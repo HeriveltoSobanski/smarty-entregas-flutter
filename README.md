@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # smarty_entregas
 
 A new Flutter project.
@@ -14,3 +15,7 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# smarty-entregas-flutter
+Projeto comercial de delivery — Smarty Entregas
+>>>>>>> 12fb045bef408cf4acb10680e82343f749839ccd
