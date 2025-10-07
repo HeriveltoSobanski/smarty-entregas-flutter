@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'presentation/pages/login/login_page.dart'; // importa a tela de login
+import 'presentation/pages/splash/splash_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,7 +18,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.orange,
         fontFamily: 'Roboto',
       ),
-      home: const PaginaLogin(),
+      home: const SplashPage(),
     );
   }
 }

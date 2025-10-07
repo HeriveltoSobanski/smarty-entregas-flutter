@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../register/register_page.dart'; // importe a tela de registro
+import '../trabalhe_conosco/trabalhe_conosco_page.dart';
+
 
 class PaginaLogin extends StatelessWidget {
   const PaginaLogin({super.key});
@@ -120,7 +122,12 @@ class PaginaLogin extends StatelessWidget {
                 // Trabalhe conosco
                 TextButton(
                   onPressed: () {
-                    // ação do trabalhe conosco
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TrabalheConoscoPage(),
+                      ),
+                    );
                   },
                   child: const Text(
                     'Trabalhe conosco',
