@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pagina_registro.dart'; // importe a tela de registro
+import '../register/register_page.dart'; // importe a tela de registro
 
 class PaginaLogin extends StatelessWidget {
   const PaginaLogin({super.key});
