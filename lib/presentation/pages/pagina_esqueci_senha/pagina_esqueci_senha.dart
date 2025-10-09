@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
-class PaginaRegistro extends StatelessWidget {
-  const PaginaRegistro({super.key});
+class PaginaEsqueciSenha extends StatelessWidget {
+  const PaginaEsqueciSenha({super.key});
 
-  InputDecoration campoMinimalista(String label) {
+  InputDecoration campoEstilo(String label) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: Colors.grey),
       filled: true,
-      fillColor:
-          Colors.white.withValues(alpha: 0.95), // substitui withOpacity()
+      fillColor: Colors.white.withOpacity(0.95),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(30),
         borderSide: const BorderSide(color: Colors.transparent),
@@ -33,93 +32,87 @@ class PaginaRegistro extends StatelessWidget {
             end: Alignment.bottomCenter,
           ),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo centralizada
+                // Logo
                 Image.asset(
                   'assets/logo.png',
-                  height: 180,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Text(
-                      'Logo não encontrada',
-                      style: TextStyle(color: Colors.white),
-                    );
-                  },
-                ),
-                const SizedBox(height: 30),
-
-                const Text(
-                  'Registre-se',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 50,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                  height: 220,
+                  errorBuilder: (_, __, ___) => const Text(
+                    'Logo não encontrada',
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 30),
 
-                TextField(decoration: campoMinimalista('Nome')),
-                const SizedBox(height: 16),
-
-                TextField(
-                  keyboardType: TextInputType.number,
-                  decoration: campoMinimalista('CPF'),
+                const Text(
+                  'Esqueci minha senha',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                TextField(
-                  keyboardType: TextInputType.phone,
-                  decoration: campoMinimalista('Telefone'),
+                const Text(
+                  'Informe seu e-mail cadastrado e enviaremos um link para redefinir sua senha.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black87,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 35),
 
+                // Campo de e-mail
                 TextField(
                   keyboardType: TextInputType.emailAddress,
-                  decoration: campoMinimalista('E-mail'),
-                ),
-                const SizedBox(height: 16),
-
-                TextField(
-                  obscureText: true,
-                  decoration: campoMinimalista('Senha'),
+                  decoration: campoEstilo('E-mail'),
                 ),
                 const SizedBox(height: 24),
 
+                // Botão "Enviar link"
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
-                      // lógica de registro
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Se este e-mail estiver cadastrado, enviaremos o link de redefinição.',
+                          ),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
                     child: const Text(
-                      'Registrar',
+                      'Enviar link de redefinição',
                       style: TextStyle(
                         fontSize: 18,
                         color: Colors.black,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
 
+                // Botão voltar
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context),
                   child: const Text(
-                    'Voltar para Login',
+                    'Voltar ao login',
                     style: TextStyle(
                       color: Colors.black,
                       decoration: TextDecoration.underline,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../register/register_page.dart'; // importe a tela de registro
+import '../register/register_page.dart';
 import '../trabalhe_conosco/trabalhe_conosco_page.dart';
-
+import '../pagina_inicial_clientes/pagina_inicial_clientes.dart';
+import '../pagina_esqueci_senha/pagina_esqueci_senha.dart'; // <-- import da nova página
 
 class PaginaLogin extends StatelessWidget {
   const PaginaLogin({super.key});
@@ -68,7 +69,12 @@ class PaginaLogin extends StatelessWidget {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
-                      // Lógica do login
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PaginaInicialClientes(),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange,
@@ -81,14 +87,15 @@ class PaginaLogin extends StatelessWidget {
                       'Entrar',
                       style: TextStyle(
                         fontSize: 18,
-                        color: Color.fromARGB(255, 0, 0, 0),
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Botão Registrar-se com navegação
+                // Botão Registrar-se
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
@@ -101,8 +108,7 @@ class PaginaLogin extends StatelessWidget {
                       );
                     },
                     style: OutlinedButton.styleFrom(
-                      side:
-                          const BorderSide(color: Color.fromARGB(255, 0, 0, 0)),
+                      side: const BorderSide(color: Colors.black),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -111,7 +117,7 @@ class PaginaLogin extends StatelessWidget {
                     child: const Text(
                       'Registrar-se',
                       style: TextStyle(
-                        color: Color.fromARGB(255, 0, 0, 0),
+                        color: Colors.black,
                         fontSize: 16,
                       ),
                     ),
@@ -132,7 +138,7 @@ class PaginaLogin extends StatelessWidget {
                   child: const Text(
                     'Trabalhe conosco',
                     style: TextStyle(
-                      color: Color.fromARGB(255, 0, 0, 0),
+                      color: Colors.black,
                       decoration: TextDecoration.underline,
                     ),
                   ),
@@ -141,12 +147,17 @@ class PaginaLogin extends StatelessWidget {
                 // Esqueci minha senha
                 TextButton(
                   onPressed: () {
-                    // ação de esqueci a senha
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PaginaEsqueciSenha(),
+                      ),
+                    );
                   },
                   child: const Text(
-                    'Esqueci meu senha',
+                    'Esqueci minha senha',
                     style: TextStyle(
-                      color: Color.fromARGB(255, 0, 0, 0),
+                      color: Colors.black,
                       decoration: TextDecoration.underline,
                     ),
                   ),

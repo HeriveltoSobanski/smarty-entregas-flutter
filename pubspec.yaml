@@ -54,7 +54,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-   - assets/logo.png
+  - assets/logo.png
+  - assets/banner.png
+  - assets/salgado.png
+  - assets/hamburguer.png
+  - assets/pizza.png
+
+
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
