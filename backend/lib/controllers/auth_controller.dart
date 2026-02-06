@@ -1,212 +1,136 @@
 import 'dart:convert';
 
+import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
-import 'package:bcrypt/bcrypt.dart';
-
-import '../db_connection.dart';
+import 'package:shelf_router/shelf_router.dart';
 
 class AuthController {
-  final DbConnection db;
+  final Connection conn;
 
-  AuthController(this.db);
+  AuthController(this.conn);
 
-  // ------------------------------------------------------------
-  //  REGISTRO DE CLIENTE
-  // ------------------------------------------------------------
-  Future<Response> registerCliente(Request req) async {
-    try {
-      final body = jsonDecode(await req.readAsString());
+  Router get router {
+    final router = Router();
 
-      final nome = body['nome'] as String?;
-      final email = body['email'] as String?;
-      final senha = body['senha'] as String?;
-      final cpf = body['cpf'] as String?;
-      final telefone = body['telefone'] as String?;
+    router.post('/login', _login);
+    router.post('/register/cliente', _registerCliente);
 
-      if ([nome, email, senha, cpf, telefone].contains(null)) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Campos obrigatórios ausentes'}),
-          headers: {'content-type': 'application/json'},
-        );
-      }
-
-      final senhaHash = BCrypt.hashpw(senha!, BCrypt.gensalt());
-
-      // documento = cpf
-      await db.connection.execute(
-        r'''
-        INSERT INTO usuarios
-          (nome, tipo_usuario, email, senha, cpf, telefone, documento, ativo)
-        VALUES
-          ($1, 'cliente', $2, $3, $4, $5, $4, true)
-        ''',
-        parameters: [nome, email, senhaHash, cpf, telefone],
-      );
-
-      return Response.ok(
-        jsonEncode({'message': 'Cliente registrado com sucesso'}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      print('🔥 Erro em registerCliente: $e');
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Erro ao registrar cliente'}),
-        headers: {'content-type': 'application/json'},
-      );
-    }
+    return router;
   }
 
-  // ------------------------------------------------------------
-  //  REGISTRO DE MOTOBOY
-  // ------------------------------------------------------------
-  Future<Response> registerMotoboy(Request req) async {
+  Future<Response> _login(Request request) async {
     try {
-      final body = jsonDecode(await req.readAsString());
+      final body = await request.readAsString();
+      final data = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
 
-      final nome = body['nome'] as String?;
-      final email = body['email'] as String?;
-      final senha = body['senha'] as String?;
-      final cpf = body['cpf'] as String?;
-      final telefone = body['telefone'] as String?;
+      final email = (data['email'] ?? '').toString().trim();
+      final senha = (data['senha'] ?? '').toString();
 
-      if ([nome, email, senha, cpf, telefone].contains(null)) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Campos obrigatórios ausentes'}),
-          headers: {'content-type': 'application/json'},
-        );
+      if (email.isEmpty || senha.isEmpty) {
+        return _json(400, {'error': 'Email e senha são obrigatórios'});
       }
 
-      final senhaHash = BCrypt.hashpw(senha!, BCrypt.gensalt());
-
-      // documento = cpf
-      await db.connection.execute(
-        r'''
-        INSERT INTO usuarios
-          (nome, tipo_usuario, email, senha, cpf, telefone, documento, ativo)
-        VALUES
-          ($1, 'motoboy', $2, $3, $4, $5, $4, true)
-        ''',
-        parameters: [nome, email, senhaHash, cpf, telefone],
-      );
-
-      return Response.ok(
-        jsonEncode({'message': 'Motoboy registrado com sucesso'}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      print('🔥 Erro em registerMotoboy: $e');
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Erro ao registrar motoboy'}),
-        headers: {'content-type': 'application/json'},
-      );
-    }
-  }
-
-  // ------------------------------------------------------------
-  //  REGISTRO DE RESTAURANTE
-  // ------------------------------------------------------------
-  Future<Response> registerRestaurante(Request req) async {
-    try {
-      final body = jsonDecode(await req.readAsString());
-
-      final nome = body['nome'] as String?;
-      final email = body['email'] as String?;
-      final senha = body['senha'] as String?;
-      final cnpj = body['cnpj'] as String?;
-      final telefone = body['telefone'] as String?;
-
-      if ([nome, email, senha, cnpj, telefone].contains(null)) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Campos obrigatórios ausentes'}),
-          headers: {'content-type': 'application/json'},
-        );
-      }
-
-      final senhaHash = BCrypt.hashpw(senha!, BCrypt.gensalt());
-
-      // documento = cnpj
-      await db.connection.execute(
-        r'''
-        INSERT INTO usuarios
-          (nome, tipo_usuario, email, senha, cnpj, telefone, documento, ativo)
-        VALUES
-          ($1, 'restaurante', $2, $3, $4, $5, $4, true)
-        ''',
-        parameters: [nome, email, senhaHash, cnpj, telefone],
-      );
-
-      return Response.ok(
-        jsonEncode({'message': 'Restaurante registrado com sucesso'}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      print('🔥 Erro em registerRestaurante: $e');
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Erro ao registrar restaurante'}),
-        headers: {'content-type': 'application/json'},
-      );
-    }
-  }
-
-  // ------------------------------------------------------------
-  //  LOGIN
-  // ------------------------------------------------------------
-  Future<Response> login(Request req) async {
-    try {
-      final body = jsonDecode(await req.readAsString());
-
-      final email = body['email'] as String?;
-      final senhaDigitada = body['senha'] as String?;
-
-      if (email == null || senhaDigitada == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'E-mail e senha são obrigatórios'}),
-          headers: {'content-type': 'application/json'},
-        );
-      }
-
-      final result = await db.connection.execute(
-        r'''
-        SELECT id_usuario, nome, email, senha, tipo_usuario, ativo
-        FROM usuarios
-        WHERE email = $1
-        ''',
-        parameters: [email],
+      final result = await conn.execute(
+        Sql.named(
+          '''
+          SELECT id_usuario, email, senha, ativo
+          FROM usuarios
+          WHERE email = @email
+          LIMIT 1
+          '''
+        ),
+        parameters: {'email': email},
       );
 
       if (result.isEmpty) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Usuário não encontrado'}),
-          headers: {'content-type': 'application/json'},
-        );
+        return _json(401, {'error': 'Credenciais inválidas'});
       }
 
-      final row = result.first.toColumnMap();
-      final senhaHash = row['senha'] as String;
+      final row = result.first;
+      final idUsuario = row[0];
+      final dbEmail = row[1]?.toString();
+      final dbSenha = row[2]?.toString();
+      final ativo = row[3] as bool;
 
-      if (!BCrypt.checkpw(senhaDigitada, senhaHash)) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Senha incorreta'}),
-          headers: {'content-type': 'application/json'},
-        );
+      if (!ativo) {
+        return _json(403, {'error': 'Usuário inativo'});
       }
 
-      return Response.ok(
-        jsonEncode({
-          'id': row['id_usuario'],
-          'nome': row['nome'],
-          'email': row['email'],
-          'tipo_usuario': row['tipo_usuario'],
-          'ativo': row['ativo'],
-        }),
-        headers: {'content-type': 'application/json'},
-      );
+      if (dbSenha != senha) {
+        return _json(401, {'error': 'Credenciais inválidas'});
+      }
+
+      return _json(200, {
+        'ok': true,
+        'user': {
+          'id_usuario': idUsuario,
+          'email': dbEmail,
+        }
+      });
     } catch (e) {
-      print('🔥 Erro em login: $e');
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Erro ao realizar login'}),
-        headers: {'content-type': 'application/json'},
-      );
+      return _json(500, {
+        'error': 'Erro ao realizar login',
+        'details': e.toString()
+      });
     }
+  }
+
+  Future<Response> _registerCliente(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
+
+      final nome = (data['nome'] ?? '').toString().trim();
+      final email = (data['email'] ?? '').toString().trim();
+      final senha = (data['senha'] ?? '').toString();
+
+      if (nome.isEmpty || email.isEmpty || senha.isEmpty) {
+        return _json(400, {'error': 'Nome, email e senha são obrigatórios'});
+      }
+
+      final result = await conn.execute(
+        Sql.named(
+          '''
+          INSERT INTO usuarios (nome, email, senha, ativo, tipo_usuario, criado_em)
+          VALUES (@nome, @email, @senha, true, 'cliente', now())
+          RETURNING id_usuario
+          '''
+        ),
+        parameters: {
+          'nome': nome,
+          'email': email,
+          'senha': senha,
+        },
+      );
+
+      final idUsuario = result.first[0];
+
+      return _json(201, {
+        'ok': true,
+        'user': {
+          'id_usuario': idUsuario,
+          'email': email,
+        }
+      });
+    } catch (e) {
+      return _json(500, {
+        'error': 'Erro ao registrar cliente',
+        'details': e.toString()
+      });
+    }
+  }
+
+  Response _json(int status, Map<String, dynamic> body) {
+    return Response(
+      status,
+      body: jsonEncode(body),
+      headers: const {
+        'content-type': 'application/json; charset=utf-8'
+      },
+    );
   }
 }
