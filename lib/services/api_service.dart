@@ -54,7 +54,8 @@ class ApiService {
     required String senha,
   }) async {
     try {
-      final url = Uri.parse('$baseUrl/login');
+      // ROTA CORRIGIDA AQUI
+      final url = Uri.parse('$baseUrl/auth/login');
 
       final resp = await http.post(
         url,
@@ -66,13 +67,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
 
-      if (resp.body.isNotEmpty) {
-        final data = jsonDecode(resp.body);
-        final msg = data['error']?.toString() ?? 'Erro ao fazer login';
-        throw Exception(msg);
-      }
-
-      throw Exception('Erro ao fazer login (código ${resp.statusCode})');
+      // se não for 200, não tenta ler como JSON
+      throw Exception('Erro ${resp.statusCode}: ${resp.body}');
     } catch (e) {
       throw Exception('Erro de conexão com o servidor: $e');
     }
