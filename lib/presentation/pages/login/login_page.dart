@@ -75,7 +75,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
 
     // Login OK -> vai pra tela inicial do cliente
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Bem-vindo, ${user['nome']}!')),
+      SnackBar(content: Text('Bem-vindo, ${user['user']?['email'] ?? ''}!')),
     );
 
     Navigator.pushReplacement(

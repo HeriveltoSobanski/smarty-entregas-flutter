@@ -59,7 +59,7 @@ class _PaginaRegistroState extends State<PaginaRegistro> {
     });
 
     try {
-      final uri = Uri.parse('http://localhost:8080/register/cliente');
+      final uri = Uri.parse('http://localhost:8080/auth/register/cliente');
 
       final body = jsonEncode({
         'nome': nomeController.text.trim(),
@@ -77,17 +77,20 @@ class _PaginaRegistroState extends State<PaginaRegistro> {
 
       if (!mounted) return;
 
-      if (resp.statusCode == 200) {
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
         // Registro OK → volta para login
         Navigator.pop(context);
       } else {
+        final msg = resp.body.isNotEmpty
+            ? (jsonDecode(resp.body)['error'] ?? 'Erro ao registrar').toString()
+            : 'Erro ao registrar (${resp.statusCode})';
         setState(() {
-          erro = 'Erro ao registrar cliente (${resp.statusCode})';
+          erro = msg;
         });
       }
     } catch (e) {
       setState(() {
-        erro = 'Erro interno ao registrar cliente';
+        erro = 'Erro de conexão: verifique se o servidor está rodando.\n$e';
       });
     } finally {
       if (mounted) {

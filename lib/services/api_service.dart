@@ -14,7 +14,7 @@ class ApiService {
     String? telefone,
   }) async {
     try {
-      final url = Uri.parse('$baseUrl/register/cliente');
+      final url = Uri.parse('$baseUrl/auth/register/cliente');
 
       final body = {
         "nome": nome,
