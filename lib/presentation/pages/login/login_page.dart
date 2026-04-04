@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../register/register_page.dart';
 import '../trabalhe_conosco/trabalhe_conosco_page.dart';
-import '../pagina_inicial_clientes/pagina_inicial_clientes.dart';
 import '../pagina_esqueci_senha/pagina_esqueci_senha.dart';
 
-// Ajuste o caminho se o seu api_service estiver em outro lugar
 import '../../../services/api_service.dart';
+import '../../../data/session_store.dart';
 
 class PaginaLogin extends StatefulWidget {
   const PaginaLogin({super.key});
@@ -16,74 +15,72 @@ class PaginaLogin extends StatefulWidget {
 }
 
 class _PaginaLoginState extends State<PaginaLogin> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _senhaController = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
 
-  bool _loading = false;
+  bool    _loading = false;
   String? _erro;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _senhaController.dispose();
+    _emailCtrl.dispose();
+    _senhaCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _fazerLogin() async {
-    setState(() {
-      _loading = true;
-      _erro = null;
-    });
-
-    final email = _emailController.text.trim();
-    final senha = _senhaController.text;
+    final email = _emailCtrl.text.trim();
+    final senha = _senhaCtrl.text;
 
     if (email.isEmpty || senha.isEmpty) {
-      setState(() {
-        _loading = false;
-        _erro = 'Preencha e-mail e senha.';
-      });
+      setState(() => _erro = 'Preencha e-mail e senha.');
       return;
     }
 
-    Map<String, dynamic>? user;
+    setState(() {
+      _loading = true;
+      _erro    = null;
+    });
 
+    Map<String, dynamic> resp;
     try {
-      user = await ApiService.login(email: email, senha: senha);
+      resp = await ApiService.login(email: email, senha: senha);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _erro = e.toString().replaceFirst('Exception: ', '');
+        _erro    = e.toString().replaceFirst('Exception: ', '');
       });
       return;
     }
 
     if (!mounted) return;
 
-    setState(() {
-      _loading = false;
-      _erro = null;
-    });
+    setState(() => _loading = false);
 
-    if (user == null) {
-      setState(() {
-        _erro = 'Erro desconhecido ao fazer login.';
-      });
-      return;
+    final user        = resp['user'] as Map<String, dynamic>? ?? {};
+    final tipoUsuario = user['tipo_usuario']?.toString() ?? 'cliente';
+    final idEmpresa   = user['id_empresa'] is int
+        ? user['id_empresa'] as int
+        : int.tryParse(user['id_empresa']?.toString() ?? '0') ?? 0;
+
+    // Salva sessão
+    SessionStore.set(
+      idUsuario:   user['id_usuario'] is int
+          ? user['id_usuario'] as int
+          : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0,
+      email:       user['email']?.toString() ?? '',
+      nome:        user['nome']?.toString() ?? '',
+      tipoUsuario: tipoUsuario,
+      idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
+    );
+
+    // Redireciona conforme tipo
+    if (tipoUsuario == 'empresa') {
+      Navigator.pushReplacementNamed(context, '/empresa');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
     }
-
-    // Login OK -> vai pra tela inicial do cliente
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Bem-vindo, ${user['user']?['email'] ?? ''}!')),
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const PaginaInicialClientes(),
-      ),
-    );
   }
 
   @override
@@ -102,43 +99,33 @@ class _PaginaLoginState extends State<PaginaLogin> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                // Logo
                 Image.asset(
                   'assets/logo.png',
-                  height: 300,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Text(
-                      'Logo não encontrada',
-                      style: TextStyle(color: Colors.white),
-                    );
-                  },
+                  height: 280,
+                  errorBuilder: (_, __, ___) => const SizedBox(height: 80),
                 ),
                 const SizedBox(height: 30),
 
-                // Campo e-mail
                 TextField(
-                  controller: _emailController,
+                  controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'E-mail',
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // Campo senha
                 TextField(
-                  controller: _senhaController,
+                  controller: _senhaCtrl,
                   obscureText: true,
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.white,
                   ),
@@ -146,14 +133,10 @@ class _PaginaLoginState extends State<PaginaLogin> {
                 const SizedBox(height: 20),
 
                 if (_erro != null) ...[
-                  Text(
-                    _erro!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
+                  Text(_erro!, style: const TextStyle(color: Colors.red)),
                   const SizedBox(height: 8),
                 ],
 
-                // Botão Entrar
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -162,99 +145,71 @@ class _PaginaLoginState extends State<PaginaLogin> {
                       backgroundColor: Colors.orange,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _loading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.black),
-                            ),
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(Colors.black)),
                           )
                         : const Text(
                             'Entrar',
                             style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                fontSize: 18,
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold),
                           ),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Botão Registrar-se
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: _loading
                         ? null
-                        : () {
-                            Navigator.push(
+                        : () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const PaginaRegistro(),
-                              ),
-                            );
-                          },
+                                  builder: (_) => const PaginaRegistro()),
+                            ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.black),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text(
-                      'Registrar-se',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                      ),
-                    ),
+                    child: const Text('Registrar-se',
+                        style: TextStyle(color: Colors.black, fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Trabalhe conosco
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const TrabalheConoscoPage(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Trabalhe conosco',
-                    style: TextStyle(
-                      color: Colors.black,
-                      decoration: TextDecoration.underline,
-                    ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const TrabalheConoscoPage()),
                   ),
+                  child: const Text('Trabalhe conosco',
+                      style: TextStyle(
+                          color: Colors.black,
+                          decoration: TextDecoration.underline)),
                 ),
 
-                // Esqueci minha senha
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PaginaEsqueciSenha(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Esqueci minha senha',
-                    style: TextStyle(
-                      color: Colors.black,
-                      decoration: TextDecoration.underline,
-                    ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const PaginaEsqueciSenha()),
                   ),
+                  child: const Text('Esqueci minha senha',
+                      style: TextStyle(
+                          color: Colors.black,
+                          decoration: TextDecoration.underline)),
                 ),
               ],
             ),

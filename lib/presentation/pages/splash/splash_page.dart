@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../login/login_page.dart'; // ajusta o caminho se necessário
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -33,13 +32,7 @@ class _SplashPageState extends State<SplashPage>
 
     // Depois de 3 segundos, transita para a tela de login com fade
     Timer(const Duration(seconds: 3), () {
-      Navigator.of(context).pushReplacement(PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const PaginaLogin(),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 800),
-      ));
+      Navigator.of(context).pushReplacementNamed('/login');
     });
   }
 

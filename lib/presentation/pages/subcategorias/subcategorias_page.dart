@@ -6,7 +6,7 @@ import '../pagina_inicial_sobremesas/pagina_inicial_sobremesas.dart';
 import '../pagina_inicial_almocos/pagina_inicial_almocos.dart';
 import '../pagina_inicial_pizza/pagina_inicial_pizza.dart';
 import '../pagina_inicial_bebidas/pagina_inicial_bebidas.dart';
-import '../pagina_inicial_dono/pagina_inicial_dono.dart';
+import '../pagina_empresa/pagina_empresa.dart';
 
 class SubcategoriasPage extends StatelessWidget {
   const SubcategoriasPage({super.key});
@@ -110,7 +110,7 @@ class SubcategoriasPage extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const PaginaInicialDono()),
+            MaterialPageRoute(builder: (_) => const PaginaEmpresa()),
           );
         },
       ),
