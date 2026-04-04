@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../services/api_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../widgets/floating_cart.dart';
+import '../../widgets/shimmer_card.dart';
 
 class PaginaInicialSobremesas extends StatefulWidget {
   const PaginaInicialSobremesas({super.key});
@@ -22,155 +26,146 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
   }
 
   Future<void> _carregarProdutos() async {
+    setState(() => _carregando = true);
     final lista = await ApiService.getProdutosPublico(categoria: 'Sobremesas');
     if (!mounted) return;
-    setState(() {
-      _produtos = lista;
-      _carregando = false;
-    });
+    setState(() { _produtos = lista; _carregando = false; });
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
-
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 253, 253, 253),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: corSmarty,
-        title: const Text(
-          'Sobremesas',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        backgroundColor: AppColors.primary,
+        centerTitle: true,
+        title: Text('Sobremesas',
+            style: GoogleFonts.poppins(
+                color: Colors.white, fontWeight: FontWeight.w700)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        centerTitle: true,
       ),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: _carregarProdutos,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  height: 160,
-                  child: Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      PageView(
-                        controller: _bannerController,
-                        onPageChanged: (index) =>
-                            setState(() => _bannerAtual = index),
-                        children: const [
-                          _BannerItem('Sobremesas'),
-                          _BannerItem('Promoções Doces'),
-                        ],
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              _banner(),
+              const SizedBox(height: 20),
+              Text('Cardápio',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 12),
+              _carregando
+                  ? SizedBox(
+                      height: 180,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: const [ShimmerCard(), ShimmerCard(), ShimmerCard()],
                       ),
-                      Positioned(
-                        bottom: 8,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(2, (index) {
-                            return Container(
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 3),
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _bannerAtual == index
-                                    ? corSmarty
-                                    : Colors.grey[300],
-                              ),
-                            );
-                          }),
+                    )
+                  : _produtos.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text('Nenhum produto disponível no momento.',
+                                style: GoogleFonts.poppins(color: AppColors.textSecondary)),
+                          ),
+                        )
+                      : SizedBox(
+                          height: 180,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _produtos.length,
+                            itemBuilder: (_, i) => _CardProduto(produto: _produtos[i]),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                _tituloSecao('Cardápio', corSmarty),
-                const SizedBox(height: 8),
-
-                if (_carregando)
-                  const Center(
-                      child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(color: corSmarty),
-                  ))
-                else if (_produtos.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(
-                      child: Text(
-                        'Nenhum produto disponível no momento.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  )
-                else
-                  SizedBox(
-                    height: 170,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _produtos.length,
-                      itemBuilder: (_, i) => _cardProduto(_produtos[i]),
-                    ),
-                  ),
-
-                const SizedBox(height: 20),
-              ],
-            ),
+              const SizedBox(height: 100),
+            ],
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
-  static Widget _tituloSecao(String texto, Color corSmarty) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        texto,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  Widget _banner() {
+    return SizedBox(
+      height: 160,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          PageView(
+            controller: _bannerController,
+            onPageChanged: (i) => setState(() => _bannerAtual = i),
+            children: const [
+              _BannerItem('Sobremesas', 'Doces irresistíveis!'),
+              _BannerItem('Sobremesas', 'Promoções especiais!'),
+            ],
+          ),
+          Positioned(
+            bottom: 10,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(2, (i) {
+                final ativo = _bannerAtual == i;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: ativo ? 20 : 8, height: 8,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: ativo ? AppColors.primary : Colors.white.withValues(alpha: 0.6),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  static Widget _cardProduto(Map<String, dynamic> p) {
-    final precoRaw = p['preco'];
-    final preco = precoRaw is num ? precoRaw.toDouble() : double.tryParse(precoRaw?.toString() ?? '') ?? 0.0;
+class _CardProduto extends StatelessWidget {
+  final Map<String, dynamic> produto;
+  const _CardProduto({required this.produto});
+
+  @override
+  Widget build(BuildContext context) {
+    final precoRaw = produto['preco'];
+    final preco = precoRaw is num
+        ? precoRaw.toDouble()
+        : double.tryParse(precoRaw?.toString() ?? '') ?? 0.0;
     return Container(
       width: 140,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+          BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             child: Container(
-              height: 90,
-              width: 140,
-              color: const Color(0xFFFFA726),
-              child: const Icon(Icons.cake, color: Colors.white, size: 36),
+              height: 90, width: 140,
+              color: AppColors.primary.withValues(alpha: 0.12),
+              child: const Icon(Icons.cake, color: AppColors.primary, size: 36),
             ),
           ),
           Padding(
@@ -178,15 +173,15 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  p['nome']?.toString() ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  'R\$ ${preco.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Colors.green),
-                ),
+                Text(produto['nome']?.toString() ?? '',
+                    style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600, fontSize: 13,
+                        color: AppColors.textPrimary),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text('R\$ ${preco.toStringAsFixed(2).replaceAll('.', ',')}',
+                    style: GoogleFonts.poppins(
+                        color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
               ],
             ),
           ),
@@ -197,8 +192,9 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
 }
 
 class _BannerItem extends StatelessWidget {
-  final String label;
-  const _BannerItem(this.label);
+  final String titulo;
+  final String subtitulo;
+  const _BannerItem(this.titulo, this.subtitulo);
 
   @override
   Widget build(BuildContext context) {
@@ -207,19 +203,19 @@ class _BannerItem extends StatelessWidget {
       child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+            colors: [AppColors.primary, AppColors.secondary],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
         ),
         child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(titulo, style: GoogleFonts.poppins(
+                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20)),
+              Text(subtitulo, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 13)),
+            ],
           ),
         ),
       ),

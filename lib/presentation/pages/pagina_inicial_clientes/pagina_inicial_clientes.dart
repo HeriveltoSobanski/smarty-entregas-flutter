@@ -1,6 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../services/api_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../cardapio_empresa/cardapio_empresa_page.dart';
+import '../../widgets/floating_cart.dart';
+import '../../widgets/shimmer_card.dart';
 
 final GlobalKey<ScaffoldMessengerState> contextGlobal =
     GlobalKey<ScaffoldMessengerState>();
@@ -15,9 +20,14 @@ class PaginaInicialClientes extends StatefulWidget {
 class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
   final PageController _bannerController = PageController();
   int _bannerAtual = 0;
+  int _tabIndex = 0;
+  Timer? _bannerTimer;
+
   List<Map<String, dynamic>> _empresas = [];
   bool _carregando = true;
   String _categoriaSel = '';
+
+  static const int _totalBanners = 2;
 
   static const List<Map<String, dynamic>> _categorias = [
     {'nome': 'Todos',      'icon': Icons.restaurant},
@@ -32,6 +42,23 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
   void initState() {
     super.initState();
     _carregar();
+    // Auto-play do banner a cada 5 segundos
+    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      final next = (_bannerAtual + 1) % _totalBanners;
+      _bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
+    super.dispose();
   }
 
   Future<void> _carregar({String categoria = ''}) async {
@@ -48,75 +75,59 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        titleSpacing: 8,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/logo.png',
-              width: 40,
-              height: 40,
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.delivery_dining, color: corSmarty),
-            ),
-            const SizedBox(width: 8),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Smarty Entregas',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black)),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.black),
-            onPressed: () {},
-          ),
-        ],
-      ),
+      backgroundColor: AppColors.background,
+      appBar: _buildAppBar(),
       body: RefreshIndicator(
-        color: corSmarty,
+        color: AppColors.primary,
         onRefresh: () => _carregar(categoria: _categoriaSel),
         child: CustomScrollView(
           slivers: [
             // Campo de busca
             SliverToBoxAdapter(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Buscar produtos ou lojas...',
-                    prefixIcon: const Icon(Icons.search, color: corSmarty),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x0A000000),
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    style: GoogleFonts.poppins(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar produtos ou lojas...',
+                      hintStyle: GoogleFonts.poppins(
+                          fontSize: 13, color: AppColors.textSecondary),
+                      prefixIcon: const Icon(Icons.search,
+                          color: AppColors.primary, size: 22),
+                      filled: true,
+                      fillColor: Colors.transparent,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Banner rotativo
+            // Banner rotativo com dots animados
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SizedBox(
-                  height: 150,
+                  height: 160,
                   child: Stack(
                     alignment: Alignment.bottomCenter,
                     children: [
@@ -129,19 +140,26 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                           _BannerItem('Peça agora e receba em casa'),
                         ],
                       ),
+                      // Dots pill animados
                       Positioned(
-                        bottom: 8,
+                        bottom: 10,
                         child: Row(
-                          children: List.generate(2, (i) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: 8, height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _bannerAtual == i
-                                  ? Colors.white
-                                  : Colors.white54,
-                            ),
-                          )),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(_totalBanners, (i) {
+                            final ativo = _bannerAtual == i;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              width: ativo ? 20 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4),
+                                color: ativo
+                                    ? AppColors.primary
+                                    : Colors.white.withValues(alpha: 0.6),
+                              ),
+                            );
+                          }),
                         ),
                       ),
                     ],
@@ -149,16 +167,15 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                 ),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-            // Filtro de categorias horizontal
+            // Filtro de categorias horizontal (chips)
             SliverToBoxAdapter(
               child: SizedBox(
                 height: 44,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _categorias.length,
                   itemBuilder: (_, i) {
                     final cat = _categorias[i]['nome'] as String;
@@ -166,7 +183,8 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                         (_categoriaSel.isEmpty && cat == 'Todos');
                     return GestureDetector(
                       onTap: () {
-                        setState(() => _categoriaSel = cat == 'Todos' ? '' : cat);
+                        setState(() =>
+                            _categoriaSel = cat == 'Todos' ? '' : cat);
                         _carregar(categoria: cat);
                       },
                       child: AnimatedContainer(
@@ -175,16 +193,28 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: sel ? corSmarty : Colors.white,
+                          color: sel ? AppColors.primary : AppColors.surface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: sel ? corSmarty : Colors.grey.shade300,
+                            color: sel
+                                ? AppColors.primary
+                                : AppColors.divider,
                           ),
+                          boxShadow: sel
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.25),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ]
+                              : null,
                         ),
                         child: Text(
                           cat,
-                          style: TextStyle(
-                            color: sel ? Colors.white : Colors.black87,
+                          style: GoogleFonts.poppins(
+                            color: sel ? Colors.white : AppColors.textSecondary,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -195,30 +225,42 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                 ),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-            // Título
+            // Título da seção
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  _categoriaSel.isEmpty || _categoriaSel == 'Todos'
-                      ? 'Todos os restaurantes'
-                      : _categoriaSel,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _categoriaSel.isEmpty || _categoriaSel == 'Todos'
+                          ? 'Todos os restaurantes'
+                          : _categoriaSel,
+                      style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
+                    ),
+                  ],
                 ),
               ),
             ),
-
             const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
-            // Lista de empresas
+            // Lista de empresas (shimmer ou dados reais)
             if (_carregando)
-              const SliverFillRemaining(
-                child: Center(
-                  child: CircularProgressIndicator(color: corSmarty),
+              SliverToBoxAdapter(
+                child: Column(
+                  children: List.generate(
+                    3,
+                    (_) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      child: _ShimmerEmpresa(),
+                    ),
+                  ),
                 ),
               )
             else if (_empresas.isEmpty)
@@ -228,13 +270,15 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.storefront_outlined,
-                          size: 64, color: Colors.grey),
+                          size: 64, color: AppColors.disabled),
                       SizedBox(height: 12),
                       Text('Nenhum restaurante disponível',
-                          style: TextStyle(color: Colors.grey, fontSize: 16)),
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 16)),
                       SizedBox(height: 4),
                       Text('Aguarde novos estabelecimentos',
-                          style: TextStyle(color: Colors.grey)),
+                          style:
+                              TextStyle(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -242,29 +286,154 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
             else
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final empresa = _empresas[index];
-                    return _CardEmpresa(empresa: empresa);
-                  },
+                  (context, index) =>
+                      _CardEmpresa(empresa: _empresas[index]),
                   childCount: _empresas.length,
                 ),
               ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: corSmarty,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Início'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Busca'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.list_alt), label: 'Pedidos'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  // ===================== APP BAR =====================
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      scrolledUnderElevation: 2,
+      shadowColor: const Color(0x1A000000),
+      backgroundColor: AppColors.surface,
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/logo.png',
+            width: 42,
+            height: 42,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.delivery_dining,
+              color: AppColors.primary,
+              size: 36,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.location_on,
+                      color: AppColors.primary, size: 13),
+                  SizedBox(width: 2),
+                  Text(
+                    'Entregar em',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: const [
+                  Text(
+                    'Mallet - PR',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(Icons.keyboard_arrow_down,
+                      color: AppColors.primary, size: 18),
+                ],
+              ),
+            ],
+          ),
         ],
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined,
+                    color: AppColors.textPrimary, size: 26),
+                onPressed: () {},
+              ),
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text(
+                      '2',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(color: AppColors.divider, height: 1),
+      ),
+    );
+  }
+
+  // ===================== BOTTOM NAV =====================
+  Widget _buildBottomNav() {
+    const icons = [
+      [Icons.home_outlined, Icons.home],
+      [Icons.search_outlined, Icons.search],
+      [Icons.receipt_long_outlined, Icons.receipt_long],
+      [Icons.person_outline, Icons.person],
+    ];
+    const labels = ['Início', 'Busca', 'Pedidos', 'Perfil'];
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _tabIndex,
+        onTap: (i) => setState(() => _tabIndex = i),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.disabled,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        type: BottomNavigationBarType.fixed,
+        items: List.generate(4, (i) {
+          final ativo = _tabIndex == i;
+          return BottomNavigationBarItem(
+            icon: Icon(ativo ? icons[i][1] : icons[i][0]),
+            label: labels[i],
+          );
+        }),
       ),
     );
   }
@@ -275,28 +444,21 @@ class _CardEmpresa extends StatelessWidget {
   final Map<String, dynamic> empresa;
   const _CardEmpresa({required this.empresa});
 
-  void _abrirCardapio(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CardapioEmpresaPage(empresa: empresa),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    const corSmarty = Color(0xFFFFA726);
     final produtos =
         List<Map<String, dynamic>>.from(empresa['produtos'] as List? ?? []);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+          BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 8,
+              offset: Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -304,17 +466,24 @@ class _CardEmpresa extends StatelessWidget {
         children: [
           // Cabeçalho da empresa
           GestureDetector(
-            onTap: () => _abrirCardapio(context),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CardapioEmpresaPage(empresa: empresa),
+              ),
+            ),
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+                  colors: [AppColors.primary, AppColors.secondary],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                 ),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(16)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Container(
@@ -325,7 +494,7 @@ class _CardEmpresa extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.storefront,
-                        color: corSmarty, size: 28),
+                        color: AppColors.primary, size: 28),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -334,15 +503,15 @@ class _CardEmpresa extends StatelessWidget {
                       children: [
                         Text(
                           empresa['nome']?.toString() ?? '',
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
                         ),
                         Text(
                           '${produtos.length} produto${produtos.length != 1 ? 's' : ''}',
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                               color: Colors.white70, fontSize: 12),
                         ),
                       ],
@@ -355,16 +524,27 @@ class _CardEmpresa extends StatelessWidget {
           ),
 
           // Lista horizontal de produtos
-          SizedBox(
-            height: 160,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemCount: produtos.length,
-              itemBuilder: (_, i) => _CardProduto(produto: produtos[i]),
+          if (produtos.isNotEmpty)
+            SizedBox(
+              height: 160,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                itemCount: produtos.length,
+                itemBuilder: (_, i) =>
+                    _CardProduto(produto: produtos[i]),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Sem produtos cadastrados',
+                style: GoogleFonts.poppins(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -379,7 +559,8 @@ class _CardProduto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final precoRaw = produto['preco'];
-    final preco = precoRaw is num ? precoRaw.toDouble()
+    final preco = precoRaw is num
+        ? precoRaw.toDouble()
         : double.tryParse(precoRaw?.toString() ?? '') ?? 0.0;
     final cat = produto['categoria_nome']?.toString() ?? '';
 
@@ -393,22 +574,28 @@ class _CardProduto extends StatelessWidget {
       width: 130,
       margin: const EdgeInsets.only(right: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F9F9),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 4,
+              offset: Offset(0, 1)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Imagem / ícone
           ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(12)),
             child: Container(
               height: 75,
               width: double.infinity,
-              color: const Color(0xFFFFA726).withValues(alpha: 0.15),
-              child: Icon(icone, color: const Color(0xFFFFA726), size: 32),
+              color: AppColors.primary.withValues(alpha: 0.1),
+              child:
+                  Icon(icone, color: AppColors.primary, size: 32),
             ),
           ),
           Padding(
@@ -418,28 +605,54 @@ class _CardProduto extends StatelessWidget {
               children: [
                 Text(
                   produto['nome']?.toString() ?? '',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 12),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600, fontSize: 12,
+                      color: AppColors.textPrimary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'R\$ ${preco.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      color: Color(0xFF4CAF50),
-                      fontWeight: FontWeight.bold,
+                  'R\$ ${preco.toStringAsFixed(2).replaceAll('.', ',')}',
+                  style: GoogleFonts.poppins(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
                       fontSize: 12),
                 ),
                 if (cat.isNotEmpty)
                   Text(cat,
-                      style: const TextStyle(
-                          color: Colors.grey, fontSize: 10)),
+                      style: GoogleFonts.poppins(
+                          color: AppColors.textSecondary,
+                          fontSize: 10)),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// ===================== SHIMMER DE EMPRESA =====================
+class _ShimmerEmpresa extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ShimmerBanner(),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: const [
+              ShimmerCard(),
+              ShimmerCard(),
+              ShimmerCard(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -456,7 +669,7 @@ class _BannerItem extends StatelessWidget {
       child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFFFA726), Color(0xFFFF6F00)],
+            colors: [AppColors.primary, AppColors.secondary],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
@@ -464,12 +677,12 @@ class _BannerItem extends StatelessWidget {
         child: Center(
           child: Text(
             texto,
-            style: const TextStyle(
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
-            textAlign: TextAlign.center,
           ),
         ),
       ),
