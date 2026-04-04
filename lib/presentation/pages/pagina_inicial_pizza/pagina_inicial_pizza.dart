@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/floating_cart.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PaginaInicialPizza extends StatefulWidget {
   const PaginaInicialPizza({super.key});
@@ -13,7 +16,7 @@ class _PaginaInicialPizzaState extends State<PaginaInicialPizza> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
+    const Color corSmarty = AppColors.primary;
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 253, 253, 253),
@@ -90,18 +93,14 @@ class _PaginaInicialPizzaState extends State<PaginaInicialPizza> {
 
               // Cards de promoções
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard("Pizza Calabresa", "R\$ 39,90",
-                        "assets/pizza_calabresa.png"),
-                    _promoCard("Pizza Portuguesa", "R\$ 42,00",
-                        "assets/pizza_portuguesa.png"),
-                    _promoCard("Pizza Frango c/ Catupiry", "R\$ 41,50",
-                        "assets/pizza_frango.png"),
-                    _promoCard("Pizza Margherita", "R\$ 38,90",
-                        "assets/pizza_margherita.png"),
+                  children: const [
+                    ProductCard(nome: "Pizza Calabresa", preco: "R\$ 39,90", imgPath: "assets/pizza_calabresa.png"),
+                    ProductCard(nome: "Pizza Portuguesa", preco: "R\$ 42,00", imgPath: "assets/pizza_portuguesa.png"),
+                    ProductCard(nome: "Pizza Frango c/ Catupiry", preco: "R\$ 41,50", imgPath: "assets/pizza_frango.png"),
+                    ProductCard(nome: "Pizza Margherita", preco: "R\$ 38,90", imgPath: "assets/pizza_margherita.png"),
                   ],
                 ),
               ),
@@ -112,16 +111,13 @@ class _PaginaInicialPizzaState extends State<PaginaInicialPizza> {
 
               // Cards de mais pedidas
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard("Pizza Quatro Queijos", "R\$ 44,90",
-                        "assets/pizza_quatroqueijos.png"),
-                    _promoCard("Pizza Pepperoni", "R\$ 45,90",
-                        "assets/pizza_pepperoni.png"),
-                    _promoCard(
-                        "Pizza Bacon", "R\$ 43,90", "assets/pizza_bacon.png"),
+                  children: const [
+                    ProductCard(nome: "Pizza Quatro Queijos", preco: "R\$ 44,90", imgPath: "assets/pizza_quatroqueijos.png"),
+                    ProductCard(nome: "Pizza Pepperoni", preco: "R\$ 45,90", imgPath: "assets/pizza_pepperoni.png"),
+                    ProductCard(nome: "Pizza Bacon", preco: "R\$ 43,90", imgPath: "assets/pizza_bacon.png"),
                   ],
                 ),
               ),
@@ -130,6 +126,8 @@ class _PaginaInicialPizzaState extends State<PaginaInicialPizza> {
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -154,58 +152,6 @@ class _PaginaInicialPizzaState extends State<PaginaInicialPizza> {
     );
   }
 
-  static Widget _promoCard(String nome, String preco, String imgPath) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imgPath,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFFFA726),
-                height: 90,
-                width: 140,
-                child: const Center(
-                  child: Text(
-                    "Imagem",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(preco, style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ===================== COMPONENTE DE BANNER =====================
@@ -223,7 +169,7 @@ class _BannerItem extends StatelessWidget {
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+              colors: [AppColors.primary, AppColors.secondary],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),

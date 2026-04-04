@@ -8,7 +8,7 @@ class PaginaEsqueciSenha extends StatelessWidget {
       labelText: label,
       labelStyle: const TextStyle(color: Colors.grey),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.95),
+      fillColor: Colors.white.withValues(alpha: 0.95),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(30),
         borderSide: const BorderSide(color: Colors.transparent),

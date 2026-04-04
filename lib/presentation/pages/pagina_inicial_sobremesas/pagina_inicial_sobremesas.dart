@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/floating_cart.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PaginaInicialSobremesas extends StatefulWidget {
   const PaginaInicialSobremesas({super.key});
@@ -14,7 +17,7 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
+    const Color corSmarty = AppColors.primary;
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 253, 253, 253),
@@ -91,14 +94,14 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
 
               // Cards de promoções
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard("Petit Gateau", "R\$ 14,90", "assets/petit.png"),
-                    _promoCard("Açaí 500ml", "R\$ 12,90", "assets/acai.png"),
-                    _promoCard("Pudim", "R\$ 8,50", "assets/pudim.png"),
-                    _promoCard("Brownie", "R\$ 9,90", "assets/brownie.png"),
+                  children: const [
+                    ProductCard(nome: "Petit Gateau", preco: "R\$ 14,90", imgPath: "assets/petit.png"),
+                    ProductCard(nome: "Açaí 500ml", preco: "R\$ 12,90", imgPath: "assets/acai.png"),
+                    ProductCard(nome: "Pudim", preco: "R\$ 8,50", imgPath: "assets/pudim.png"),
+                    ProductCard(nome: "Brownie", preco: "R\$ 9,90", imgPath: "assets/brownie.png"),
                   ],
                 ),
               ),
@@ -108,16 +111,13 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
               const SizedBox(height: 8),
 
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                        "Sorvete 2 Bolas", "R\$ 7,99", "assets/sorvete.png"),
-                    _promoCard(
-                        "Cheesecake", "R\$ 11,99", "assets/cheesecake.png"),
-                    _promoCard(
-                        "Torta de Limão", "R\$ 9,50", "assets/tortalimao.png"),
+                  children: const [
+                    ProductCard(nome: "Sorvete 2 Bolas", preco: "R\$ 7,99", imgPath: "assets/sorvete.png"),
+                    ProductCard(nome: "Cheesecake", preco: "R\$ 11,99", imgPath: "assets/cheesecake.png"),
+                    ProductCard(nome: "Torta de Limão", preco: "R\$ 9,50", imgPath: "assets/tortalimao.png"),
                   ],
                 ),
               ),
@@ -126,6 +126,8 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -150,47 +152,6 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
     );
   }
 
-  static Widget _promoCard(String nome, String preco, String imgPath) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imgPath,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(preco, style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ===================== COMPONENTE DE BANNER =====================
@@ -208,7 +169,7 @@ class _BannerItem extends StatelessWidget {
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+              colors: [AppColors.primary, AppColors.secondary],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),

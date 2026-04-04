@@ -5,6 +5,8 @@
   import 'presentation/pages/register/register_page.dart';
   import 'presentation/pages/trabalhe_conosco/trabalhe_conosco_page.dart';
   import 'presentation/pages/pagina_esqueci_senha/pagina_esqueci_senha.dart';
+  import 'features/checkout/checkout_screen.dart';
+  import 'core/theme/app_theme.dart';
 
   void main() => runApp(const MyApp());
 
@@ -16,10 +18,7 @@
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Smarty Entregas',
-        theme: ThemeData(
-          primarySwatch: Colors.orange,
-          fontFamily: 'Roboto',
-        ),
+        theme: AppTheme.theme,
         initialRoute: '/splash',
         routes: {
           '/splash': (_) => const SplashPage(),
@@ -27,8 +26,8 @@
           '/home': (_) => const PaginaInicialClientes(),
           '/register': (_) => const PaginaRegistro(),
           '/trabalhe': (_) => const TrabalheConoscoPage(),
-          '/esqueci-senha': (_) =>
-              const PaginaEsqueciSenha(), // <-- agora está no lugar certo
+          '/esqueci-senha': (_) => const PaginaEsqueciSenha(),
+          '/checkout': (_) => const CheckoutScreen(),
         },
       );
     }

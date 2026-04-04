@@ -57,7 +57,7 @@ class _TrabalheConoscoPageState extends State<TrabalheConoscoPage> {
                           // Seletor Empresa | Motoboy
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.4),
+                              color: Colors.orange.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(

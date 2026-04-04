@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/floating_cart.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PaginaInicialAlmocos extends StatefulWidget {
   const PaginaInicialAlmocos({super.key});
@@ -13,7 +16,7 @@ class _PaginaInicialAlmocosState extends State<PaginaInicialAlmocos> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
+    const Color corSmarty = AppColors.primary;
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 253, 253, 253),
@@ -90,30 +93,14 @@ class _PaginaInicialAlmocosState extends State<PaginaInicialAlmocos> {
 
               // Cards de pratos do dia
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                      "Feijoada",
-                      "R\$ 29,90",
-                      "assets/feijoada.png",
-                    ),
-                    _promoCard(
-                      "Strogonoff de Frango",
-                      "R\$ 24,90",
-                      "assets/strogonoff.png",
-                    ),
-                    _promoCard(
-                      "Parmegiana de Frango",
-                      "R\$ 28,90",
-                      "assets/parmegiana.png",
-                    ),
-                    _promoCard(
-                      "Filé Grelhado",
-                      "R\$ 22,00",
-                      "assets/filegrelhado.png",
-                    ),
+                  children: const [
+                    ProductCard(nome: "Feijoada", preco: "R\$ 29,90", imgPath: "assets/feijoada.png"),
+                    ProductCard(nome: "Strogonoff de Frango", preco: "R\$ 24,90", imgPath: "assets/strogonoff.png"),
+                    ProductCard(nome: "Parmegiana de Frango", preco: "R\$ 28,90", imgPath: "assets/parmegiana.png"),
+                    ProductCard(nome: "Filé Grelhado", preco: "R\$ 22,00", imgPath: "assets/filegrelhado.png"),
                   ],
                 ),
               ),
@@ -124,25 +111,13 @@ class _PaginaInicialAlmocosState extends State<PaginaInicialAlmocos> {
 
               // Cards de mais pedidos
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                      "Lasanha à Bolonhesa",
-                      "R\$ 26,50",
-                      "assets/lasanha.png",
-                    ),
-                    _promoCard(
-                      "Prato Executivo",
-                      "R\$ 27,90",
-                      "assets/pratoexecutivo.png",
-                    ),
-                    _promoCard(
-                      "Frango Xadrez",
-                      "R\$ 25,00",
-                      "assets/frangoxadrez.png",
-                    ),
+                  children: const [
+                    ProductCard(nome: "Lasanha à Bolonhesa", preco: "R\$ 26,50", imgPath: "assets/lasanha.png"),
+                    ProductCard(nome: "Prato Executivo", preco: "R\$ 27,90", imgPath: "assets/pratoexecutivo.png"),
+                    ProductCard(nome: "Frango Xadrez", preco: "R\$ 25,00", imgPath: "assets/frangoxadrez.png"),
                   ],
                 ),
               ),
@@ -151,6 +126,8 @@ class _PaginaInicialAlmocosState extends State<PaginaInicialAlmocos> {
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -175,58 +152,6 @@ class _PaginaInicialAlmocosState extends State<PaginaInicialAlmocos> {
     );
   }
 
-  static Widget _promoCard(String nome, String preco, String imgPath) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imgPath,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFFFA726),
-                height: 90,
-                width: 140,
-                child: const Center(
-                  child: Text(
-                    "Imagem",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(preco, style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ===================== COMPONENTE DE BANNER =====================
@@ -244,7 +169,7 @@ class _BannerItem extends StatelessWidget {
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+              colors: [AppColors.primary, AppColors.secondary],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),

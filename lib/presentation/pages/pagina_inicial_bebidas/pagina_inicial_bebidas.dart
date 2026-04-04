@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/floating_cart.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PaginaInicialBebidas extends StatefulWidget {
   const PaginaInicialBebidas({super.key});
@@ -13,7 +16,7 @@ class _PaginaInicialBebidasState extends State<PaginaInicialBebidas> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
+    const Color corSmarty = AppColors.primary;
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 253, 253, 253),
@@ -90,16 +93,14 @@ class _PaginaInicialBebidasState extends State<PaginaInicialBebidas> {
 
               // ===================== Cards de promoções =====================
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                        "Coca-Cola Lata", "R\$ 4,99", "assets/coca_lata.png"),
-                    _promoCard(
-                        "Guaraná 2L", "R\$ 8,99", "assets/guarana_2l.png"),
-                    _promoCard("Água Mineral", "R\$ 2,50", "assets/agua.png"),
-                    _promoCard("Suco Natural", "R\$ 6,99", "assets/suco.png"),
+                  children: const [
+                    ProductCard(nome: "Coca-Cola Lata", preco: "R\$ 4,99", imgPath: "assets/coca_lata.png"),
+                    ProductCard(nome: "Guaraná 2L", preco: "R\$ 8,99", imgPath: "assets/guarana_2l.png"),
+                    ProductCard(nome: "Água Mineral", preco: "R\$ 2,50", imgPath: "assets/agua.png"),
+                    ProductCard(nome: "Suco Natural", preco: "R\$ 6,99", imgPath: "assets/suco.png"),
                   ],
                 ),
               ),
@@ -110,16 +111,13 @@ class _PaginaInicialBebidasState extends State<PaginaInicialBebidas> {
 
               // ===================== Cards de mais pedidas =====================
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                        "Cerveja Heineken", "R\$ 7,50", "assets/heineken.png"),
-                    _promoCard(
-                        "Refrigerante Pepsi", "R\$ 5,50", "assets/pepsi.png"),
-                    _promoCard("Energético Monster", "R\$ 10,99",
-                        "assets/monster.png"),
+                  children: const [
+                    ProductCard(nome: "Cerveja Heineken", preco: "R\$ 7,50", imgPath: "assets/heineken.png"),
+                    ProductCard(nome: "Refrigerante Pepsi", preco: "R\$ 5,50", imgPath: "assets/pepsi.png"),
+                    ProductCard(nome: "Energético Monster", preco: "R\$ 10,99", imgPath: "assets/monster.png"),
                   ],
                 ),
               ),
@@ -128,6 +126,8 @@ class _PaginaInicialBebidasState extends State<PaginaInicialBebidas> {
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -152,47 +152,6 @@ class _PaginaInicialBebidasState extends State<PaginaInicialBebidas> {
     );
   }
 
-  static Widget _promoCard(String nome, String preco, String imgPath) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imgPath,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(preco, style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ===================== COMPONENTE DE BANNER =====================
@@ -210,7 +169,7 @@ class _BannerItem extends StatelessWidget {
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+              colors: [AppColors.primary, AppColors.secondary],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),

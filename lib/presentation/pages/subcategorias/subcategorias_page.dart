@@ -74,9 +74,8 @@ class SubcategoriasPage extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
-                    // lista não-const por causa do withOpacity
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.15),
+                      color: Colors.grey.withValues(alpha: 0.15),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     ),

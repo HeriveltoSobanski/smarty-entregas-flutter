@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/floating_cart.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PaginaInicialLanches extends StatefulWidget {
   const PaginaInicialLanches({super.key});
@@ -13,7 +16,7 @@ class _PaginaInicialLanchesState extends State<PaginaInicialLanches> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corSmarty = Color(0xFFFFA726);
+    const Color corSmarty = AppColors.primary;
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 253, 253, 253),
@@ -90,15 +93,14 @@ class _PaginaInicialLanchesState extends State<PaginaInicialLanches> {
 
               // Cards de promoções
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard("X-Burger", "R\$ 9,99", "assets/hamburguer.png"),
-                    _promoCard("X-Bacon", "R\$ 11,90", "assets/xbacon.png"),
-                    _promoCard("X-Salada", "R\$ 10,99", "assets/xsalada.png"),
-                    _promoCard(
-                        "Combo Duplo", "R\$ 19,99", "assets/comboduplo.png"),
+                  children: const [
+                    ProductCard(nome: "X-Burger", preco: "R\$ 9,99", imgPath: "assets/hamburguer.png"),
+                    ProductCard(nome: "X-Bacon", preco: "R\$ 11,90", imgPath: "assets/xbacon.png"),
+                    ProductCard(nome: "X-Salada", preco: "R\$ 10,99", imgPath: "assets/xsalada.png"),
+                    ProductCard(nome: "Combo Duplo", preco: "R\$ 19,99", imgPath: "assets/comboduplo.png"),
                   ],
                 ),
               ),
@@ -109,14 +111,13 @@ class _PaginaInicialLanchesState extends State<PaginaInicialLanches> {
 
               // Cards de mais pedidos
               SizedBox(
-                height: 170,
+                height: 260,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  children: [
-                    _promoCard(
-                        "X-Calabresa", "R\$ 12,90", "assets/xcalabresa.png"),
-                    _promoCard("X-Tudo", "R\$ 14,90", "assets/xtudo.png"),
-                    _promoCard("X-Frango", "R\$ 10,50", "assets/xfrango.png"),
+                  children: const [
+                    ProductCard(nome: "X-Calabresa", preco: "R\$ 12,90", imgPath: "assets/xcalabresa.png"),
+                    ProductCard(nome: "X-Tudo", preco: "R\$ 14,90", imgPath: "assets/xtudo.png"),
+                    ProductCard(nome: "X-Frango", preco: "R\$ 10,50", imgPath: "assets/xfrango.png"),
                   ],
                 ),
               ),
@@ -125,6 +126,8 @@ class _PaginaInicialLanchesState extends State<PaginaInicialLanches> {
           ),
         ),
       ),
+      floatingActionButton: const FloatingCart(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -149,47 +152,6 @@ class _PaginaInicialLanchesState extends State<PaginaInicialLanches> {
     );
   }
 
-  static Widget _promoCard(String nome, String preco, String imgPath) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imgPath,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(preco, style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ===================== COMPONENTE DE BANNER =====================
@@ -207,7 +169,7 @@ class _BannerItem extends StatelessWidget {
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
+              colors: [AppColors.primary, AppColors.secondary],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),

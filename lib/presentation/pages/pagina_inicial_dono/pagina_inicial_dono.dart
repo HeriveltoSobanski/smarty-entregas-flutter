@@ -97,7 +97,7 @@ class _PaginaInicialDonoState extends State<PaginaInicialDono> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.15),
+                      color: Colors.grey.withValues(alpha: 0.15),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -107,7 +107,7 @@ class _PaginaInicialDonoState extends State<PaginaInicialDono> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     CircleAvatar(
-                      backgroundColor: opcao.cor.withOpacity(0.15),
+                      backgroundColor: opcao.cor.withValues(alpha: 0.15),
                       radius: 35,
                       child: Icon(opcao.icone, color: opcao.cor, size: 35),
                     ),
