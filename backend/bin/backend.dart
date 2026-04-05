@@ -39,6 +39,7 @@ void main() async {
   app.post('/auth/login',              auth.login);
   app.post('/auth/register/cliente',   auth.registerCliente);
   app.post('/auth/register/empresa',   auth.registerEmpresa);
+  app.post('/auth/register/motoboy',   auth.registerMotoboy);
 
   // PRODUTOS
   app.get('/produtos/categorias',      produto.getCategorias);

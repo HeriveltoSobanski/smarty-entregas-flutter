@@ -55,6 +55,38 @@ class ApiService {
     }
   }
 
+  static Future<String?> registerMotoboy({
+    required String nome,
+    required String email,
+    required String senha,
+    String? cpf,
+    String? telefone,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'nome': nome, 'email': email, 'senha': senha,
+      };
+      if (cpf != null && cpf.isNotEmpty) body['cpf'] = cpf;
+      if (telefone != null && telefone.isNotEmpty) body['telefone'] = telefone;
+
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/register/motoboy'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (resp.statusCode == 200 || resp.statusCode == 201) return null;
+      try {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['error']?.toString() ?? 'Erro ao registrar';
+      } catch (_) {
+        return 'Erro ${resp.statusCode}: ${resp.body}';
+      }
+    } catch (e) {
+      return 'Servidor indisponível. Verifique se o backend está rodando.';
+    }
+  }
+
   static Future<String?> registerEmpresa({
     required String nome,
     required String email,

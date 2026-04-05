@@ -197,6 +197,61 @@ class AuthController {
     }
   }
 
+  // ----------------------------------------------------------------
+  // REGISTRO MOTOBOY
+  // ----------------------------------------------------------------
+  Future<Response> registerMotoboy(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
+
+      final nome     = (data['nome'] ?? '').toString().trim();
+      final email    = (data['email'] ?? '').toString().trim();
+      final senha    = (data['senha'] ?? '').toString();
+      final cpf      = (data['cpf'] ?? '').toString().trim();
+      final telefone = (data['telefone'] ?? '').toString().trim();
+
+      if (nome.isEmpty || email.isEmpty || senha.isEmpty) {
+        return _json(400, {'error': 'Nome, email e senha são obrigatórios'});
+      }
+
+      final result = await conn.execute(
+        Sql.named('''
+          INSERT INTO usuarios
+            (nome, email, senha, cpf, telefone, ativo, tipo_usuario, criado_em, atualizado_em)
+          VALUES
+            (@nome, @email, @senha, @cpf, @telefone, true, 'motoboy', now(), now())
+          RETURNING id_usuario
+        '''),
+        parameters: {
+          'nome': nome,
+          'email': email,
+          'senha': senha,
+          'cpf': cpf.isEmpty ? null : cpf,
+          'telefone': telefone.isEmpty ? null : telefone,
+        },
+      );
+
+      final idUsuario = result.first[0];
+
+      return _json(201, {
+        'ok': true,
+        'user': {'id_usuario': idUsuario, 'email': email, 'tipo_usuario': 'motoboy'}
+      });
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('usuarios_email_key')) {
+        return _json(409, {'error': 'Este e-mail já está cadastrado'});
+      }
+      if (msg.contains('usuarios_cpf_key')) {
+        return _json(409, {'error': 'Este CPF já está cadastrado'});
+      }
+      return _json(500, {'error': 'Erro ao registrar motoboy', 'details': msg});
+    }
+  }
+
   Response _json(int status, Map<String, dynamic> body) {
     return Response(
       status,
