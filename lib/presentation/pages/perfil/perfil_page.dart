@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/session_store.dart';
+import '../cliente_enderecos/cliente_enderecos_page.dart';
 
 const Color _laranja = Color(0xFFF5841F);
 
@@ -44,7 +45,33 @@ class PerfilPage extends StatelessWidget {
           _item(Icons.person_outline, 'Nome', nome),
           _item(Icons.email_outlined, 'E-mail', email),
           _item(Icons.badge_outlined, 'Tipo de conta', 'Cliente'),
-          const SizedBox(height: 32),
+          const SizedBox(height: 8),
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0.5,
+            child: ListTile(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ClienteEnderecosPage()),
+              ),
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: _laranja.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.location_on_outlined,
+                    color: _laranja, size: 20),
+              ),
+              title: const Text('Meus endereços',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+              subtitle: const Text('Gerenciar endereços de entrega',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(

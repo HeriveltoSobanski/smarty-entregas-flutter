@@ -405,6 +405,102 @@ class ApiService {
   // FOTO PERFIL EMPRESA
   // ----------------------------------------------------------------
 
+  // ----------------------------------------------------------------
+  // ENDEREÇOS DO CLIENTE
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getEnderecosCliente(
+      int idUsuario) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['enderecos'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<String?> criarEnderecoCliente({
+    required int    idUsuario,
+    required String endereco,
+    required String apelido,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'apelido':   apelido,
+          'endereco':  endereco,
+          'latitude':  latitude,
+          'longitude': longitude,
+        }),
+      );
+      if (resp.statusCode == 201) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar endereço';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<void> deletarEnderecoCliente(int idEndereco) async {
+    try {
+      await http.delete(
+          Uri.parse('$baseUrl/clientes/enderecos/$idEndereco'));
+    } catch (_) {}
+  }
+
+  static Future<void> marcarEnderecoClientePrincipal(int idEndereco) async {
+    try {
+      await http.patch(
+          Uri.parse('$baseUrl/clientes/enderecos/$idEndereco/principal'));
+    } catch (_) {}
+  }
+
+  // ----------------------------------------------------------------
+  // ENDEREÇO DA EMPRESA
+  // ----------------------------------------------------------------
+
+  static Future<Map<String, dynamic>?> getEnderecoEmpresa(int idEmpresa) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> atualizarEnderecoEmpresa(
+      int idEmpresa, String endereco, double lat, double lng) async {
+    try {
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'endereco':  endereco,
+          'latitude':  lat,
+          'longitude': lng,
+        }),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar endereço';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
   static Future<String?> atualizarFotoEmpresa(
       int idEmpresa, String fotoPerfil) async {
     try {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
+import '../mapa_entrega/mapa_entrega_page.dart';
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -121,9 +122,12 @@ class _TabEntregasState extends State<_TabEntregas> {
     setState(() => _meuStatus = novoStatus);
   }
 
-  Future<void> _aceitar(int idPedido) async {
+  Future<void> _aceitar(Map<String, dynamic> pedido) async {
     final id = SessionStore.idUsuario;
     if (id == null) return;
+    final idPedido = pedido['id_pedido'] is int
+        ? pedido['id_pedido'] as int
+        : int.parse(pedido['id_pedido'].toString());
     final erro = await ApiService.aceitarEntrega(
         idPedido: idPedido, idMotoboy: id);
     if (!mounted) return;
@@ -135,6 +139,25 @@ class _TabEntregasState extends State<_TabEntregas> {
     await ApiService.atualizarMeuStatusMotoboy(id, 'em_rota');
     setState(() => _meuStatus = 'em_rota');
     _carregar();
+    // Abre o mapa com a rota
+    _abrirMapa(pedido);
+  }
+
+  void _abrirMapa(Map<String, dynamic> pedido) {
+    final idPedido = pedido['id_pedido'] is int
+        ? pedido['id_pedido'] as int
+        : int.tryParse(pedido['id_pedido']?.toString() ?? '') ?? 0;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapaEntregaPage(
+          enderecoOrigem:  pedido['empresa_endereco']?.toString() ?? '',
+          enderecoDestino: pedido['endereco_entrega']?.toString() ?? '',
+          nomeEmpresa:     pedido['empresa']?.toString() ?? '',
+          idPedido:        idPedido,
+        ),
+      ),
+    );
   }
 
   Future<void> _atualizarStatus(int idPedido, int idStatus) async {
@@ -226,6 +249,7 @@ class _TabEntregasState extends State<_TabEntregas> {
             ..._emRota.map((p) => _CardEntregaAtiva(
                   pedido: p,
                   onAtualizar: _atualizarStatus,
+                  onVerMapa: () => _abrirMapa(p),
                 )),
             const SizedBox(height: 16),
           ],
@@ -244,10 +268,7 @@ class _TabEntregasState extends State<_TabEntregas> {
           else
             ..._emEspera.map((p) => _CardEntregaDisponivel(
                   pedido: p,
-                  onAceitar: () => _aceitar(
-                      p['id_pedido'] is int
-                          ? p['id_pedido'] as int
-                          : int.parse(p['id_pedido'].toString())),
+                  onAceitar: () => _aceitar(p),
                 )),
         ],
       ),
@@ -374,8 +395,9 @@ class _CardEntregaDisponivel extends StatelessWidget {
 class _CardEntregaAtiva extends StatelessWidget {
   final Map<String, dynamic> pedido;
   final Future<void> Function(int idPedido, int idStatus) onAtualizar;
+  final VoidCallback onVerMapa;
   const _CardEntregaAtiva(
-      {required this.pedido, required this.onAtualizar});
+      {required this.pedido, required this.onAtualizar, required this.onVerMapa});
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +456,22 @@ class _CardEntregaAtiva extends StatelessWidget {
             _linha(Icons.attach_money,
                 'Valor: R\$ ${valor.toStringAsFixed(2)}  •  Taxa: R\$ 5,00'),
             const SizedBox(height: 10),
+            // Botão Ver Mapa (linha própria)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue[700],
+                  side: BorderSide(color: Colors.blue[700]!),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: onVerMapa,
+                icon: const Icon(Icons.map_outlined, size: 18),
+                label: const Text('Ver Mapa / Navegar'),
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 if (idStatus == 3)

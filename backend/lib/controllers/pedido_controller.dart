@@ -92,14 +92,16 @@ class PedidoController {
                  p.valor_total, p.criado_em,
                  u.nome AS cliente, u.email AS cliente_email,
                  u.telefone AS cliente_telefone,
-                 p.endereco_entrega, p.observacao
+                 p.endereco_entrega, p.observacao,
+                 COALESCE(p.quase_pronto, false) AS quase_pronto,
+                 COALESCE(p.tipo_entrega, '')    AS tipo_entrega
           FROM pedidos p
           JOIN usuarios u        ON u.id_usuario  = p.id_usuario
           JOIN status_pedidos sp ON sp.id_status  = p.id_status
-          WHERE p.id_pedido = @id
+          WHERE p.id_pedido = @pedido_id
           LIMIT 1
         '''),
-        parameters: {'id': idPedido},
+        parameters: {'pedido_id': idPedido},
       );
 
       if (pedResult.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
@@ -112,9 +114,9 @@ class PedidoController {
                  COALESCE(pi.observacao, '') AS observacao
           FROM pedido_itens pi
           JOIN produtos pr ON pr.id_produto = pi.id_produto
-          WHERE pi.id_pedido = @id
+          WHERE pi.id_pedido = @pedido_id
         '''),
-        parameters: {'id': idPedido},
+        parameters: {'pedido_id': idPedido},
       );
 
       final itens = itensResult.map((i) => {
@@ -136,6 +138,8 @@ class PedidoController {
           'cliente_telefone': r[7]?.toString() ?? '',
           'endereco_entrega': r[8]?.toString() ?? '',
           'observacao':       r[9]?.toString() ?? '',
+          'quase_pronto':     r[10] as bool? ?? false,
+          'tipo_entrega':     r[11]?.toString() ?? '',
           'itens':            itens,
         }
       });
@@ -213,8 +217,8 @@ class PedidoController {
       if (novoStatus == null) return _json(400, {'error': 'id_status deve ser inteiro'});
 
       await conn.execute(
-        Sql.named('UPDATE pedidos SET id_status = @s WHERE id_pedido = @id'),
-        parameters: {'s': novoStatus, 'id': idPedido},
+        Sql.named('UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id'),
+        parameters: {'novo_status': novoStatus, 'pedido_id': idPedido},
       );
 
       return _json(200, {'ok': true});
@@ -232,8 +236,8 @@ class PedidoController {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
       await conn.execute(
-        Sql.named('UPDATE pedidos SET quase_pronto = true WHERE id_pedido = @id'),
-        parameters: {'id': idPedido},
+        Sql.named('UPDATE pedidos SET quase_pronto = true WHERE id_pedido = @pedido_id'),
+        parameters: {'pedido_id': idPedido},
       );
       return _json(200, {'ok': true});
     } catch (e) {
@@ -253,9 +257,9 @@ class PedidoController {
         Sql.named('''
           UPDATE pedidos
           SET tipo_entrega = 'motoboy', id_status = 6
-          WHERE id_pedido = @id
+          WHERE id_pedido = @pedido_id
         '''),
-        parameters: {'id': idPedido},
+        parameters: {'pedido_id': idPedido},
       );
       return _json(200, {'ok': true});
     } catch (e) {
@@ -275,9 +279,9 @@ class PedidoController {
         Sql.named('''
           UPDATE pedidos
           SET tipo_entrega = 'propria', id_status = 3
-          WHERE id_pedido = @id
+          WHERE id_pedido = @pedido_id
         '''),
-        parameters: {'id': idPedido},
+        parameters: {'pedido_id': idPedido},
       );
       return _json(200, {'ok': true});
     } catch (e) {

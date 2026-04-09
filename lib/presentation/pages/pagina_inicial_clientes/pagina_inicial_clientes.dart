@@ -7,6 +7,7 @@ import '../busca/busca_page.dart';
 import '../meus_pedidos/meus_pedidos_page.dart';
 import '../perfil/perfil_page.dart';
 import '../cardapio_empresa/cardapio_empresa_page.dart';
+import '../cliente_enderecos/cliente_enderecos_page.dart';
 
 const Color _primary = Color(0xFFF5841F);
 const Color _bg = Color(0xFFF5F5F5);
@@ -27,6 +28,75 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
     const MeusPedidosPage(),
     const PerfilPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verificarEndereco());
+  }
+
+  Future<void> _verificarEndereco() async {
+    final id = SessionStore.idUsuario;
+    if (id == null) return;
+    final enderecos = await ApiService.getEnderecosCliente(id);
+    if (!mounted) return;
+    if (enderecos.isEmpty) {
+      _mostrarModalEnderecoObrigatorio();
+    }
+  }
+
+  void _mostrarModalEnderecoObrigatorio() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(children: [
+            Icon(Icons.location_on, color: _primary),
+            SizedBox(width: 8),
+            Expanded(child: Text('Endereço obrigatório',
+                style: TextStyle(fontSize: 17))),
+          ]),
+          content: const Text(
+            'Para fazer pedidos você precisa cadastrar pelo menos um endereço de entrega.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ClienteEnderecosPage(),
+                  ),
+                );
+                if (!mounted) return;
+                // Verifica se cadastrou algum
+                final id = SessionStore.idUsuario;
+                if (id == null) return;
+                final enderecos = await ApiService.getEnderecosCliente(id);
+                if (enderecos.isEmpty && mounted) {
+                  _mostrarModalEnderecoObrigatorio();
+                }
+              },
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Cadastrar agora',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

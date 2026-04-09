@@ -6,6 +6,10 @@ class SessionStore {
   static String? nome;
   static String? tipoUsuario; // 'cliente' | 'empresa' | 'motoboy'
   static int?    idEmpresa;
+  // Endereço verificado no mapa (apenas para empresa)
+  static String? enderecoEmpresa;
+  static double? latEmpresa;
+  static double? lngEmpresa;
 
   static void set({
     required int    idUsuario,
@@ -22,11 +26,14 @@ class SessionStore {
   }
 
   static void clear() {
-    idUsuario   = null;
-    email       = null;
-    nome        = null;
-    tipoUsuario = null;
-    idEmpresa   = null;
+    idUsuario        = null;
+    email            = null;
+    nome             = null;
+    tipoUsuario      = null;
+    idEmpresa        = null;
+    enderecoEmpresa  = null;
+    latEmpresa       = null;
+    lngEmpresa       = null;
   }
 
   static bool get isEmpresa  => tipoUsuario == 'empresa';

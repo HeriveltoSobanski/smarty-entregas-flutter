@@ -30,7 +30,7 @@ class MotoboyController {
           JOIN status_pedidos sp ON sp.id_status  = p.id_status
           LEFT JOIN pedido_itens pitem ON pitem.id_pedido = p.id_pedido
           LEFT JOIN produtos pr        ON pr.id_produto   = pitem.id_produto
-          WHERE p.id_status = 2
+          WHERE p.id_status = 6
             AND p.id_motoboy IS NULL
           GROUP BY p.id_pedido, e.nome, e.endereco, sp.nome,
                    p.valor_total, p.criado_em, p.endereco_entrega, p.observacao
@@ -98,6 +98,7 @@ class MotoboyController {
         Sql.named('''
           SELECT p.id_pedido,
                  e.nome AS empresa,
+                 COALESCE(e.endereco, '') AS empresa_endereco,
                  sp.nome AS status,
                  p.id_status,
                  p.valor_total,
@@ -111,22 +112,23 @@ class MotoboyController {
           LEFT JOIN pedido_itens pitem ON pitem.id_pedido = p.id_pedido
           LEFT JOIN produtos pr        ON pr.id_produto   = pitem.id_produto
           WHERE p.id_motoboy = @id AND p.id_status = 3
-          GROUP BY p.id_pedido, e.nome, sp.nome, p.id_status,
+          GROUP BY p.id_pedido, e.nome, e.endereco, sp.nome, p.id_status,
                    p.valor_total, p.criado_em, p.endereco_entrega, p.observacao
           ORDER BY p.criado_em DESC
         '''),
         parameters: {'id': idMotoboy},
       );
       final list = result.map((r) => {
-        'id_pedido':        r[0],
-        'empresa':          r[1]?.toString() ?? '',
-        'status':           r[2]?.toString() ?? '',
-        'id_status':        r[3],
-        'valor_total':      r[4],
-        'criado_em':        r[5]?.toString() ?? '',
-        'endereco_entrega': r[6]?.toString() ?? '',
-        'observacao':       r[7]?.toString() ?? '',
-        'itens':            r[8]?.toString() ?? '',
+        'id_pedido':         r[0],
+        'empresa':           r[1]?.toString() ?? '',
+        'empresa_endereco':  r[2]?.toString() ?? '',
+        'status':            r[3]?.toString() ?? '',
+        'id_status':         r[4],
+        'valor_total':       r[5],
+        'criado_em':         r[6]?.toString() ?? '',
+        'endereco_entrega':  r[7]?.toString() ?? '',
+        'observacao':        r[8]?.toString() ?? '',
+        'itens':             r[9]?.toString() ?? '',
       }).toList();
       return _json(200, {'pedidos': list});
     } catch (e) {
@@ -148,8 +150,8 @@ class MotoboyController {
         return _json(400, {'error': 'id_motoboy e status obrigatórios'});
       }
       await conn.execute(
-        Sql.named('UPDATE usuarios SET status_motoboy = @s WHERE id_usuario = @id'),
-        parameters: {'s': status, 'id': idMotoboy},
+        Sql.named('UPDATE usuarios SET status_motoboy = @novo_status WHERE id_usuario = @usuario_id'),
+        parameters: {'novo_status': status, 'usuario_id': idMotoboy},
       );
       return _json(200, {'ok': true});
     } catch (e) {
@@ -263,8 +265,8 @@ class MotoboyController {
 
       await conn.execute(
         Sql.named(
-            'UPDATE pedidos SET id_status = @s WHERE id_pedido = @id'),
-        parameters: {'s': idStatus, 'id': idPedido},
+            'UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id'),
+        parameters: {'novo_status': idStatus, 'pedido_id': idPedido},
       );
 
       return _json(200, {'ok': true});

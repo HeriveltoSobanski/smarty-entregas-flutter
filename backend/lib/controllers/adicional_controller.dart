@@ -114,8 +114,8 @@ class AdicionalController {
       if (idAdicional == null) return _json(400, {'error': 'id inválido'});
 
       await conn.execute(
-        Sql.named('DELETE FROM produto_adicionais WHERE id_adicional = @id'),
-        parameters: {'id': idAdicional},
+        Sql.named('DELETE FROM produto_adicionais WHERE id_adicional = @adicional_id'),
+        parameters: {'adicional_id': idAdicional},
       );
       return _json(200, {'ok': true});
     } catch (e) {

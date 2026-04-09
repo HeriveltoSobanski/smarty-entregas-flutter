@@ -61,6 +61,75 @@ class EmpresaController {
     }
   }
 
+  // ----------------------------------------------------------------
+  // GET /empresas/:id/endereco
+  // ----------------------------------------------------------------
+  Future<Response> getEndereco(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+      final result = await conn.execute(
+        Sql.named(
+            'SELECT endereco, latitude, longitude FROM empresas WHERE id_empresa = @id'),
+        parameters: {'id': idEmpresa},
+      );
+
+      if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+      final r = result.first;
+
+      return _json(200, {
+        'endereco':  r[0]?.toString(),
+        'latitude':  r[1],
+        'longitude': r[2],
+      });
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // PATCH /empresas/:id/endereco
+  // Body: { endereco, latitude, longitude }
+  // ----------------------------------------------------------------
+  Future<Response> atualizarEndereco(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+      final body = await request.readAsString();
+      final data = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
+
+      final endereco  = data['endereco']?.toString();
+      final latitude  = data['latitude']  is num ? (data['latitude']  as num).toDouble() : null;
+      final longitude = data['longitude'] is num ? (data['longitude'] as num).toDouble() : null;
+
+      if (endereco == null || endereco.isEmpty) {
+        return _json(400, {'error': 'endereco é obrigatório'});
+      }
+
+      await conn.execute(
+        Sql.named('''
+          UPDATE empresas
+          SET endereco = @endereco, latitude = @lat, longitude = @lng
+          WHERE id_empresa = @id
+        '''),
+        parameters: {
+          'endereco': endereco,
+          'lat':      latitude,
+          'lng':      longitude,
+          'id':       idEmpresa,
+        },
+      );
+
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
   Response _json(int status, Map<String, dynamic> body) => Response(
         status,
         body: jsonEncode(body),

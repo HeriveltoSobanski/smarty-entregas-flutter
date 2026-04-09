@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
+import '../cliente_enderecos/cliente_enderecos_page.dart';
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -22,14 +23,49 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final TextEditingController _observacaoCtrl  = TextEditingController();
-  final TextEditingController _enderecoCtrl    = TextEditingController();
+  final TextEditingController _observacaoCtrl = TextEditingController();
   bool _carregando = false;
+
+  Map<String, dynamic>? _enderecoSel;  // endereço selecionado
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarEnderecos();
+  }
+
+  Future<void> _carregarEnderecos() async {
+    final id = SessionStore.idUsuario;
+    if (id == null) return;
+    final lista = await ApiService.getEnderecosCliente(id);
+    if (!mounted) return;
+    // Pré-seleciona o principal (ou o primeiro)
+    final sel = lista.firstWhere(
+      (e) => e['principal'] as bool? ?? false,
+      orElse: () => lista.isNotEmpty ? lista.first : {},
+    );
+    setState(() => _enderecoSel = sel.isEmpty ? null : sel);
+  }
+
+  Future<void> _selecionarEndereco() async {
+    final escolhido = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ClienteEnderecosPage(modoSelecao: true),
+      ),
+    );
+    if (escolhido != null && mounted) {
+      setState(() => _enderecoSel = escolhido);
+      // Recarrega lista caso tenha adicionado novo
+      _carregarEnderecos().then((_) {
+        if (mounted) setState(() => _enderecoSel = escolhido);
+      });
+    }
+  }
 
   @override
   void dispose() {
     _observacaoCtrl.dispose();
-    _enderecoCtrl.dispose();
     super.dispose();
   }
 
@@ -72,11 +108,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       };
     }).toList();
 
-    final endereco = _enderecoCtrl.text.trim();
+    final endereco = _enderecoSel?['endereco']?.toString().trim() ?? '';
     if (endereco.isEmpty) {
       setState(() => _carregando = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o endereço de entrega.')),
+        const SnackBar(content: Text('Selecione um endereço de entrega.')),
       );
       return;
     }
@@ -278,7 +314,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: const [
+                    const Row(children: [
                       Icon(Icons.location_on_outlined, color: _cor, size: 20),
                       SizedBox(width: 8),
                       Text('Endereço de entrega',
@@ -286,18 +322,74 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               fontSize: 15, fontWeight: FontWeight.bold)),
                     ]),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: _enderecoCtrl,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        hintText: 'Rua, número, bairro, complemento...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    // ── Endereço selecionado ─────────────────────
+                    InkWell(
+                      onTap: _selecionarEndereco,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _enderecoSel != null
+                              ? _cor.withValues(alpha: 0.06)
+                              : Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _enderecoSel != null
+                                ? _cor
+                                : Colors.red.shade300,
+                            width: 1.5,
+                          ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: _cor, width: 2),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _enderecoSel != null
+                                  ? Icons.location_on
+                                  : Icons.location_off,
+                              color: _enderecoSel != null
+                                  ? _cor
+                                  : Colors.red,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _enderecoSel != null
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _enderecoSel!['apelido']
+                                                  ?.toString() ??
+                                              'Endereço',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                              color: _cor),
+                                        ),
+                                        Text(
+                                          _enderecoSel!['endereco']
+                                                  ?.toString() ??
+                                              '',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[700]),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      'Nenhum endereço selecionado.\nToque para adicionar.',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.red[700]),
+                                    ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(Icons.swap_vert,
+                                color: Colors.grey[500], size: 20),
+                          ],
                         ),
                       ),
                     ),

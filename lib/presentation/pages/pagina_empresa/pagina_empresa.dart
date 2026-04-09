@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
+import '../selecionar_endereco/selecionar_endereco_page.dart';
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -20,6 +21,105 @@ class PaginaEmpresa extends StatefulWidget {
 
 class _PaginaEmpresaState extends State<PaginaEmpresa> {
   int _aba = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verificarEndereco());
+  }
+
+  Future<void> _verificarEndereco() async {
+    final id = SessionStore.idEmpresa;
+    if (id == null) return;
+
+    final data = await ApiService.getEnderecoEmpresa(id);
+    final endereco = data?['endereco']?.toString() ?? '';
+
+    // Atualiza sessão
+    SessionStore.enderecoEmpresa = endereco.isEmpty ? null : endereco;
+    SessionStore.latEmpresa  = data?['latitude']  is num ? (data!['latitude']  as num).toDouble() : null;
+    SessionStore.lngEmpresa  = data?['longitude'] is num ? (data!['longitude'] as num).toDouble() : null;
+
+    if (!mounted) return;
+    if (endereco.isEmpty) {
+      _mostrarModalEnderecoObrigatorio();
+    }
+  }
+
+  void _mostrarModalEnderecoObrigatorio() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // obrigatório — não pode fechar sem cadastrar
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            const Icon(Icons.location_on, color: Color(0xFFFFA726)),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Endereço obrigatório',
+                style: TextStyle(fontSize: 17))),
+          ]),
+          content: const Text(
+            'Para que os motoboys consigam encontrar sua empresa, '
+            'você precisa cadastrar o endereço antes de continuar.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFA726),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx); // fecha o dialog
+                final res = await Navigator.push<EnderecoSelecionado>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SelecionarEnderecoPage(),
+                  ),
+                );
+                if (res != null) {
+                  await _salvarEndereco(res);
+                } else {
+                  // Não cadastrou — mostra de novo
+                  if (mounted) _mostrarModalEnderecoObrigatorio();
+                }
+              },
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Cadastrar agora',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _salvarEndereco(EnderecoSelecionado res) async {
+    final id = SessionStore.idEmpresa;
+    if (id == null) return;
+    final erro = await ApiService.atualizarEnderecoEmpresa(
+        id, res.endereco, res.lat, res.lng);
+    if (!mounted) return;
+    if (erro != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(erro), backgroundColor: Colors.red));
+      _mostrarModalEnderecoObrigatorio();
+    } else {
+      SessionStore.enderecoEmpresa = res.endereco;
+      SessionStore.latEmpresa  = res.lat;
+      SessionStore.lngEmpresa  = res.lng;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Endereço salvo com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -866,7 +966,8 @@ class _TabPedidos extends StatefulWidget {
 class _TabPedidosState extends State<_TabPedidos> {
   List<Map<String, dynamic>> _pedidos = [];
   bool      _carregando  = true;
-  DateTime  _dataInicio  = DateTime.now().subtract(const Duration(days: 7));
+  // filtro manual (usado só pelo relatório)
+  DateTime  _dataInicio  = DateTime.now().subtract(const Duration(days: 30));
   DateTime  _dataFim     = DateTime.now();
   Timer?    _timer;
 
@@ -883,9 +984,6 @@ class _TabPedidosState extends State<_TabPedidos> {
     super.dispose();
   }
 
-  String _fmtApi(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
   String _fmtBR(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
@@ -893,14 +991,14 @@ class _TabPedidosState extends State<_TabPedidos> {
     if (!silencioso) setState(() => _carregando = true);
     final id = SessionStore.idEmpresa;
     if (id != null) {
-      final lista = await ApiService.getPedidosByEmpresa(
-        id,
-        inicio: _fmtApi(_dataInicio),
-        fim:    _fmtApi(_dataFim),
-      );
-      if (mounted) setState(() => _pedidos = lista);
+      // Sem filtro de data na lista ao vivo — evita problema de fuso horário
+      // onde pedidos feitos à noite ficam fora do range UTC
+      final lista = await ApiService.getPedidosByEmpresa(id);
+      if (mounted) {
+        setState(() => _pedidos = lista);
+      }
     }
-    if (mounted && !silencioso) setState(() => _carregando = false);
+    if (mounted && !silencioso) { setState(() => _carregando = false); }
   }
 
   Future<void> _selecionarData(bool isInicio) async {
@@ -1699,6 +1797,9 @@ class _TabContaState extends State<_TabConta> {
   bool _carregando = true;
   String? _fotoPerfil;
   bool _salvandoFoto = false;
+  String? _endereco;
+  double? _lat;
+  double? _lng;
 
   @override
   void initState() {
@@ -1710,10 +1811,54 @@ class _TabContaState extends State<_TabConta> {
     setState(() => _carregando = true);
     final id = SessionStore.idEmpresa;
     if (id != null) {
-      final lista = await ApiService.getPedidosByEmpresa(id);
-      if (mounted) setState(() => _pedidos = lista);
+      final results = await Future.wait([
+        ApiService.getPedidosByEmpresa(id),
+        ApiService.getEnderecoEmpresa(id),
+      ]);
+      final lista = results[0] as List<Map<String, dynamic>>;
+      final endData = results[1] as Map<String, dynamic>?;
+      if (mounted) {
+        setState(() {
+          _pedidos  = lista;
+          _endereco = endData?['endereco']?.toString();
+          _lat      = endData?['latitude']  is num ? (endData!['latitude']  as num).toDouble() : null;
+          _lng      = endData?['longitude'] is num ? (endData!['longitude'] as num).toDouble() : null;
+        });
+      }
     }
     if (mounted) setState(() => _carregando = false);
+  }
+
+  Future<void> _editarEndereco() async {
+    final res = await Navigator.push<EnderecoSelecionado>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SelecionarEnderecoPage(
+          enderecoInicial: _endereco,
+          latInicial:      _lat,
+          lngInicial:      _lng,
+        ),
+      ),
+    );
+    if (res == null || !mounted) return;
+    final id = SessionStore.idEmpresa;
+    if (id == null) return;
+    final erro = await ApiService.atualizarEnderecoEmpresa(
+        id, res.endereco, res.lat, res.lng);
+    if (!mounted) return;
+    if (erro != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(erro), backgroundColor: Colors.red));
+    } else {
+      SessionStore.enderecoEmpresa = res.endereco;
+      SessionStore.latEmpresa  = res.lat;
+      SessionStore.lngEmpresa  = res.lng;
+      setState(() { _endereco = res.endereco; _lat = res.lat; _lng = res.lng; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Endereço atualizado!'),
+            backgroundColor: Colors.green),
+      );
+    }
   }
 
   Future<void> _selecionarFoto() async {
@@ -1883,6 +2028,90 @@ class _TabContaState extends State<_TabConta> {
                       ],
                     ),
                   ),
+                ]),
+              ),
+            ),
+
+            // ── Endereço da empresa ────────────────────────────
+            GestureDetector(
+              onTap: _editarEndereco,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: (_endereco == null || _endereco!.isEmpty)
+                        ? Colors.red.shade300
+                        : Colors.green.shade300,
+                    width: 1.5,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 6)
+                  ],
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 46, height: 46,
+                    decoration: BoxDecoration(
+                      color: (_endereco == null || _endereco!.isEmpty)
+                          ? Colors.red.shade50
+                          : Colors.green.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.location_on,
+                      color: (_endereco == null || _endereco!.isEmpty)
+                          ? Colors.red
+                          : Colors.green,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          const Text('Endereço da empresa',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(width: 6),
+                          if (_endereco == null || _endereco!.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('Obrigatório',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 10,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                        ]),
+                        const SizedBox(height: 2),
+                        Text(
+                          (_endereco != null && _endereco!.isNotEmpty)
+                              ? _endereco!
+                              : 'Toque para cadastrar o endereço.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: (_endereco == null || _endereco!.isEmpty)
+                                ? Colors.red[700]
+                                : Colors.grey[600],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.edit_outlined,
+                      color: Colors.grey[400], size: 20),
                 ]),
               ),
             ),
