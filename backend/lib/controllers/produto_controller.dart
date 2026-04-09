@@ -311,6 +311,72 @@ class ProdutoController {
     }
   }
 
+  // ----------------------------------------------------------------
+  // GET /produtos/busca?q=<termo>
+  // Busca produtos ativos por nome do produto ou nome da empresa
+  // ----------------------------------------------------------------
+  Future<Response> buscarProdutos(Request request) async {
+    try {
+      final q = (request.url.queryParameters['q'] ?? '').trim();
+      if (q.isEmpty) {
+        return _json(400, {'error': 'Parâmetro q obrigatório'});
+      }
+
+      final result = await conn.execute(
+        Sql.named('''
+          SELECT e.id_empresa, u.nome AS empresa_nome,
+                 p.id_produto, p.nome AS produto_nome, p.descricao,
+                 p.preco, c.nome AS categoria_nome, p.imagem,
+                 e.foto_perfil
+          FROM empresas e
+          JOIN usuarios u   ON u.id_usuario   = e.id_usuario
+          JOIN produtos p   ON p.id_empresa   = e.id_empresa
+          LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
+          WHERE p.ativo = true
+            AND (
+              LOWER(p.nome)  ILIKE '%' || LOWER(@q) || '%'
+              OR LOWER(u.nome) ILIKE '%' || LOWER(@q) || '%'
+            )
+          ORDER BY e.id_empresa, p.preco ASC
+        '''),
+        parameters: {'q': q},
+      );
+
+      final Map<int, Map<String, dynamic>> empresaMap = {};
+      for (final r in result) {
+        final idEmpresa   = r[0] as int;
+        final empresaNome = r[1]?.toString() ?? '';
+        final idProduto   = r[2];
+        final produtoNome = r[3]?.toString() ?? '';
+        final descricao   = r[4]?.toString() ?? '';
+        final preco       = r[5];
+        final catNome     = r[6]?.toString() ?? '';
+        final imagem      = r[7]?.toString();
+        final fotoPerfil  = r[8]?.toString();
+
+        empresaMap.putIfAbsent(idEmpresa, () => {
+          'id_empresa':  idEmpresa,
+          'nome':        empresaNome,
+          'foto_perfil': fotoPerfil,
+          'produtos':    <Map<String, dynamic>>[],
+        });
+
+        (empresaMap[idEmpresa]!['produtos'] as List).add({
+          'id_produto':     idProduto,
+          'nome':           produtoNome,
+          'descricao':      descricao,
+          'preco':          preco,
+          'categoria_nome': catNome,
+          'imagem':         imagem,
+        });
+      }
+
+      return _json(200, {'empresas': empresaMap.values.toList()});
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
   Response _json(int status, Map<String, dynamic> body) {
     return Response(
       status,

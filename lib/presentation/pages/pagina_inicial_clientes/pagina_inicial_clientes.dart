@@ -589,18 +589,6 @@ class _EmpresaCard extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 12, color: Color(0xFF757575))),
                     ]),
-                    const SizedBox(height: 8),
-                    // Preview de produtos com imagem
-                    if (produtos.isNotEmpty)
-                      SizedBox(
-                        height: 100,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: produtos.length > 5 ? 5 : produtos.length,
-                          itemBuilder: (_, i) =>
-                              _MiniCardProduto(produto: produtos[i]),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -650,71 +638,6 @@ class _LogoEmpresa extends StatelessWidget {
   }
 }
 
-// ── Mini card de produto (preview horizontal) ─────────────────────
-class _MiniCardProduto extends StatelessWidget {
-  final Map<String, dynamic> produto;
-  const _MiniCardProduto({required this.produto});
-
-  @override
-  Widget build(BuildContext context) {
-    final nome = produto['nome']?.toString() ?? '';
-    final precoRaw = produto['preco'];
-    final preco = precoRaw is num
-        ? precoRaw.toDouble()
-        : double.tryParse(precoRaw?.toString() ?? '') ?? 0.0;
-    final imagem = produto['imagem']?.toString();
-
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MiniImagem(imagem: imagem),
-          const SizedBox(height: 4),
-          Text(nome,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          Text('R\$ ${preco.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontSize: 10,
-                  color: _primary,
-                  fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Imagem em miniatura ───────────────────────────────────────────
-class _MiniImagem extends StatelessWidget {
-  final String? imagem;
-  const _MiniImagem({this.imagem});
-
-  @override
-  Widget build(BuildContext context) {
-    if (imagem != null && imagem!.contains(',')) {
-      try {
-        final bytes = base64Decode(imagem!.split(',').last);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(bytes, width: 80, height: 56, fit: BoxFit.cover),
-        );
-      } catch (_) {}
-    }
-    return Container(
-      width: 80,
-      height: 56,
-      decoration: BoxDecoration(
-        color: _primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Icon(Icons.fastfood, color: _primary, size: 24),
-    );
-  }
-}
-
 // ── Shimmer card (skeleton loading) ──────────────────────────────
 class _EmpresaCardShimmer extends StatelessWidget {
   const _EmpresaCardShimmer();
@@ -753,18 +676,6 @@ class _EmpresaCardShimmer extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: Colors.grey.shade200,
                     borderRadius: BorderRadius.circular(4))),
-            const SizedBox(height: 10),
-            Row(
-              children: List.generate(
-                  4,
-                  (_) => Container(
-                        width: 80, height: 56,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(8)),
-                      )),
-            ),
           ]),
         ),
       ]),

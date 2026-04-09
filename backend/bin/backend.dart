@@ -227,6 +227,7 @@ void main() async {
 
   // PRODUTOS
   app.get('/produtos/categorias',      produto.getCategorias);
+  app.get('/produtos/busca',           produto.buscarProdutos);
   app.get('/produtos/empresa',         produto.getProdutosByEmpresa);
   app.get('/produtos/publico',         produto.getProdutosPublico);
   app.get('/produtos/empresas',        produto.getEmpresasComProdutos);
