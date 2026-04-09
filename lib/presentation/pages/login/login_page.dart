@@ -161,6 +161,8 @@ class _PaginaLoginState extends State<PaginaLogin>
 
     if (tipoUsuario == 'empresa') {
       Navigator.pushReplacementNamed(context, '/empresa');
+    } else if (tipoUsuario == 'motoboy') {
+      Navigator.pushReplacementNamed(context, '/motoboy');
     } else {
       Navigator.pushReplacementNamed(context, '/home');
     }

@@ -53,7 +53,7 @@ class ProdutoController {
         Sql.named('''
           SELECT p.id_produto, p.nome, p.descricao, p.preco, p.ativo,
                  c.nome AS categoria_nome, p.id_categoria,
-                 p.criado_em
+                 p.criado_em, p.imagem
           FROM produtos p
           LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
           WHERE p.id_empresa = @id_empresa
@@ -71,6 +71,7 @@ class ProdutoController {
         'categoria_nome': r[5]?.toString() ?? '',
         'id_categoria':   r[6],
         'criado_em':      r[7]?.toString(),
+        'imagem':         r[8]?.toString(),
       }).toList();
 
       return _json(200, {'produtos': list});
@@ -154,6 +155,7 @@ class ProdutoController {
           : double.tryParse(
                   data['preco']?.toString().replaceAll(',', '.') ?? '0') ??
               0.0;
+      final imagem    = data['imagem']?.toString();
 
       if (idEmpresa == null || idCategoria == null ||
           nome.isEmpty || preco <= 0) {
@@ -165,9 +167,9 @@ class ProdutoController {
       final result = await conn.execute(
         Sql.named('''
           INSERT INTO produtos
-            (id_empresa, id_categoria, nome, descricao, preco, ativo, criado_em, atualizado_em)
+            (id_empresa, id_categoria, nome, descricao, preco, imagem, ativo, criado_em, atualizado_em)
           VALUES
-            (@id_empresa, @id_categoria, @nome, @descricao, @preco, true, now(), now())
+            (@id_empresa, @id_categoria, @nome, @descricao, @preco, @imagem, true, now(), now())
           RETURNING id_produto
         '''),
         parameters: {
@@ -176,6 +178,7 @@ class ProdutoController {
           'nome':         nome,
           'descricao':    descricao,
           'preco':        preco,
+          'imagem':       imagem,
         },
       );
 
@@ -243,7 +246,8 @@ class ProdutoController {
           ? '''
             SELECT e.id_empresa, u.nome AS empresa_nome,
                    p.id_produto, p.nome AS produto_nome, p.descricao,
-                   p.preco, c.nome AS categoria_nome
+                   p.preco, c.nome AS categoria_nome, p.imagem,
+                   e.foto_perfil
             FROM empresas e
             JOIN usuarios u   ON u.id_usuario   = e.id_usuario
             JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -255,7 +259,8 @@ class ProdutoController {
           : '''
             SELECT e.id_empresa, u.nome AS empresa_nome,
                    p.id_produto, p.nome AS produto_nome, p.descricao,
-                   p.preco, c.nome AS categoria_nome
+                   p.preco, c.nome AS categoria_nome, p.imagem,
+                   e.foto_perfil
             FROM empresas e
             JOIN usuarios u   ON u.id_usuario   = e.id_usuario
             JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -280,10 +285,13 @@ class ProdutoController {
         final descricao   = r[4]?.toString() ?? '';
         final preco       = r[5];
         final catNome     = r[6]?.toString() ?? '';
+        final imagem      = r[7]?.toString();
+        final fotoPerfil  = r[8]?.toString();
 
         empresaMap.putIfAbsent(idEmpresa, () => {
           'id_empresa':   idEmpresa,
           'nome':         empresaNome,
+          'foto_perfil':  fotoPerfil,
           'produtos':     <Map<String, dynamic>>[],
         });
 
@@ -293,6 +301,7 @@ class ProdutoController {
           'descricao':      descricao,
           'preco':          preco,
           'categoria_nome': catNome,
+          'imagem':         imagem,
         });
       }
 

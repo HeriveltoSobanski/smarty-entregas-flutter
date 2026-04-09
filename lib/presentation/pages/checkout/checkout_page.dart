@@ -22,12 +22,14 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final TextEditingController _observacaoCtrl = TextEditingController();
+  final TextEditingController _observacaoCtrl  = TextEditingController();
+  final TextEditingController _enderecoCtrl    = TextEditingController();
   bool _carregando = false;
 
   @override
   void dispose() {
     _observacaoCtrl.dispose();
+    _enderecoCtrl.dispose();
     super.dispose();
   }
 
@@ -57,17 +59,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _carregando = true);
 
     final itensParaEnvio = widget.itens.map((item) {
+      final adicionais = item['adicionais']?.toString() ?? '';
+      final obs        = item['observacao']?.toString() ?? '';
+      final descricao  = [adicionais, obs]
+          .where((s) => s.isNotEmpty)
+          .join(' | ');
       return {
         'id_produto': item['id_produto'],
         'quantidade': item['quantidade'],
         'preco_unit': _precoItem(item['preco']),
+        if (descricao.isNotEmpty) 'observacao': descricao,
       };
     }).toList();
 
+    final endereco = _enderecoCtrl.text.trim();
+    if (endereco.isEmpty) {
+      setState(() => _carregando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe o endereço de entrega.')),
+      );
+      return;
+    }
+
     final erro = await ApiService.criarPedido(
-      idUsuario: idUsuario,
-      idEmpresa: idEmpresa is int ? idEmpresa : int.parse(idEmpresa.toString()),
-      itens: itensParaEnvio,
+      idUsuario:       idUsuario,
+      idEmpresa:       idEmpresa is int ? idEmpresa : int.parse(idEmpresa.toString()),
+      itens:           itensParaEnvio,
+      enderecoEntrega: endereco,
+      observacao:      _observacaoCtrl.text.trim(),
     );
 
     setState(() => _carregando = false);
@@ -167,14 +186,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                     const Divider(height: 20),
                     ...widget.itens.map((item) {
-                      final nome = item['nome']?.toString() ?? '';
-                      final qtd = item['quantidade'] ?? 1;
-                      final preco = _precoItem(item['preco']);
-                      final subtotal = preco * (qtd is num ? qtd.toInt() : 1);
+                      final nome       = item['nome']?.toString() ?? '';
+                      final qtd        = item['quantidade'] ?? 1;
+                      final preco      = _precoItem(item['preco']);
+                      final subtotal   = preco * (qtd is num ? qtd.toInt() : 1);
+                      final adicionais = item['adicionais']?.toString() ?? '';
+                      final obs        = item['observacao']?.toString() ?? '';
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Column(
@@ -191,6 +213,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                     style: const TextStyle(
                                         fontSize: 12, color: Colors.grey),
                                   ),
+                                  if (adicionais.isNotEmpty)
+                                    Text(
+                                      adicionais,
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.orange[700],
+                                          fontStyle: FontStyle.italic),
+                                    ),
+                                  if (obs.isNotEmpty)
+                                    Text(
+                                      'Obs: $obs',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic),
+                                    ),
                                 ],
                               ),
                             ),
@@ -222,6 +260,46 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ---- Endereço de entrega ----
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: const [
+                      Icon(Icons.location_on_outlined, color: _cor, size: 20),
+                      SizedBox(width: 8),
+                      Text('Endereço de entrega',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _enderecoCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'Rua, número, bairro, complemento...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: _cor, width: 2),
+                        ),
+                      ),
                     ),
                   ],
                 ),

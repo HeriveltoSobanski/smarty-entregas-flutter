@@ -153,7 +153,6 @@ class ApiService {
     }
   }
 
-  /// [categoria] = 'Lanches', 'Pizzas', etc. (opcional)
   static Future<List<Map<String, dynamic>>> getProdutosPublico({
     String? categoria,
   }) async {
@@ -180,18 +179,22 @@ class ApiService {
     required String nome,
     required String descricao,
     required double preco,
+    String?         imagem,
   }) async {
     try {
+      final body = <String, dynamic>{
+        'id_empresa':   idEmpresa,
+        'id_categoria': idCategoria,
+        'nome':         nome,
+        'descricao':    descricao,
+        'preco':        preco,
+      };
+      if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
+
       final resp = await http.post(
         Uri.parse('$baseUrl/produtos'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id_empresa':   idEmpresa,
-          'id_categoria': idCategoria,
-          'nome':         nome,
-          'descricao':    descricao,
-          'preco':        preco,
-        }),
+        body: jsonEncode(body),
       );
 
       if (resp.statusCode == 201) return null;
@@ -221,22 +224,59 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
+  // BUSCA
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> buscarProdutos(String termo) async {
+    try {
+      final uri = Uri.parse(
+          '$baseUrl/produtos/busca?q=${Uri.encodeComponent(termo)}');
+      final resp = await http.get(uri);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['empresas'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ----------------------------------------------------------------
   // PEDIDOS — criar
   // ----------------------------------------------------------------
+
+  static Future<Map<String, dynamic>?> getPedidoDetalhes(int idPedido) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/pedidos/$idPedido/detalhes'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['pedido'] as Map<String, dynamic>?;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<String?> criarPedido({
     required int idUsuario,
     required int idEmpresa,
-    required List<Map<String, dynamic>> itens, // [{id_produto, quantidade, preco_unit}]
+    required List<Map<String, dynamic>> itens,
+    String enderecoEntrega = '',
+    String observacao = '',
   }) async {
     try {
       final resp = await http.post(
         Uri.parse('$baseUrl/pedidos'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'id_usuario': idUsuario,
-          'id_empresa': idEmpresa,
-          'itens': itens,
+          'id_usuario':       idUsuario,
+          'id_empresa':       idEmpresa,
+          'itens':            itens,
+          'endereco_entrega': enderecoEntrega,
+          'observacao':       observacao,
         }),
       );
       if (resp.statusCode == 201) return null;
@@ -253,8 +293,41 @@ class ApiService {
     }
   }
 
-  /// Retorna lista de empresas que têm produtos ativos,
-  /// com seus produtos agrupados. Filtro opcional por categoria.
+  // ----------------------------------------------------------------
+  // PEDIDOS — cliente
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getPedidosByCliente(
+      int idUsuario) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/pedidos/cliente?id_usuario=$idUsuario'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> atualizarStatusPedido(
+      int idPedido, int idStatus) async {
+    try {
+      await http.patch(
+        Uri.parse('$baseUrl/pedidos/$idPedido/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_status': idStatus}),
+      );
+    } catch (_) {}
+  }
+
+  // ----------------------------------------------------------------
+  // EMPRESAS com produtos
+  // ----------------------------------------------------------------
+
   static Future<List<Map<String, dynamic>>> getEmpresasComProdutos({
     String? categoria,
   }) async {
@@ -275,10 +348,202 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
+  // ADICIONAIS
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getAdicionais(int idProduto) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/produtos/$idProduto/adicionais'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['grupos'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<String?> createAdicional({
+    required int    idProduto,
+    required String grupo,
+    required int    maximoGrupo,
+    required bool   obrigatorio,
+    required String nome,
+    required String descricao,
+    required double preco,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/produtos/$idProduto/adicionais'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'grupo':        grupo,
+          'maximo_grupo': maximoGrupo,
+          'obrigatorio':  obrigatorio,
+          'nome':         nome,
+          'descricao':    descricao,
+          'preco':        preco,
+        }),
+      );
+      if (resp.statusCode == 201) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar adicional';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<void> deleteAdicional(int idAdicional) async {
+    try {
+      await http.delete(Uri.parse('$baseUrl/adicionais/$idAdicional'));
+    } catch (_) {}
+  }
+
+  // ----------------------------------------------------------------
+  // FOTO PERFIL EMPRESA
+  // ----------------------------------------------------------------
+
+  static Future<String?> atualizarFotoEmpresa(
+      int idEmpresa, String fotoPerfil) async {
+    try {
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'foto_perfil': fotoPerfil}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar foto';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // MOTOBOY
+  // ----------------------------------------------------------------
+
+  static Future<Map<String, dynamic>> getMotoboyCount() async {
+    try {
+      final resp = await http.get(Uri.parse('$baseUrl/motoboys/count'));
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'disponiveis': 0, 'em_rota': 0};
+    } catch (_) { return {'disponiveis': 0, 'em_rota': 0}; }
+  }
+
+  static Future<void> atualizarMeuStatusMotoboy(
+      int idMotoboy, String status) async {
+    try {
+      await http.patch(
+        Uri.parse('$baseUrl/motoboy/meu-status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_motoboy': idMotoboy, 'status': status}),
+      );
+    } catch (_) {}
+  }
+
+  static Future<List<Map<String, dynamic>>> getEntregasEmRota(int idMotoboy) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/motoboy/em-rota?id_motoboy=$idMotoboy'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+      }
+      return [];
+    } catch (_) { return []; }
+  }
+
+  static Future<void> marcarQuasePronto(int idPedido) async {
+    try {
+      await http.patch(Uri.parse('$baseUrl/pedidos/$idPedido/quase-pronto'));
+    } catch (_) {}
+  }
+
+  static Future<String?> chamarMotoboy(int idPedido) async {
+    try {
+      final resp = await http.patch(
+          Uri.parse('$baseUrl/pedidos/$idPedido/chamar-motoboy'));
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro';
+    } catch (_) { return 'Servidor indisponível.'; }
+  }
+
+  static Future<void> entregaPropria(int idPedido) async {
+    try {
+      await http.patch(
+          Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria'));
+    } catch (_) {}
+  }
+
+  static Future<List<Map<String, dynamic>>> getEntregasDisponiveis() async {
+    try {
+      final resp = await http.get(Uri.parse('$baseUrl/motoboy/disponiveis'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+      }
+      return [];
+    } catch (_) { return []; }
+  }
+
+  static Future<List<Map<String, dynamic>>> getMinhasEntregas(int idMotoboy) async {
+    try {
+      final resp = await http.get(
+          Uri.parse('$baseUrl/motoboy/minhas?id_motoboy=$idMotoboy'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+      }
+      return [];
+    } catch (_) { return []; }
+  }
+
+  static Future<String?> aceitarEntrega(
+      {required int idPedido, required int idMotoboy}) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/motoboy/aceitar'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_pedido': idPedido, 'id_motoboy': idMotoboy}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao aceitar entrega';
+    } catch (_) { return 'Servidor indisponível.'; }
+  }
+
+  static Future<void> atualizarStatusMotoboy(
+      int idPedido, int idStatus) async {
+    try {
+      await http.patch(
+        Uri.parse('$baseUrl/motoboy/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_pedido': idPedido, 'id_status': idStatus}),
+      );
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> getHistoricoMotoboy(
+      int idMotoboy, {String? inicio, String? fim}) async {
+    try {
+      String url = '$baseUrl/motoboy/historico?id_motoboy=$idMotoboy';
+      if (inicio != null && fim != null) url += '&inicio=$inicio&fim=$fim';
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return {};
+    } catch (_) { return {}; }
+  }
+
+  // ----------------------------------------------------------------
   // PEDIDOS — empresa
   // ----------------------------------------------------------------
 
-  /// [inicio] e [fim] no formato 'YYYY-MM-DD' (opcional)
   static Future<List<Map<String, dynamic>>> getPedidosByEmpresa(
     int idEmpresa, {
     String? inicio,

@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
@@ -271,6 +274,24 @@ class _CardProduto extends StatelessWidget {
               ),
             ),
             IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: _cor),
+              tooltip: 'Adicionais',
+              onPressed: () {
+                final id = produto['id_produto'] is int
+                    ? produto['id_produto'] as int
+                    : int.tryParse(produto['id_produto'].toString()) ?? 0;
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.white,
+                  shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24))),
+                  builder: (_) => _AdicionaisSheet(idProduto: id),
+                );
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
               onPressed: onDelete,
             ),
@@ -294,8 +315,8 @@ class _FormAddProdutoState extends State<_FormAddProduto> {
   final _nomeCtrl      = TextEditingController();
   final _descricaoCtrl = TextEditingController();
   final _precoCtrl     = TextEditingController();
-  final _imagemCtrl    = TextEditingController();
 
+  String? _imagemBase64;
   List<Map<String, dynamic>> _categorias = [];
   Map<String, dynamic>?      _catSel;
   String? _erro;
@@ -312,8 +333,21 @@ class _FormAddProdutoState extends State<_FormAddProduto> {
     _nomeCtrl.dispose();
     _descricaoCtrl.dispose();
     _precoCtrl.dispose();
-    _imagemCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _selecionarImagem() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 75,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final b64 = base64Encode(bytes);
+    setState(() => _imagemBase64 = 'data:image/jpeg;base64,$b64');
   }
 
   Future<void> _carregarCats() async {
@@ -355,6 +389,7 @@ class _FormAddProdutoState extends State<_FormAddProduto> {
       nome:        nome,
       descricao:   descricao,
       preco:       preco,
+      imagem:      _imagemBase64,
     );
 
     if (!mounted) return;
@@ -426,34 +461,37 @@ class _FormAddProdutoState extends State<_FormAddProduto> {
             ),
             const SizedBox(height: 12),
 
-            // Preview + campo de URL de imagem
-            Row(
-              children: [
-                if (_imagemCtrl.text.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      _imagemCtrl.text,
-                      width: 60, height: 60, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 60, height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.broken_image, color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                if (_imagemCtrl.text.isNotEmpty) const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _imagemCtrl,
-                    decoration: _deco('URL da imagem (opcional)'),
-                    onChanged: (_) => setState(() {}),
-                  ),
+            // Seletor de imagem da galeria
+            GestureDetector(
+              onTap: _selecionarImagem,
+              child: Container(
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
-              ],
+                child: _imagemBase64 != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          base64Decode(_imagemBase64!.split(',').last),
+                          width: double.infinity,
+                          height: 90,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.add_photo_alternate_outlined,
+                              color: _cor, size: 28),
+                          SizedBox(width: 8),
+                          Text('Adicionar foto da galeria',
+                              style: TextStyle(color: _cor, fontSize: 14)),
+                        ],
+                      ),
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -513,6 +551,309 @@ class _FormAddProdutoState extends State<_FormAddProduto> {
 }
 
 // =============================================================
+// SHEET: ADICIONAIS DO PRODUTO
+// =============================================================
+class _AdicionaisSheet extends StatefulWidget {
+  final int idProduto;
+  const _AdicionaisSheet({required this.idProduto});
+
+  @override
+  State<_AdicionaisSheet> createState() => _AdicionaisSheetState();
+}
+
+class _AdicionaisSheetState extends State<_AdicionaisSheet> {
+  List<Map<String, dynamic>> _grupos = [];
+  bool _loading = true;
+
+  // Form
+  final _nomeCtrl      = TextEditingController();
+  final _descCtrl      = TextEditingController();
+  final _precoCtrl     = TextEditingController();
+  final _grupoCtrl     = TextEditingController(text: 'Adicionais');
+  final _maxCtrl       = TextEditingController(text: '3');
+  bool _obrigatorio    = false;
+  String? _erro;
+  bool _salvando       = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose(); _descCtrl.dispose(); _precoCtrl.dispose();
+    _grupoCtrl.dispose(); _maxCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _carregar() async {
+    setState(() => _loading = true);
+    final grupos = await ApiService.getAdicionais(widget.idProduto);
+    if (mounted) setState(() { _grupos = grupos; _loading = false; });
+  }
+
+  Future<void> _salvar() async {
+    final nome  = _nomeCtrl.text.trim();
+    final grupo = _grupoCtrl.text.trim();
+    final preco = double.tryParse(_precoCtrl.text.trim().replaceAll(',', '.')) ?? 0.0;
+    final maximo = int.tryParse(_maxCtrl.text.trim()) ?? 3;
+
+    if (nome.isEmpty || grupo.isEmpty) {
+      setState(() => _erro = 'Nome e grupo são obrigatórios.');
+      return;
+    }
+
+    setState(() { _salvando = true; _erro = null; });
+
+    final erro = await ApiService.createAdicional(
+      idProduto:   widget.idProduto,
+      grupo:       grupo,
+      maximoGrupo: maximo,
+      obrigatorio: _obrigatorio,
+      nome:        nome,
+      descricao:   _descCtrl.text.trim(),
+      preco:       preco,
+    );
+
+    if (!mounted) return;
+    setState(() => _salvando = false);
+
+    if (erro != null) {
+      setState(() => _erro = erro);
+      return;
+    }
+
+    _nomeCtrl.clear(); _descCtrl.clear(); _precoCtrl.clear();
+    _carregar();
+  }
+
+  Future<void> _deletar(int idAdicional) async {
+    await ApiService.deleteAdicional(idAdicional);
+    _carregar();
+  }
+
+  InputDecoration _deco(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.grey[50],
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        isDense: true,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, scrollCtrl) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: ListView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const Text('Gerenciar Adicionais',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Opções extras que o cliente pode escolher ao pedir',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            const SizedBox(height: 16),
+
+            // ── Lista de grupos/adicionais existentes ────────────
+            if (_loading)
+              const Center(child: CircularProgressIndicator(color: _cor))
+            else if (_grupos.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('Nenhum adicional cadastrado ainda.',
+                    style: TextStyle(color: Colors.grey[500])),
+              )
+            else
+              ..._grupos.map((g) {
+                final itens = List<Map<String, dynamic>>.from(
+                    g['itens'] as List? ?? []);
+                final obrig = g['obrigatorio'] == true;
+                final max   = g['maximo_grupo'];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _cor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(g['grupo']?.toString() ?? '',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                        if (obrig)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('OBRIGATÓRIO',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        const SizedBox(width: 6),
+                        Text('máx $max',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[600])),
+                      ]),
+                    ),
+                    ...itens.map((item) {
+                      final preco = item['preco'];
+                      final precoVal = preco is num
+                          ? preco.toDouble()
+                          : double.tryParse(preco?.toString() ?? '') ?? 0.0;
+                      final id = item['id_adicional'] is int
+                          ? item['id_adicional'] as int
+                          : int.tryParse(
+                                  item['id_adicional']?.toString() ?? '') ??
+                              0;
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        title: Text(item['nome']?.toString() ?? '',
+                            style: const TextStyle(fontSize: 14)),
+                        subtitle: (item['descricao']?.toString() ?? '')
+                                .isNotEmpty
+                            ? Text(item['descricao'].toString(),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[500]))
+                            : null,
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text(
+                            precoVal == 0
+                                ? 'Grátis'
+                                : '+ R\$ ${precoVal.toStringAsFixed(2)}',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: precoVal == 0
+                                    ? Colors.green
+                                    : Colors.black87,
+                                fontSize: 13),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 18, color: Colors.red),
+                            onPressed: () => _deletar(id),
+                          ),
+                        ]),
+                      );
+                    }),
+                    const Divider(),
+                  ],
+                );
+              }),
+
+            const SizedBox(height: 8),
+            const Text('Adicionar novo item',
+                style:
+                    TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            // Formulário
+            Row(children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                    controller: _grupoCtrl,
+                    decoration: _deco('Grupo (ex: Molhos)')),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                    controller: _maxCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: _deco('Máx')),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Checkbox(
+                value: _obrigatorio,
+                onChanged: (v) => setState(() => _obrigatorio = v ?? false),
+                activeColor: _cor,
+              ),
+              const Text('Obrigatório'),
+            ]),
+            const SizedBox(height: 4),
+            TextField(
+                controller: _nomeCtrl,
+                decoration: _deco('Nome do item *')),
+            const SizedBox(height: 8),
+            TextField(
+                controller: _descCtrl,
+                decoration: _deco('Descrição (opcional)')),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _precoCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: _deco('Preço extra (0 = grátis)'),
+            ),
+            const SizedBox(height: 8),
+            if (_erro != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_erro!,
+                    style: const TextStyle(color: Colors.red)),
+              ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _salvando ? null : _salvar,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _cor,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _salvando
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Salvar Adicional',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================
 // TAB: PEDIDOS
 // =============================================================
 class _TabPedidos extends StatefulWidget {
@@ -527,11 +868,19 @@ class _TabPedidosState extends State<_TabPedidos> {
   bool      _carregando  = true;
   DateTime  _dataInicio  = DateTime.now().subtract(const Duration(days: 7));
   DateTime  _dataFim     = DateTime.now();
+  Timer?    _timer;
 
   @override
   void initState() {
     super.initState();
     _carregar();
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _carregar(silencioso: true));
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   String _fmtApi(DateTime d) =>
@@ -540,8 +889,8 @@ class _TabPedidosState extends State<_TabPedidos> {
   String _fmtBR(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-  Future<void> _carregar() async {
-    setState(() => _carregando = true);
+  Future<void> _carregar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _carregando = true);
     final id = SessionStore.idEmpresa;
     if (id != null) {
       final lista = await ApiService.getPedidosByEmpresa(
@@ -551,7 +900,7 @@ class _TabPedidosState extends State<_TabPedidos> {
       );
       if (mounted) setState(() => _pedidos = lista);
     }
-    if (mounted) setState(() => _carregando = false);
+    if (mounted && !silencioso) setState(() => _carregando = false);
   }
 
   Future<void> _selecionarData(bool isInicio) async {
@@ -719,7 +1068,10 @@ class _TabPedidosState extends State<_TabPedidos> {
                         padding: const EdgeInsets.all(16),
                         itemCount: _pedidos.length,
                         itemBuilder: (_, i) =>
-                            _CardPedido(pedido: _pedidos[i]),
+                            _CardPedido(
+                              pedido: _pedidos[i],
+                              onStatusAtualizado: _carregar,
+                            ),
                       ),
                     ),
         ),
@@ -784,7 +1136,8 @@ class _TabPedidosState extends State<_TabPedidos> {
 
 class _CardPedido extends StatelessWidget {
   final Map<String, dynamic> pedido;
-  const _CardPedido({required this.pedido});
+  final VoidCallback? onStatusAtualizado;
+  const _CardPedido({required this.pedido, this.onStatusAtualizado});
 
   @override
   Widget build(BuildContext context) {
@@ -805,7 +1158,26 @@ class _CardPedido extends StatelessWidget {
         statusCor = Colors.orange;
     }
 
-    return Container(
+    final idPedido = pedido['id_pedido'] is int
+        ? pedido['id_pedido'] as int
+        : int.tryParse(pedido['id_pedido']?.toString() ?? '') ?? 0;
+
+    return GestureDetector(
+      onTap: () async {
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(24))),
+          builder: (_) => _PedidoDetalheSheet(
+            idPedido: idPedido,
+            onStatusAtualizado: onStatusAtualizado,
+          ),
+        );
+      },
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -824,22 +1196,26 @@ class _CardPedido extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('#${pedido['id_pedido']}',
+              Text('#$idPedido',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 15)),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusCor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusCor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(status,
+                      style: TextStyle(
+                          color: statusCor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
                 ),
-                child: Text(status,
-                    style: TextStyle(
-                        color: statusCor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold)),
-              ),
+                const SizedBox(width: 6),
+                Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+              ]),
             ],
           ),
           const SizedBox(height: 6),
@@ -866,8 +1242,446 @@ class _CardPedido extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
+}
+
+// =============================================================
+// PEDIDO — detalhe sheet (empresa)
+// =============================================================
+class _PedidoDetalheSheet extends StatefulWidget {
+  final int idPedido;
+  final VoidCallback? onStatusAtualizado;
+  const _PedidoDetalheSheet(
+      {required this.idPedido, this.onStatusAtualizado});
+
+  @override
+  State<_PedidoDetalheSheet> createState() => _PedidoDetalheSheetState();
+}
+
+class _PedidoDetalheSheetState extends State<_PedidoDetalheSheet> {
+  Map<String, dynamic>? _pedido;
+  bool _carregando  = true;
+  bool _atualizando = false;
+  int  _motoboyCount = 0;
+
+  // status IDs: 1 Criado, 2 Em Preparo, 3 A Caminho, 4 Entregue, 5 Cancelado, 6 Aguardando Motoboy
+  static const _statusNomes = {
+    1: 'Criado',
+    2: 'Em Preparo',
+    3: 'A Caminho',
+    4: 'Entregue',
+    5: 'Cancelado',
+    6: 'Aguardando Motoboy',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  Future<void> _carregar() async {
+    setState(() => _carregando = true);
+    final results = await Future.wait([
+      ApiService.getPedidoDetalhes(widget.idPedido),
+      ApiService.getMotoboyCount(),
+    ]);
+    if (mounted) {
+      final count = results[1] as Map<String, dynamic>;
+      setState(() {
+        _pedido        = results[0];
+        _motoboyCount  = (count['disponiveis'] is int
+            ? count['disponiveis'] as int
+            : int.tryParse(count['disponiveis']?.toString() ?? '0') ?? 0);
+        _carregando    = false;
+      });
+    }
+  }
+
+  Future<void> _atualizarStatus(int novoIdStatus) async {
+    setState(() => _atualizando = true);
+    await ApiService.atualizarStatusPedido(widget.idPedido, novoIdStatus);
+    await _carregar();
+    setState(() => _atualizando = false);
+    widget.onStatusAtualizado?.call();
+  }
+
+  Future<void> _marcarQuasePronto() async {
+    setState(() => _atualizando = true);
+    await ApiService.marcarQuasePronto(widget.idPedido);
+    await _carregar();
+    setState(() => _atualizando = false);
+    widget.onStatusAtualizado?.call();
+  }
+
+  Future<void> _chamarMotoboy() async {
+    setState(() => _atualizando = true);
+    await ApiService.chamarMotoboy(widget.idPedido);
+    await _carregar();
+    setState(() => _atualizando = false);
+    widget.onStatusAtualizado?.call();
+  }
+
+  Future<void> _entregaPropria() async {
+    setState(() => _atualizando = true);
+    await ApiService.entregaPropria(widget.idPedido);
+    await _carregar();
+    setState(() => _atualizando = false);
+    widget.onStatusAtualizado?.call();
+  }
+
+  Color _corStatus(String status) {
+    switch (status) {
+      case 'Entregue': return Colors.green;
+      case 'Cancelado': return Colors.red;
+      default: return Colors.orange;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, ctrl) {
+        if (_carregando) {
+          return const Center(child: CircularProgressIndicator(color: _cor));
+        }
+        if (_pedido == null) {
+          return const Center(child: Text('Não foi possível carregar o pedido.'));
+        }
+
+        final p = _pedido!;
+        final idStatus = p['id_status'] is int
+            ? p['id_status'] as int
+            : int.tryParse(p['id_status']?.toString() ?? '') ?? 1;
+        final status      = p['status']?.toString() ?? '';
+        final valor       = double.tryParse(p['valor_total']?.toString() ?? '0') ?? 0;
+        final itens       = List<Map<String, dynamic>>.from(p['itens'] ?? []);
+        final quasePronto = p['quase_pronto'] as bool? ?? false;
+        final tipoEntrega = p['tipo_entrega']?.toString() ?? '';
+
+        return SingleChildScrollView(
+          controller: ctrl,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // handle
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // cabeçalho
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Pedido #${p['id_pedido']}',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _corStatus(status).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(status,
+                        style: TextStyle(
+                            color: _corStatus(status),
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // cliente
+              _secao('Cliente'),
+              _infoLinha(Icons.person_outline,
+                  p['cliente']?.toString() ?? ''),
+              if ((p['cliente_email']?.toString() ?? '').isNotEmpty)
+                _infoLinha(Icons.email_outlined,
+                    p['cliente_email']?.toString() ?? ''),
+              if ((p['cliente_telefone']?.toString() ?? '').isNotEmpty)
+                _infoLinha(Icons.phone_outlined,
+                    p['cliente_telefone']?.toString() ?? ''),
+              const SizedBox(height: 16),
+
+              // endereço
+              if ((p['endereco_entrega']?.toString() ?? '').isNotEmpty) ...[
+                _secao('Endereço de entrega'),
+                _infoLinha(Icons.location_on_outlined,
+                    p['endereco_entrega']?.toString() ?? ''),
+                const SizedBox(height: 16),
+              ],
+
+              // observação
+              if ((p['observacao']?.toString() ?? '').isNotEmpty) ...[
+                _secao('Observação'),
+                _infoLinha(Icons.notes,
+                    p['observacao']?.toString() ?? ''),
+                const SizedBox(height: 16),
+              ],
+
+              // itens
+              _secao('Itens do pedido'),
+              ...itens.map((item) {
+                final qtd = item['quantidade'] is int
+                    ? item['quantidade'] as int
+                    : int.tryParse(item['quantidade']?.toString() ?? '') ?? 1;
+                final preco = double.tryParse(
+                        item['preco_unit']?.toString() ?? '0') ??
+                    0;
+                final sub = qtd * preco;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item['produto']?.toString() ?? '',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                            Text(
+                                'Qtd: $qtd  ×  R\$ ${preco.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey[600])),
+                            if ((item['observacao']?.toString() ?? '').isNotEmpty)
+                              Text(
+                                  item['observacao']!.toString(),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange[700],
+                                      fontStyle: FontStyle.italic)),
+                          ],
+                        ),
+                      ),
+                      Text('R\$ ${sub.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                );
+              }),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('R\$ ${valor.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _cor)),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // ── ações ──────────────────────────────────────────
+              if (idStatus < 4 && idStatus != 5) ...[
+                _secao('Ações'),
+                const SizedBox(height: 8),
+                if (_atualizando)
+                  const Center(child: CircularProgressIndicator(color: _cor))
+                else
+                  Column(
+                    children: [
+                      // Botão "Quase Pronto" — só no status Em Preparo (2) e ainda não marcado
+                      if (idStatus == 2 && !quasePronto)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrange,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: _marcarQuasePronto,
+                              icon: const Icon(Icons.notifications_active, size: 18),
+                              label: const Text('Avisar cliente: Quase Pronto!',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ),
+
+                      // Badge "Quase pronto enviado"
+                      if (quasePronto)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            const Icon(Icons.check_circle, color: Colors.deepOrange, size: 16),
+                            const SizedBox(width: 6),
+                            Text('Cliente avisado que está quase pronto',
+                                style: TextStyle(fontSize: 12, color: Colors.deepOrange[700])),
+                          ]),
+                        ),
+
+                      // Opções de entrega — só no status Em Preparo (2) sem tipo definido
+                      if (idStatus == 2 && tipoEntrega.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _secao('Como será a entrega?'),
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: _entregaPropria,
+                                    icon: const Icon(Icons.directions_car, size: 18),
+                                    label: const Text('Entrega Própria',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _cor,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: _chamarMotoboy,
+                                    icon: const Icon(Icons.delivery_dining, size: 18),
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text('Motoboy',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        if (_motoboyCount > 0) ...[
+                                          const SizedBox(width: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Text('$_motoboyCount',
+                                                style: const TextStyle(
+                                                    color: _cor,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ]),
+                            ],
+                          ),
+                        ),
+
+                      // Badge tipo de entrega definido
+                      if (tipoEntrega.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            Icon(
+                              tipoEntrega == 'propria'
+                                  ? Icons.directions_car
+                                  : Icons.delivery_dining,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              tipoEntrega == 'propria'
+                                  ? 'Entrega própria em andamento'
+                                  : 'Aguardando motoboy',
+                              style: const TextStyle(fontSize: 12, color: Colors.green),
+                            ),
+                          ]),
+                        ),
+
+                      // Avançar status / Cancelar
+                      if (idStatus != 2 || tipoEntrega.isNotEmpty)
+                        Row(children: [
+                          if (idStatus < 4 && idStatus != 6)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _cor,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () => _atualizarStatus(idStatus + 1),
+                                icon: const Icon(Icons.arrow_forward, size: 18),
+                                label: Text(_statusNomes[idStatus + 1] ?? 'Avançar'),
+                              ),
+                            ),
+                          if (idStatus < 4 && idStatus != 6)
+                            const SizedBox(width: 10),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => _atualizarStatus(5),
+                            child: const Text('Cancelar'),
+                          ),
+                        ]),
+                    ],
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _secao(String titulo) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(titulo,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey)),
+      );
+
+  Widget _infoLinha(IconData icon, String texto) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: Colors.grey[500]),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(texto,
+                    style: const TextStyle(fontSize: 14))),
+          ],
+        ),
+      );
 }
 
 // =============================================================
@@ -883,6 +1697,8 @@ class _TabConta extends StatefulWidget {
 class _TabContaState extends State<_TabConta> {
   List<Map<String, dynamic>> _pedidos = [];
   bool _carregando = true;
+  String? _fotoPerfil;
+  bool _salvandoFoto = false;
 
   @override
   void initState() {
@@ -898,6 +1714,26 @@ class _TabContaState extends State<_TabConta> {
       if (mounted) setState(() => _pedidos = lista);
     }
     if (mounted) setState(() => _carregando = false);
+  }
+
+  Future<void> _selecionarFoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 600, maxHeight: 600, imageQuality: 80,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+    setState(() => _salvandoFoto = true);
+    final idEmpresa = SessionStore.idEmpresa;
+    if (idEmpresa != null) {
+      await ApiService.atualizarFotoEmpresa(idEmpresa, b64);
+      if (mounted) setState(() { _fotoPerfil = b64; _salvandoFoto = false; });
+    } else {
+      setState(() => _salvandoFoto = false);
+    }
   }
 
   double _totalStatus(String status) => _pedidos
@@ -963,6 +1799,94 @@ class _TabContaState extends State<_TabConta> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Foto de perfil da empresa ──────────────────────
+            GestureDetector(
+              onTap: _selecionarFoto,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 6)
+                  ],
+                ),
+                child: Row(children: [
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: _cor.withValues(alpha: 0.15),
+                        backgroundImage: _fotoPerfil != null &&
+                                _fotoPerfil!.contains(',')
+                            ? MemoryImage(
+                                base64Decode(_fotoPerfil!.split(',').last))
+                            : null,
+                        child: _fotoPerfil == null
+                            ? Text(
+                                (SessionStore.nome ?? 'E')
+                                    .isNotEmpty
+                                    ? (SessionStore.nome ?? 'E')[0]
+                                        .toUpperCase()
+                                    : 'E',
+                                style: const TextStyle(
+                                    fontSize: 28,
+                                    color: _cor,
+                                    fontWeight: FontWeight.bold),
+                              )
+                            : null,
+                      ),
+                      if (_salvandoFoto)
+                        const Positioned.fill(
+                          child: CircleAvatar(
+                            backgroundColor: Colors.black26,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          ),
+                        ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: _cor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt,
+                              size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Foto de perfil',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15)),
+                        Text(
+                          _fotoPerfil == null
+                              ? 'Toque para adicionar uma foto. Ela aparecerá na tela inicial.'
+                              : 'Foto definida. Toque para alterar.',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+
             // Card receita total
             Container(
               width: double.infinity,

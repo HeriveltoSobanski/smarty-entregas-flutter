@@ -33,6 +33,9 @@ class CriarPedidoController {
         return _json(400, {'error': 'id_empresa obrigatório e deve ser inteiro'});
       }
 
+      final enderecoEntrega = body['endereco_entrega']?.toString() ?? '';
+      final observacao      = body['observacao']?.toString() ?? '';
+
       final rawItens = body['itens'];
       if (rawItens == null || rawItens is! List || rawItens.isEmpty) {
         return _json(400, {'error': 'itens obrigatório e não pode ser vazio'});
@@ -60,6 +63,7 @@ class CriarPedidoController {
           'id_produto': idProduto,
           'quantidade': quantidade,
           'preco_unit': precoUnit,
+          'observacao': item['observacao']?.toString() ?? '',
         });
       }
 
@@ -72,14 +76,20 @@ class CriarPedidoController {
       // ---- Inserir pedido (id_status = 1 → 'Criado') ----
       final pedidoResult = await conn.execute(
         Sql.named('''
-          INSERT INTO pedidos (id_usuario, id_empresa, id_status, valor_total)
-          VALUES (@id_usuario, @id_empresa, 1, @valor_total)
+          INSERT INTO pedidos
+            (id_usuario, id_empresa, id_status, valor_total,
+             endereco_entrega, observacao)
+          VALUES
+            (@id_usuario, @id_empresa, 1, @valor_total,
+             @endereco_entrega, @observacao)
           RETURNING id_pedido
         '''),
         parameters: {
-          'id_usuario':  idUsuario,
-          'id_empresa':  idEmpresa,
-          'valor_total': valorTotal,
+          'id_usuario':       idUsuario,
+          'id_empresa':       idEmpresa,
+          'valor_total':      valorTotal,
+          'endereco_entrega': enderecoEntrega,
+          'observacao':       observacao,
         },
       );
 
@@ -89,14 +99,15 @@ class CriarPedidoController {
       for (final item in itens) {
         await conn.execute(
           Sql.named('''
-            INSERT INTO pedido_itens (id_pedido, id_produto, quantidade, preco_unit)
-            VALUES (@id_pedido, @id_produto, @quantidade, @preco_unit)
+            INSERT INTO pedido_itens (id_pedido, id_produto, quantidade, preco_unit, observacao)
+            VALUES (@id_pedido, @id_produto, @quantidade, @preco_unit, @observacao)
           '''),
           parameters: {
             'id_pedido':  idPedido,
             'id_produto': item['id_produto'],
             'quantidade': item['quantidade'],
             'preco_unit': item['preco_unit'],
+            'observacao': item['observacao'],
           },
         );
       }
