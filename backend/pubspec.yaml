@@ -13,6 +13,7 @@ dependencies:
   shelf_cors_headers: ^0.1.0
   crypto: any
   dotenv: ^4.2.0
+  http: ^1.0.0
 
 dev_dependencies:
   lints: any

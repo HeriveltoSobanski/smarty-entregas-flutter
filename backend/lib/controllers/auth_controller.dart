@@ -2,13 +2,18 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+
+import '../services/jwt_service.dart';
+import '../services/password_service.dart';
+
 class AuthController {
   final Connection conn;
+  final JwtService _jwt;
 
-  AuthController(this.conn);
+  AuthController(this.conn, this._jwt);
 
   // ----------------------------------------------------------------
-  // LOGIN — retorna tipo_usuario e id_empresa se for empresa
+  // LOGIN
   // ----------------------------------------------------------------
   Future<Response> login(Request request) async {
     try {
@@ -42,24 +47,40 @@ class AuthController {
       }
 
       final row = result.first;
-      final idUsuario   = row[0];
-      final dbEmail     = row[1]?.toString();
-      final dbSenha     = row[2]?.toString();
+      final idUsuario   = row[0] as int;
+      final dbEmail     = row[1]?.toString() ?? '';
+      final dbSenha     = row[2]?.toString() ?? '';
       final ativo       = row[3] as bool;
-      final tipoUsuario = row[4]?.toString();
-      final nome        = row[5]?.toString();
-      final idEmpresa   = row[6];
+      final tipoUsuario = row[4]?.toString() ?? '';
+      final nome        = row[5]?.toString() ?? '';
+      final idEmpresa   = (row[6] as int?) ?? 0;
 
       if (!ativo) {
         return _json(403, {'error': 'Usuário inativo'});
       }
 
-      if (dbSenha != senha) {
+      if (!PasswordService.verify(senha, dbSenha)) {
         return _json(401, {'error': 'Credenciais inválidas'});
       }
 
+      // Migração automática: se a senha estava em texto plano, re-hasheia
+      if (PasswordService.needsUpgrade(dbSenha)) {
+        final newHash = PasswordService.hash(senha);
+        await conn.execute(
+          Sql.named('UPDATE usuarios SET senha = @senha WHERE id_usuario = @id'),
+          parameters: {'senha': newHash, 'id': idUsuario},
+        );
+      }
+
+      final token = _jwt.generateToken(
+        idUsuario: idUsuario,
+        tipoUsuario: tipoUsuario,
+        idEmpresa: idEmpresa,
+      );
+
       return _json(200, {
         'ok': true,
+        'token': token,
         'user': {
           'id_usuario': idUsuario,
           'email': dbEmail,
@@ -69,7 +90,7 @@ class AuthController {
         }
       });
     } catch (e) {
-      return _json(500, {'error': 'Erro ao realizar login', 'details': e.toString()});
+      return _json(500, {'error': 'Erro ao realizar login'});
     }
   }
 
@@ -92,6 +113,11 @@ class AuthController {
       if (nome.isEmpty || email.isEmpty || senha.isEmpty) {
         return _json(400, {'error': 'Nome, email e senha são obrigatórios'});
       }
+      if (senha.length < 6) {
+        return _json(400, {'error': 'Senha deve ter ao menos 6 caracteres'});
+      }
+
+      final senhaHash = PasswordService.hash(senha);
 
       final result = await conn.execute(
         Sql.named('''
@@ -104,24 +130,29 @@ class AuthController {
         parameters: {
           'nome': nome,
           'email': email,
-          'senha': senha,
+          'senha': senhaHash,
           'cpf': cpf.isEmpty ? null : cpf,
           'telefone': telefone.isEmpty ? null : telefone,
         },
       );
 
-      final idUsuario = result.first[0];
+      final idUsuario = result.first[0] as int;
+      final token = _jwt.generateToken(
+        idUsuario: idUsuario,
+        tipoUsuario: 'cliente',
+      );
 
       return _json(201, {
         'ok': true,
-        'user': {'id_usuario': idUsuario, 'email': email}
+        'token': token,
+        'user': {'id_usuario': idUsuario, 'email': email, 'tipo_usuario': 'cliente'}
       });
     } catch (e) {
       final msg = e.toString();
       if (msg.contains('usuarios_email_key')) {
         return _json(409, {'error': 'Este e-mail já está cadastrado'});
       }
-      return _json(500, {'error': 'Erro ao registrar cliente', 'details': msg});
+      return _json(500, {'error': 'Erro ao registrar cliente'});
     }
   }
 
@@ -147,9 +178,12 @@ class AuthController {
           'error': 'Nome fantasia, e-mail, senha, CNPJ e telefone são obrigatórios'
         });
       }
+      if (senha.length < 6) {
+        return _json(400, {'error': 'Senha deve ter ao menos 6 caracteres'});
+      }
 
-      // Insere usuario como 'empresa'; o trigger upsert_empresa_on_usuario
-      // cria automaticamente o registro em empresas
+      final senhaHash = PasswordService.hash(senha);
+
       final result = await conn.execute(
         Sql.named('''
           INSERT INTO usuarios
@@ -161,26 +195,33 @@ class AuthController {
         parameters: {
           'nome': nome,
           'email': email,
-          'senha': senha,
+          'senha': senhaHash,
           'cnpj': cnpj,
           'telefone': telefone,
         },
       );
 
-      final idUsuario = result.first[0];
+      final idUsuario = result.first[0] as int;
 
-      // Busca o id_empresa criado pelo trigger
       final empResult = await conn.execute(
         Sql.named(
-          'SELECT id_empresa FROM empresas WHERE id_usuario = @id_usuario LIMIT 1'
+          'SELECT id_empresa FROM empresas WHERE id_usuario = @id_usuario LIMIT 1',
         ),
         parameters: {'id_usuario': idUsuario},
       );
 
-      final idEmpresa = empResult.isNotEmpty ? empResult.first[0] : null;
+      final idEmpresa =
+          empResult.isNotEmpty ? (empResult.first[0] as int?) ?? 0 : 0;
+
+      final token = _jwt.generateToken(
+        idUsuario: idUsuario,
+        tipoUsuario: 'empresa',
+        idEmpresa: idEmpresa,
+      );
 
       return _json(201, {
         'ok': true,
+        'token': token,
         'user': {
           'id_usuario': idUsuario,
           'email': email,
@@ -193,7 +234,7 @@ class AuthController {
       if (msg.contains('usuarios_email_key')) {
         return _json(409, {'error': 'Este e-mail já está cadastrado'});
       }
-      return _json(500, {'error': 'Erro ao registrar empresa', 'details': msg});
+      return _json(500, {'error': 'Erro ao registrar empresa'});
     }
   }
 
@@ -216,6 +257,11 @@ class AuthController {
       if (nome.isEmpty || email.isEmpty || senha.isEmpty) {
         return _json(400, {'error': 'Nome, email e senha são obrigatórios'});
       }
+      if (senha.length < 6) {
+        return _json(400, {'error': 'Senha deve ter ao menos 6 caracteres'});
+      }
+
+      final senhaHash = PasswordService.hash(senha);
 
       final result = await conn.execute(
         Sql.named('''
@@ -228,17 +274,26 @@ class AuthController {
         parameters: {
           'nome': nome,
           'email': email,
-          'senha': senha,
+          'senha': senhaHash,
           'cpf': cpf.isEmpty ? null : cpf,
           'telefone': telefone.isEmpty ? null : telefone,
         },
       );
 
-      final idUsuario = result.first[0];
+      final idUsuario = result.first[0] as int;
+      final token = _jwt.generateToken(
+        idUsuario: idUsuario,
+        tipoUsuario: 'motoboy',
+      );
 
       return _json(201, {
         'ok': true,
-        'user': {'id_usuario': idUsuario, 'email': email, 'tipo_usuario': 'motoboy'}
+        'token': token,
+        'user': {
+          'id_usuario': idUsuario,
+          'email': email,
+          'tipo_usuario': 'motoboy',
+        }
       });
     } catch (e) {
       final msg = e.toString();
@@ -248,7 +303,7 @@ class AuthController {
       if (msg.contains('usuarios_cpf_key')) {
         return _json(409, {'error': 'Este CPF já está cadastrado'});
       }
-      return _json(500, {'error': 'Erro ao registrar motoboy', 'details': msg});
+      return _json(500, {'error': 'Erro ao registrar motoboy'});
     }
   }
 

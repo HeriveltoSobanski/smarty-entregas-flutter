@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -16,9 +17,15 @@ import 'package:backend/controllers/adicional_controller.dart';
 import 'package:backend/controllers/empresa_controller.dart';
 import 'package:backend/controllers/motoboy_controller.dart';
 import 'package:backend/controllers/cliente_endereco_controller.dart';
+import 'package:backend/services/jwt_service.dart';
+import 'package:backend/middleware/jwt_middleware.dart';
 
 void main() async {
   final env = DotEnv(includePlatformEnvironment: true)..load();
+
+  final jwtSecret = env['JWT_SECRET'] ?? 'smarty_entregas_dev_secret';
+  final orsApiKey = env['ORS_API_KEY'] ?? '';
+  final jwtService = JwtService(jwtSecret);
 
   final db = DbConnection(env);
   try {
@@ -54,16 +61,12 @@ void main() async {
         principal   BOOLEAN NOT NULL DEFAULT false
       )
     ''',
-    // Garante id_usuario mesmo sem FK (caso o tipo do PK seja diferente)
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS id_usuario INT",
-    // Garante colunas mesmo que a tabela tenha sido criada sem elas
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS apelido VARCHAR(50) NOT NULL DEFAULT 'Casa'",
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS endereco TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION",
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION",
     "ALTER TABLE usuario_enderecos ADD COLUMN IF NOT EXISTS principal BOOLEAN NOT NULL DEFAULT false",
-    // O banco tem colunas extras (cep, cidade, região) que são NOT NULL mas não usamos.
-    // Tornar nullable para não bloquear nossos inserts.
     "ALTER TABLE usuario_enderecos ALTER COLUMN cep         DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN logradouro  DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN numero      DROP NOT NULL",
@@ -72,7 +75,6 @@ void main() async {
     "ALTER TABLE usuario_enderecos ALTER COLUMN cidade      DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN estado      DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN pais        DROP NOT NULL",
-    // Faz DROP NOT NULL em TODAS as colunas da tabela exceto PK (abordagem genérica)
     '''
       DO \$\$
       DECLARE col RECORD;
@@ -91,7 +93,6 @@ void main() async {
         END LOOP;
       END \$\$
     ''',
-    // Remove qualquer trigger que possa estar bloqueando inserts em usuario_enderecos
     '''
       DO \$\$
       DECLARE r RECORD;
@@ -106,7 +107,6 @@ void main() async {
         END LOOP;
       END \$\$
     ''',
-    // Remove funções relacionadas a validação de tipo_usuario que usem smallint
     '''
       DO \$\$
       DECLARE r RECORD;
@@ -122,7 +122,6 @@ void main() async {
       END \$\$
     ''',
     "INSERT INTO status_pedidos (id_status, nome) VALUES (6, 'Aguardando Motoboy') ON CONFLICT DO NOTHING",
-    // Remove trigger que bloqueia transições de status
     "DROP TRIGGER IF EXISTS trg_valida_status ON pedidos",
     "DROP FUNCTION IF EXISTS fn_valida_transicao_status() CASCADE",
     '''
@@ -138,7 +137,10 @@ void main() async {
         ativo        BOOLEAN NOT NULL DEFAULT true
       )
     ''',
+    // Aumenta o campo senha para suportar o formato hash v1:salt:sha256
+    "ALTER TABLE usuarios ALTER COLUMN senha TYPE VARCHAR(200)",
   ];
+
   for (final sql in migrations) {
     try {
       await db.connection.execute(Sql.named(sql), parameters: {});
@@ -148,84 +150,29 @@ void main() async {
   }
   print('Migrações aplicadas');
 
-  final auth        = AuthController(db.connection);
-  final produto     = ProdutoController(db.connection);
-  final pedido      = PedidoController(db.connection);
-  final criarPedido = CriarPedidoController(db.connection);
-  final adicional   = AdicionalController(db.connection);
-  final empresa          = EmpresaController(db.connection);
-  final motoboy          = MotoboyController(db.connection);
-  final clienteEndereco  = ClienteEnderecoController(db.connection);
+  final auth           = AuthController(db.connection, jwtService);
+  final produto        = ProdutoController(db.connection);
+  final pedido         = PedidoController(db.connection);
+  final criarPedido    = CriarPedidoController(db.connection);
+  final adicional      = AdicionalController(db.connection);
+  final empresa        = EmpresaController(db.connection);
+  final motoboy        = MotoboyController(db.connection);
+  final clienteEndereco = ClienteEnderecoController(db.connection);
 
   final app = Router();
 
-  app.get('/', (Request req) => Response.ok('Smarty Entregas API Rodando'));
-
-  // Rota de manutenção — remove triggers bloqueadores da tabela pedidos
-  app.get('/admin/fix-triggers', (Request req) async {
-    try {
-      // Lista todos os triggers na tabela pedidos
-      final triggers = await db.connection.execute(
-        Sql.named('''
-          SELECT trigger_name, action_statement
-          FROM information_schema.triggers
-          WHERE event_object_table = 'pedidos'
-        '''),
-        parameters: {},
-      );
-      final nomes = triggers.map((r) => r[0]?.toString() ?? '').toList();
-
-      // Derruba cada trigger encontrado
-      for (final nome in nomes) {
-        if (nome.isNotEmpty) {
-          await db.connection.execute(
-            Sql.named('DROP TRIGGER IF EXISTS $nome ON pedidos'),
-            parameters: {},
-          );
-        }
-      }
-
-      // Derruba funções relacionadas a validação de status
-      final funcs = await db.connection.execute(
-        Sql.named('''
-          SELECT routine_name FROM information_schema.routines
-          WHERE routine_type = 'FUNCTION'
-          AND routine_name ILIKE '%status%'
-        '''),
-        parameters: {},
-      );
-      for (final f in funcs) {
-        final fn = f[0]?.toString() ?? '';
-        if (fn.isNotEmpty) {
-          await db.connection.execute(
-            Sql.named('DROP FUNCTION IF EXISTS $fn() CASCADE'),
-            parameters: {},
-          );
-        }
-      }
-
-      return Response.ok(
-        jsonEncode({'ok': true, 'triggers_removidos': nomes}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
-        headers: {'content-type': 'application/json'},
-      );
-    }
-  });
+  app.get('/', (Request req) => Response.ok('Smarty Entregas API'));
 
   // OPTIONS preflight
   app.options('/<ignored|.*>', (Request req) => Response.ok(''));
 
-  // AUTH
+  // ── AUTH (públicas) ──────────────────────────────────────────
   app.post('/auth/login',              auth.login);
   app.post('/auth/register/cliente',   auth.registerCliente);
   app.post('/auth/register/empresa',   auth.registerEmpresa);
   app.post('/auth/register/motoboy',   auth.registerMotoboy);
 
-  // PRODUTOS
+  // ── PRODUTOS ─────────────────────────────────────────────────
   app.get('/produtos/categorias',      produto.getCategorias);
   app.get('/produtos/busca',           produto.buscarProdutos);
   app.get('/produtos/empresa',         produto.getProdutosByEmpresa);
@@ -235,31 +182,34 @@ void main() async {
   app.delete('/produtos/<id>',         produto.deleteProduto);
   app.patch('/produtos/<id>/ativo',    produto.toggleAtivo);
 
-  // ADICIONAIS
+  // ── ADICIONAIS ───────────────────────────────────────────────
   app.get('/produtos/<id>/adicionais',  adicional.getAdicionais);
   app.post('/produtos/<id>/adicionais', adicional.createAdicional);
   app.delete('/adicionais/<id>',        adicional.deleteAdicional);
 
-  // EMPRESAS
+  // ── EMPRESAS ─────────────────────────────────────────────────
   app.patch('/empresas/<id>/foto',      empresa.atualizarFoto);
   app.get('/empresas/<id>/foto',        empresa.getFoto);
   app.get('/empresas/<id>/endereco',    empresa.getEndereco);
   app.patch('/empresas/<id>/endereco',  empresa.atualizarEndereco);
 
-  // ENDEREÇOS DO CLIENTE
+  // ── ENDEREÇOS DO CLIENTE ─────────────────────────────────────
   app.get('/clientes/<id>/enderecos',              clienteEndereco.listar);
   app.post('/clientes/<id>/enderecos',             clienteEndereco.criar);
   app.delete('/clientes/enderecos/<id>',           clienteEndereco.deletar);
   app.patch('/clientes/enderecos/<id>/principal',  clienteEndereco.marcarPrincipal);
 
-  // PEDIDOS
+  // ── PEDIDOS ──────────────────────────────────────────────────
   app.post('/pedidos',                  criarPedido.criarPedido);
   app.get('/pedidos/empresa',           pedido.getPedidosByEmpresa);
   app.get('/pedidos/cliente',           pedido.getPedidosByCliente);
   app.get('/pedidos/<id>/detalhes',     pedido.getPedidoDetalhes);
   app.patch('/pedidos/<id>/status',     pedido.atualizarStatus);
+  app.patch('/pedidos/<id>/quase-pronto',    pedido.marcarQuasePronto);
+  app.patch('/pedidos/<id>/chamar-motoboy',  pedido.chamarMotoboy);
+  app.patch('/pedidos/<id>/entrega-propria', pedido.entregaPropria);
 
-  // MOTOBOY
+  // ── MOTOBOY ──────────────────────────────────────────────────
   app.get('/motoboy/disponiveis',       motoboy.getDisponiveis);
   app.get('/motoboy/em-rota',           motoboy.getEmRota);
   app.get('/motoboy/historico',         motoboy.getHistorico);
@@ -267,9 +217,72 @@ void main() async {
   app.post('/motoboy/aceitar',          motoboy.aceitarEntrega);
   app.patch('/motoboy/status',          motoboy.atualizarStatus);
   app.patch('/motoboy/meu-status',      motoboy.atualizarMeuStatus);
-  app.patch('/pedidos/<id>/quase-pronto',    pedido.marcarQuasePronto);
-  app.patch('/pedidos/<id>/chamar-motoboy',  pedido.chamarMotoboy);
-  app.patch('/pedidos/<id>/entrega-propria', pedido.entregaPropria);
+
+  // ── MAPA / PROXY ORS ─────────────────────────────────────────
+  // Mantém a API key no servidor — o app Flutter não precisa saber a chave.
+  app.get('/mapa/rota', (Request req) async {
+    try {
+      final params   = req.url.queryParameters;
+      final origemLat = params['origemLat'] ?? '';
+      final origemLng = params['origemLng'] ?? '';
+      final destLat   = params['destLat'] ?? '';
+      final destLng   = params['destLng'] ?? '';
+
+      if ([origemLat, origemLng, destLat, destLng].any((s) => s.isEmpty)) {
+        return _json(400, {'error': 'Parâmetros origemLat, origemLng, destLat, destLng são obrigatórios'});
+      }
+
+      final orsResp = await http.post(
+        Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car/geojson'),
+        headers: {
+          'Authorization': orsApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'coordinates': [
+            [double.parse(origemLng), double.parse(origemLat)],
+            [double.parse(destLng), double.parse(destLat)],
+          ]
+        }),
+      );
+
+      return Response(
+        orsResp.statusCode,
+        body: orsResp.body,
+        headers: const {'content-type': 'application/json; charset=utf-8'},
+      );
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao calcular rota'});
+    }
+  });
+
+  // ── MANUTENÇÃO ───────────────────────────────────────────────
+  app.get('/admin/fix-triggers', (Request req) async {
+    try {
+      final triggers = await db.connection.execute(
+        Sql.named('''
+          SELECT trigger_name FROM information_schema.triggers
+          WHERE event_object_table = 'pedidos'
+        '''),
+        parameters: {},
+      );
+      final nomes = triggers.map((r) => r[0]?.toString() ?? '').toList();
+      for (final nome in nomes) {
+        if (nome.isNotEmpty) {
+          await db.connection.execute(
+            Sql.named('DROP TRIGGER IF EXISTS $nome ON pedidos'),
+            parameters: {},
+          );
+        }
+      }
+      return Response.ok(
+        jsonEncode({'ok': true, 'triggers_removidos': nomes}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  });
 
   final overrideHeaders = {
     'Access-Control-Allow-Origin':  '*',
@@ -280,8 +293,15 @@ void main() async {
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(corsHeaders(headers: overrideHeaders))
+      .addMiddleware(jwtMiddleware(jwtService))
       .addHandler(app.call);
 
   final server = await serve(handler, InternetAddress.anyIPv4, 8080);
   print('Servidor online em http://${server.address.host}:${server.port}');
 }
+
+Response _json(int status, Map<String, dynamic> body) => Response(
+      status,
+      body: jsonEncode(body),
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );

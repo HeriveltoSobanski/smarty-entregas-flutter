@@ -157,6 +157,7 @@ class _PaginaLoginState extends State<PaginaLogin>
       nome:        user['nome']?.toString()     ?? '',
       tipoUsuario: tipoUsuario,
       idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
+      token:       resp['token']?.toString(),
     );
 
     if (tipoUsuario == 'empresa') {

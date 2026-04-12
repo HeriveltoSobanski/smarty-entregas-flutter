@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import '../../../services/api_service.dart';
+import '../../../data/session_store.dart';
 
 // ── CPF Validator ─────────────────────────────────────────────────────────────
 
@@ -262,97 +263,110 @@ class _PaginaRegistroState extends State<PaginaRegistro> {
 
     setState(() => _carregando = true);
 
-    final erro = await ApiService.registerCliente(
-      nome:     _nomeCtrl.text.trim(),
-      email:    _emailCtrl.text.trim(),
-      senha:    _senhaCtrl.text,
-      cpf:      _cpfFmt.getUnmaskedText(),
-      telefone: _telFmt.getUnmaskedText(),
-    );
+    Map<String, dynamic> resp;
+    try {
+      resp = await ApiService.registerCliente(
+        nome:     _nomeCtrl.text.trim(),
+        email:    _emailCtrl.text.trim(),
+        senha:    _senhaCtrl.text,
+        cpf:      _cpfFmt.getUnmaskedText(),
+        telefone: _telFmt.getUnmaskedText(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _carregando = false);
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      if (msg.toLowerCase().contains('e-mail') || msg.toLowerCase().contains('email')) {
+        _snack('Este e-mail já está cadastrado.');
+      } else if (msg.toLowerCase().contains('cpf')) {
+        _snack('Este CPF já está cadastrado.');
+      } else {
+        _snack(msg);
+      }
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _carregando = false);
 
-    if (erro == null) {
-      // Sucesso
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width:  72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color:  const Color(0xFF4CAF50).withValues(alpha: 0.12),
-                  shape:  BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle,
-                    color: Color(0xFF4CAF50), size: 44),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Conta criada com sucesso!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize:   18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Agora faça login para continuar.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // fecha dialog
-                    Navigator.of(context).pop(); // volta para login
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _orange,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(
-                    'Ir para Login',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      color:      Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-      return;
-    }
+    // Auto-login após registro — salva token e vai direto para o app
+    final user = resp['user'] as Map<String, dynamic>? ?? {};
+    SessionStore.set(
+      idUsuario: user['id_usuario'] is int
+          ? user['id_usuario'] as int
+          : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0,
+      email:       user['email']?.toString()    ?? _emailCtrl.text.trim(),
+      nome:        user['nome']?.toString()     ?? _nomeCtrl.text.trim(),
+      tipoUsuario: 'cliente',
+      token:       resp['token']?.toString(),
+    );
 
-    // Erros específicos
-    if (erro.contains('indisponível') || erro.contains('servidor')) {
-      _snack('Sem conexão com o servidor. Verifique se o backend está rodando.');
-    } else if (erro.toLowerCase().contains('e-mail') ||
-        erro.toLowerCase().contains('email')) {
-      _snack('Este e-mail já está cadastrado.');
-    } else if (erro.toLowerCase().contains('cpf')) {
-      _snack('Este CPF já está cadastrado.');
-    } else {
-      _snack('Erro ao criar conta. Tente novamente.');
-    }
+    // Sucesso — dialog de boas-vindas e navega para o app
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width:  72,
+              height: 72,
+              decoration: BoxDecoration(
+                color:  const Color(0xFF4CAF50).withValues(alpha: 0.12),
+                shape:  BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle,
+                  color: Color(0xFF4CAF50), size: 44),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Conta criada com sucesso!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize:   18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Bem-vindo ao Smarty Entregas!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                  fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/home', (_) => false);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _orange,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(
+                  'Começar',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    color:      Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Step indicator ────────────────────────────────────────────────────────

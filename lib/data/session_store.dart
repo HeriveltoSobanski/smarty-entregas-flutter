@@ -6,6 +6,8 @@ class SessionStore {
   static String? nome;
   static String? tipoUsuario; // 'cliente' | 'empresa' | 'motoboy'
   static int?    idEmpresa;
+  static String? token; // JWT Bearer token
+
   // Endereço verificado no mapa (apenas para empresa)
   static String? enderecoEmpresa;
   static double? latEmpresa;
@@ -17,12 +19,14 @@ class SessionStore {
     required String nome,
     required String tipoUsuario,
     int?            idEmpresa,
+    String?         token,
   }) {
     SessionStore.idUsuario   = idUsuario;
     SessionStore.email       = email;
     SessionStore.nome        = nome;
     SessionStore.tipoUsuario = tipoUsuario;
     SessionStore.idEmpresa   = idEmpresa;
+    SessionStore.token       = token;
   }
 
   static void clear() {
@@ -31,6 +35,7 @@ class SessionStore {
     nome             = null;
     tipoUsuario      = null;
     idEmpresa        = null;
+    token            = null;
     enderecoEmpresa  = null;
     latEmpresa       = null;
     lngEmpresa       = null;
@@ -39,4 +44,5 @@ class SessionStore {
   static bool get isEmpresa  => tipoUsuario == 'empresa';
   static bool get isCliente  => tipoUsuario == 'cliente';
   static bool get isMotoboy  => tipoUsuario == 'motoboy';
+  static bool get isLoggedIn => token != null;
 }

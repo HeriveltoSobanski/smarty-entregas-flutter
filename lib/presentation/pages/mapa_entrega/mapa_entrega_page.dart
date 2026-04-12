@@ -6,12 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// ORS API key — OpenRouteService (gratuito: 2k req/dia)
-const _orsApiKey =
-    'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImM2YmJlZTFiOGQxNDQ5NDRhZTc5ZGRjMmE2Yzk0MTQ0IiwiaCI6Im11cm11cjY0In0=';
+import '../../../services/api_service.dart';
 
 // =============================================================
 // MapaEntregaPage — exibe rota no mapa para o motoboy
+// A chave ORS fica no backend — não exposta no app.
 // =============================================================
 class MapaEntregaPage extends StatefulWidget {
   final String enderecoOrigem;   // endereço da empresa (origem)
@@ -53,19 +52,27 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
     setState(() { _carregando = true; _erro = ''; });
 
     try {
-      final origem  = await _geocodificar(widget.enderecoOrigem);
-      final destino = await _geocodificar(widget.enderecoDestino);
+      // Geocodifica os dois endereços em paralelo
+      final results = await Future.wait([
+        _geocodificar(widget.enderecoOrigem),
+        _geocodificar(widget.enderecoDestino),
+      ]);
+
+      final origem  = results[0];
+      final destino = results[1];
 
       if (origem == null) {
         setState(() {
-          _erro = 'Não foi possível encontrar o endereço da empresa:\n"${widget.enderecoOrigem}"\n\nVerifique se o endereço está completo.';
+          _erro = 'Não foi possível encontrar o endereço da empresa:\n'
+              '"${widget.enderecoOrigem}"';
           _carregando = false;
         });
         return;
       }
       if (destino == null) {
         setState(() {
-          _erro = 'Não foi possível encontrar o endereço de entrega:\n"${widget.enderecoDestino}"\n\nVerifique se o endereço está completo.';
+          _erro = 'Não foi possível encontrar o endereço de entrega:\n'
+              '"${widget.enderecoDestino}"';
           _carregando = false;
         });
         return;
@@ -79,7 +86,7 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
       await _calcularRota(origem, destino);
     } catch (e) {
       setState(() {
-        _erro = 'Erro ao carregar mapa: $e';
+        _erro = 'Erro ao carregar mapa.';
         _carregando = false;
       });
     }
@@ -107,34 +114,22 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
     return LatLng(lat, lon);
   }
 
-  // ── Rota via OpenRouteService ───────────────────────────────
+  // ── Rota via proxy do backend (chave ORS não exposta no app) ──
   Future<void> _calcularRota(LatLng origem, LatLng destino) async {
     try {
-      final url = Uri.parse(
-          'https://api.openrouteservice.org/v2/directions/driving-car/geojson');
-
-      final resp = await http.post(
-        url,
-        headers: {
-          'Authorization': _orsApiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, application/geo+json',
-        },
-        body: jsonEncode({
-          'coordinates': [
-            [origem.longitude, origem.latitude],
-            [destino.longitude, destino.latitude],
-          ],
-        }),
+      final data = await ApiService.getRotaORS(
+        origemLat: origem.latitude,
+        origemLng: origem.longitude,
+        destLat: destino.latitude,
+        destLng: destino.longitude,
       );
 
-      if (resp.statusCode == 200) {
-        final data     = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (data != null) {
         final features = (data['features'] as List?) ?? [];
         if (features.isNotEmpty) {
           final feature  = features.first as Map<String, dynamic>;
           final geometry = feature['geometry'] as Map<String, dynamic>;
-          final coords   = (geometry['coordinates'] as List);
+          final coords   = geometry['coordinates'] as List;
           final props    = (feature['properties'] as Map?)
                                ?['summary'] as Map? ?? {};
 
@@ -147,34 +142,29 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
           setState(() {
             _rota        = pontos;
             _distanciaKm = ((props['distance'] as num?)?.toDouble() ?? 0) / 1000;
-            _duracaoMin  = (((props['duration'] as num?)?.toDouble() ?? 0) / 60).round();
+            _duracaoMin  =
+                (((props['duration'] as num?)?.toDouble() ?? 0) / 60).round();
           });
         }
       }
-      // Mesmo sem rota, exibe os pins
     } catch (_) {
-      // Rota falhou — continua exibindo pins sem polyline
+      // Rota falhou — exibe pins sem polyline
     }
 
     setState(() => _carregando = false);
     _ajustarCamara();
   }
 
-  // ── Centraliza o mapa para mostrar os 2 pontos ─────────────
   void _ajustarCamara() {
     if (_origem == null || _destino == null) return;
     final bounds = LatLngBounds.fromPoints([_origem!, _destino!]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mapCtrl.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(60),
-        ),
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
       );
     });
   }
 
-  // ── Abre Google Maps com a rota ─────────────────────────────
   Future<void> _abrirNavegacao() async {
     if (_origem == null || _destino == null) return;
     final uri = Uri.parse(
@@ -183,7 +173,6 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
         '&destination=${_destino!.latitude},${_destino!.longitude}'
         '&travelmode=driving');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      // Fallback: mapa simples
       final fallback = Uri.parse(
           'geo:${_destino!.latitude},${_destino!.longitude}'
           '?q=${Uri.encodeComponent(widget.enderecoDestino)}');
@@ -259,7 +248,6 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
 
   Widget _buildMapa() => Column(
         children: [
-          // ── Info bar ──────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -294,7 +282,6 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
                 ],
               ),
             ),
-          // ── Mapa ─────────────────────────────────────────────
           Expanded(
             child: FlutterMap(
               mapController: _mapCtrl,
@@ -308,7 +295,6 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
                       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'br.com.smartyentregas',
                 ),
-                // Polyline de rota
                 if (_rota.isNotEmpty)
                   PolylineLayer(
                     polylines: [
@@ -319,7 +305,6 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
                       ),
                     ],
                   ),
-                // Marcadores
                 MarkerLayer(
                   markers: [
                     if (_origem != null)
@@ -367,7 +352,8 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
             color: cor,
             shape: BoxShape.circle,
             boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+              BoxShadow(
+                  color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
             ],
           ),
           child: Icon(icon, color: Colors.white, size: 22),

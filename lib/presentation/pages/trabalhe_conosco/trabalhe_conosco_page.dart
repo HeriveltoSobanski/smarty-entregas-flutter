@@ -381,21 +381,21 @@ class _TrabalheConoscoPageState extends State<TrabalheConoscoPage> {
     if (!_eForm1.currentState!.validate()) return;
     setState(() => _carregando = true);
 
-    final erro = await ApiService.registerEmpresa(
-      nome:     _eNomeCtrl.text.trim(),
-      email:    _eEmailCtrl.text.trim(),
-      senha:    _eSenhaCtrl.text,
-      cnpj:     _cnpjFmt.getUnmaskedText(),
-      telefone: _eTelFmt.getUnmaskedText(),
-    );
-
-    if (!mounted) return;
-    setState(() => _carregando = false);
-
-    if (erro == null) {
+    try {
+      await ApiService.registerEmpresa(
+        nome:     _eNomeCtrl.text.trim(),
+        email:    _eEmailCtrl.text.trim(),
+        senha:    _eSenhaCtrl.text,
+        cnpj:     _cnpjFmt.getUnmaskedText(),
+        telefone: _eTelFmt.getUnmaskedText(),
+      );
+      if (!mounted) return;
+      setState(() => _carregando = false);
       await _showSuccess('Empresa cadastrada com sucesso!');
-    } else {
-      _handleApiError(erro);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _carregando = false);
+      _handleApiError(e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -403,21 +403,21 @@ class _TrabalheConoscoPageState extends State<TrabalheConoscoPage> {
     if (!_mForm1.currentState!.validate()) return;
     setState(() => _carregando = true);
 
-    final erro = await ApiService.registerMotoboy(
-      nome:     _mNomeCtrl.text.trim(),
-      email:    _mEmailCtrl.text.trim(),
-      senha:    _mSenhaCtrl.text,
-      cpf:      _cpfFmt.getUnmaskedText(),
-      telefone: _mTelFmt.getUnmaskedText(),
-    );
-
-    if (!mounted) return;
-    setState(() => _carregando = false);
-
-    if (erro == null) {
+    try {
+      await ApiService.registerMotoboy(
+        nome:     _mNomeCtrl.text.trim(),
+        email:    _mEmailCtrl.text.trim(),
+        senha:    _mSenhaCtrl.text,
+        cpf:      _cpfFmt.getUnmaskedText(),
+        telefone: _mTelFmt.getUnmaskedText(),
+      );
+      if (!mounted) return;
+      setState(() => _carregando = false);
       await _showSuccess('Cadastro realizado com sucesso!');
-    } else {
-      _handleApiError(erro);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _carregando = false);
+      _handleApiError(e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
