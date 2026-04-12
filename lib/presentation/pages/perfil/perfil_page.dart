@@ -87,9 +87,9 @@ class PerfilPage extends StatelessWidget {
                           onPressed: () => Navigator.pop(context),
                           child: const Text('Cancelar')),
                       ElevatedButton(
-                        onPressed: () {
-                          SessionStore.clear();
-                          Navigator.pop(context);
+                        onPressed: () async {
+                          await SessionStore.logout();
+                          if (!context.mounted) return;
                           Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
                         },
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

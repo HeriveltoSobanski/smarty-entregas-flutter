@@ -35,8 +35,9 @@ class _PaginaMotoboyState extends State<PaginaMotoboy> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.logout, color: Colors.white),
-          onPressed: () {
-            SessionStore.clear();
+          onPressed: () async {
+            await SessionStore.logout();
+            if (!context.mounted) return;
             Navigator.of(context)
                 .pushNamedAndRemoveUntil('/login', (_) => false);
           },

@@ -1,3 +1,5 @@
+import 'auth_storage.dart';
+
 /// Sessão em memória do usuário logado.
 /// Preenchida após login bem-sucedido e limpa no logout.
 class SessionStore {
@@ -39,6 +41,12 @@ class SessionStore {
     enderecoEmpresa  = null;
     latEmpresa       = null;
     lngEmpresa       = null;
+  }
+
+  /// Limpa a sessão em memória e o storage persistente.
+  static Future<void> logout() async {
+    clear();
+    await AuthStorage.clear();
   }
 
   static bool get isEmpresa  => tipoUsuario == 'empresa';

@@ -6,6 +6,7 @@ import '../trabalhe_conosco/trabalhe_conosco_page.dart';
 import '../pagina_esqueci_senha/pagina_esqueci_senha.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
+import '../../../data/auth_storage.dart';
 
 class PaginaLogin extends StatefulWidget {
   const PaginaLogin({super.key});
@@ -149,17 +150,32 @@ class _PaginaLoginState extends State<PaginaLogin>
         ? user['id_empresa'] as int
         : int.tryParse(user['id_empresa']?.toString() ?? '0') ?? 0;
 
+    final idUsuario = user['id_usuario'] is int
+        ? user['id_usuario'] as int
+        : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0;
+    final token = resp['token']?.toString() ?? '';
+
     SessionStore.set(
-      idUsuario: user['id_usuario'] is int
-          ? user['id_usuario'] as int
-          : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0,
-      email:       user['email']?.toString()    ?? '',
-      nome:        user['nome']?.toString()     ?? '',
+      idUsuario:   idUsuario,
+      email:       user['email']?.toString() ?? '',
+      nome:        user['nome']?.toString()  ?? '',
       tipoUsuario: tipoUsuario,
       idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
-      token:       resp['token']?.toString(),
+      token:       token,
     );
 
+    if (token.isNotEmpty) {
+      await AuthStorage.save(
+        token:       token,
+        idUsuario:   idUsuario,
+        email:       user['email']?.toString() ?? '',
+        nome:        user['nome']?.toString()  ?? '',
+        tipoUsuario: tipoUsuario,
+        idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
+      );
+    }
+
+    if (!mounted) return;
     if (tipoUsuario == 'empresa') {
       Navigator.pushReplacementNamed(context, '/empresa');
     } else if (tipoUsuario == 'motoboy') {

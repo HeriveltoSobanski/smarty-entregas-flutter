@@ -153,6 +153,7 @@ class _HomeContentState extends State<_HomeContent> {
   List<Map<String, dynamic>> _empresas = [];
   bool _loading = true;
   String _categoriaFiltro = '';
+  String _labelEntrega = '';
 
   // Banner
   final _bannerCtrl = PageController();
@@ -189,10 +190,27 @@ class _HomeContentState extends State<_HomeContent> {
 
   Future<void> _carregar() async {
     setState(() => _loading = true);
-    final lista = await ApiService.getEmpresasComProdutos(
-      categoria: _categoriaFiltro.isEmpty ? null : _categoriaFiltro,
-    );
-    if (mounted) setState(() { _empresas = lista; _loading = false; });
+    final id = SessionStore.idUsuario;
+    final results = await Future.wait([
+      ApiService.getEmpresasComProdutos(
+        categoria: _categoriaFiltro.isEmpty ? null : _categoriaFiltro,
+      ),
+      if (id != null) ApiService.getEnderecosCliente(id),
+    ]);
+    if (!mounted) return;
+    final lista = results[0];
+    if (id != null && results.length > 1) {
+      final enderecos = results[1];
+      if (enderecos.isNotEmpty) {
+        final principal = enderecos.firstWhere(
+          (e) => e['principal'] == true,
+          orElse: () => enderecos.first,
+        );
+        final apelido = (principal['apelido'] ?? '').toString().trim();
+        _labelEntrega = apelido.isNotEmpty ? apelido : 'Meu endereço';
+      }
+    }
+    setState(() { _empresas = lista; _loading = false; });
   }
 
   @override
@@ -331,14 +349,16 @@ class _HomeContentState extends State<_HomeContent> {
         children: [
           const Text('Entregar em',
               style: TextStyle(fontSize: 11, color: Color(0xFF757575))),
-          Row(children: const [
-            Text('Mallet - PR',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A1A))),
-            SizedBox(width: 2),
-            Icon(Icons.keyboard_arrow_down, color: _primary, size: 18),
+          Row(children: [
+            Text(
+              _labelEntrega.isNotEmpty ? _labelEntrega : 'Meu endereço',
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A)),
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.keyboard_arrow_down, color: _primary, size: 18),
           ]),
         ],
       ),

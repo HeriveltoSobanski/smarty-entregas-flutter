@@ -4,6 +4,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
+import '../../../data/auth_storage.dart';
 
 // ── CPF Validator ─────────────────────────────────────────────────────────────
 
@@ -290,16 +291,33 @@ class _PaginaRegistroState extends State<PaginaRegistro> {
     setState(() => _carregando = false);
 
     // Auto-login após registro — salva token e vai direto para o app
-    final user = resp['user'] as Map<String, dynamic>? ?? {};
+    final user       = resp['user'] as Map<String, dynamic>? ?? {};
+    final idUsuario  = user['id_usuario'] is int
+        ? user['id_usuario'] as int
+        : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0;
+    final email      = user['email']?.toString() ?? _emailCtrl.text.trim();
+    final nome       = user['nome']?.toString()  ?? _nomeCtrl.text.trim();
+    final token      = resp['token']?.toString() ?? '';
+
     SessionStore.set(
-      idUsuario: user['id_usuario'] is int
-          ? user['id_usuario'] as int
-          : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0,
-      email:       user['email']?.toString()    ?? _emailCtrl.text.trim(),
-      nome:        user['nome']?.toString()     ?? _nomeCtrl.text.trim(),
+      idUsuario:   idUsuario,
+      email:       email,
+      nome:        nome,
       tipoUsuario: 'cliente',
-      token:       resp['token']?.toString(),
+      token:       token,
     );
+
+    if (token.isNotEmpty) {
+      await AuthStorage.save(
+        token:       token,
+        idUsuario:   idUsuario,
+        email:       email,
+        nome:        nome,
+        tipoUsuario: 'cliente',
+      );
+    }
+
+    if (!mounted) return;
 
     // Sucesso — dialog de boas-vindas e navega para o app
     await showDialog<void>(
