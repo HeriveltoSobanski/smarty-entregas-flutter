@@ -17,6 +17,8 @@ import 'package:backend/controllers/adicional_controller.dart';
 import 'package:backend/controllers/empresa_controller.dart';
 import 'package:backend/controllers/motoboy_controller.dart';
 import 'package:backend/controllers/cliente_endereco_controller.dart';
+import 'package:backend/controllers/empresa_motoboy_controller.dart';
+import 'package:backend/controllers/avaliacao_controller.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
 
@@ -47,6 +49,19 @@ void main() async {
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_motoboy INT REFERENCES usuarios(id_usuario)",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS quase_pronto BOOLEAN DEFAULT false",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT NULL",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30) DEFAULT NULL",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS troco_para NUMERIC(10,2) DEFAULT NULL",
+    '''
+      CREATE TABLE IF NOT EXISTS empresa_motoboys (
+        id_motoboy_empresa SERIAL PRIMARY KEY,
+        id_empresa         INT NOT NULL REFERENCES empresas(id_empresa) ON DELETE CASCADE,
+        nome               VARCHAR(100) NOT NULL,
+        telefone           VARCHAR(20) NOT NULL DEFAULT '',
+        ativo              BOOLEAN NOT NULL DEFAULT true
+      )
+    ''',
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motoboy_empresa_nome VARCHAR(100) DEFAULT NULL",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motoboy_empresa_telefone VARCHAR(20) DEFAULT NULL",
     "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS status_motoboy VARCHAR(20) DEFAULT 'offline'",
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION",
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION",
@@ -121,7 +136,12 @@ void main() async {
         END LOOP;
       END \$\$
     ''',
-    "INSERT INTO status_pedidos (id_status, nome) VALUES (6, 'Aguardando Motoboy') ON CONFLICT DO NOTHING",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (1, 'Aguardando')        ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (2, 'Em Preparo')        ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (3, 'A Caminho')         ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (4, 'Entregue')          ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (5, 'Cancelado')         ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
+    "INSERT INTO status_pedidos (id_status, nome) VALUES (6, 'Aguardando Motoboy') ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
     "DROP TRIGGER IF EXISTS trg_valida_status ON pedidos",
     "DROP FUNCTION IF EXISTS fn_valida_transicao_status() CASCADE",
     '''
@@ -139,6 +159,25 @@ void main() async {
     ''',
     // Aumenta o campo senha para suportar o formato hash v1:salt:sha256
     "ALTER TABLE usuarios ALTER COLUMN senha TYPE VARCHAR(200)",
+    // Vincula motoboys da empresa a usuários reais
+    "ALTER TABLE empresa_motoboys ADD COLUMN IF NOT EXISTS id_usuario INT REFERENCES usuarios(id_usuario)",
+    "ALTER TABLE empresa_motoboys ALTER COLUMN nome     DROP NOT NULL",
+    "ALTER TABLE empresa_motoboys ALTER COLUMN telefone DROP NOT NULL",
+    // Avaliações de restaurantes e motoboys
+    '''
+      CREATE TABLE IF NOT EXISTS avaliacoes (
+        id_avaliacao  SERIAL PRIMARY KEY,
+        id_pedido     INT NOT NULL REFERENCES pedidos(id_pedido),
+        id_usuario    INT NOT NULL REFERENCES usuarios(id_usuario),
+        id_empresa    INT NOT NULL REFERENCES empresas(id_empresa),
+        id_motoboy    INT REFERENCES usuarios(id_usuario),
+        nota_empresa  SMALLINT NOT NULL CHECK (nota_empresa BETWEEN 1 AND 5),
+        nota_motoboy  SMALLINT CHECK (nota_motoboy BETWEEN 1 AND 5),
+        comentario    TEXT,
+        criado_em     TIMESTAMP DEFAULT NOW(),
+        UNIQUE (id_pedido, id_usuario)
+      )
+    ''',
   ];
 
   for (final sql in migrations) {
@@ -157,7 +196,9 @@ void main() async {
   final adicional      = AdicionalController(db.connection);
   final empresa        = EmpresaController(db.connection);
   final motoboy        = MotoboyController(db.connection);
-  final clienteEndereco = ClienteEnderecoController(db.connection);
+  final clienteEndereco  = ClienteEnderecoController(db.connection);
+  final empresaMotoboy   = EmpresaMotoboyController(db.connection);
+  final avaliacao        = AvaliacaoController(db.connection);
 
   final app = Router();
 
@@ -208,6 +249,18 @@ void main() async {
   app.patch('/pedidos/<id>/quase-pronto',    pedido.marcarQuasePronto);
   app.patch('/pedidos/<id>/chamar-motoboy',  pedido.chamarMotoboy);
   app.patch('/pedidos/<id>/entrega-propria', pedido.entregaPropria);
+  app.patch('/pedidos/<id>/entrega-propria-motoboy', empresaMotoboy.atribuirMotoboy);
+
+  // ── AVALIAÇÕES ───────────────────────────────────────────────
+  app.post('/avaliacoes',                    avaliacao.criar);
+  app.get('/pedidos/<id>/avaliacao',         avaliacao.verificar);
+  app.get('/empresas/<id>/avaliacao',        avaliacao.getEmpresa);
+
+  // ── MOTOBOYS DA EMPRESA ──────────────────────────────────────
+  app.get('/motoboys/buscar',              empresaMotoboy.buscarPorId);
+  app.get('/empresas/<id>/motoboys',       empresaMotoboy.listar);
+  app.post('/empresas/<id>/motoboys',      empresaMotoboy.criar);
+  app.delete('/empresas/motoboys/<id>',    empresaMotoboy.deletar);
 
   // ── MOTOBOY ──────────────────────────────────────────────────
   app.get('/motoboy/disponiveis',       motoboy.getDisponiveis);

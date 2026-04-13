@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/session_store.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
+import '../suporte/suporte_page.dart';
 
 const Color _laranja = Color(0xFFF5841F);
 
@@ -67,6 +68,32 @@ class PerfilPage extends StatelessWidget {
               title: const Text('Meus endereços',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
               subtitle: const Text('Gerenciar endereços de entrega',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0.5,
+            child: ListTile(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SuportePage()),
+              ),
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.support_agent,
+                    color: Colors.blue, size: 20),
+              ),
+              title: const Text('Ajuda e Suporte',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+              subtitle: const Text('Dúvidas, problemas ou cancelamentos',
                   style: TextStyle(fontSize: 12, color: Colors.grey)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey),
             ),

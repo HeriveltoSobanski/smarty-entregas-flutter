@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../checkout/checkout_page.dart';
+import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
 
 const Color _primary = Color(0xFFF5841F);
 
@@ -222,12 +223,16 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                     Text('40-60 min', style: TextStyle(fontSize: 13, color: Colors.grey)),
                   ]),
                   const SizedBox(height: 6),
-                  Row(children: const [
-                    Icon(Icons.star, color: Color(0xFFFFC107), size: 15),
-                    SizedBox(width: 3),
-                    Text('4.8', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text(' • ', style: TextStyle(color: Colors.grey)),
-                    Text('mínimo R\$ 15,00', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Row(children: [
+                    NotaEstrelas(
+                      nota: (widget.empresa['nota_media'] is num
+                          ? (widget.empresa['nota_media'] as num).toDouble()
+                          : double.tryParse(widget.empresa['nota_media']?.toString() ?? '0') ?? 0.0),
+                      total: (widget.empresa['nota_total'] is int
+                          ? widget.empresa['nota_total'] as int
+                          : int.tryParse(widget.empresa['nota_total']?.toString() ?? '0') ?? 0),
+                      tamanho: 13,
+                    ),
                   ]),
                   const SizedBox(height: 12),
                   Container(

@@ -27,7 +27,7 @@ class DbConnection {
         password: password,
       ),
       settings: ConnectionSettings(
-        sslMode: SslMode.disable, // Forca o desligamento do SSL para teste local
+        sslMode: SslMode.disable,
       ),
     );
   }

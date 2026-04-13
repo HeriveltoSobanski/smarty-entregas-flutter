@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
+import '../detalhes_pedido/detalhes_pedido_page.dart';
+import '../acompanhamento_pedido/acompanhamento_pedido_page.dart';
 
 const Color _laranja = Color(0xFFF5841F);
 
@@ -108,11 +110,33 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                           final cor = _corStatus(idStatus);
                           final quasePronto = p['quase_pronto'] == true;
 
+                          // Pedidos ativos (1=aguardando,2=preparando,3=a caminho)
+                          // abrem acompanhamento; concluídos/cancelados abrem detalhes
+                          final ativo = idStatus >= 1 && idStatus <= 3;
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 2,
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ativo
+                                      ? AcompanhamentoPedidoPage(
+                                          idPedido:        p['id_pedido'] as int,
+                                          idEmpresa:       p['id_empresa'] is int ? p['id_empresa'] as int : int.tryParse(p['id_empresa']?.toString() ?? '') ?? 0,
+                                          nomeEmpresa:     empresa,
+                                          enderecoEntrega: p['endereco_entrega']?.toString() ?? '',
+                                        )
+                                      : DetalhesPedidoPage(
+                                          idPedido:    p['id_pedido'] as int,
+                                          nomeEmpresa: empresa,
+                                        ),
+                                ),
+                              ),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 decoration: BoxDecoration(
@@ -163,6 +187,7 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                                 ),
                               ),
                             ]),
+                            ),
                           );
                         },
                       ),

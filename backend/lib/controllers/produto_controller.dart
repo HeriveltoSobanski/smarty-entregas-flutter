@@ -242,34 +242,31 @@ class ProdutoController {
     try {
       final categoria = request.url.queryParameters['categoria'];
 
-      final query = categoria != null && categoria.isNotEmpty
-          ? '''
-            SELECT e.id_empresa, u.nome AS empresa_nome,
-                   p.id_produto, p.nome AS produto_nome, p.descricao,
-                   p.preco, c.nome AS categoria_nome, p.imagem,
-                   e.foto_perfil
-            FROM empresas e
-            JOIN usuarios u   ON u.id_usuario   = e.id_usuario
-            JOIN produtos p   ON p.id_empresa   = e.id_empresa
-            JOIN categorias c ON c.id_categoria = p.id_categoria
-            WHERE p.ativo = true
-              AND LOWER(c.nome) = LOWER(@categoria)
-            ORDER BY e.id_empresa, p.preco ASC
-          '''
-          : '''
-            SELECT e.id_empresa, u.nome AS empresa_nome,
-                   p.id_produto, p.nome AS produto_nome, p.descricao,
-                   p.preco, c.nome AS categoria_nome, p.imagem,
-                   e.foto_perfil
-            FROM empresas e
-            JOIN usuarios u   ON u.id_usuario   = e.id_usuario
-            JOIN produtos p   ON p.id_empresa   = e.id_empresa
-            JOIN categorias c ON c.id_categoria = p.id_categoria
-            WHERE p.ativo = true
-            ORDER BY e.id_empresa, p.preco ASC
-          ''';
+      final filtroCategoria = categoria != null && categoria.isNotEmpty;
+      final query = '''
+        SELECT e.id_empresa, u.nome AS empresa_nome,
+               p.id_produto, p.nome AS produto_nome, p.descricao,
+               p.preco, c.nome AS categoria_nome, p.imagem,
+               e.foto_perfil,
+               COALESCE(av.media, 0)  AS nota_media,
+               COALESCE(av.total, 0)  AS nota_total
+        FROM empresas e
+        JOIN usuarios u   ON u.id_usuario   = e.id_usuario
+        JOIN produtos p   ON p.id_empresa   = e.id_empresa
+        JOIN categorias c ON c.id_categoria = p.id_categoria
+        LEFT JOIN (
+          SELECT id_empresa,
+                 ROUND(AVG(nota_empresa)::numeric, 1) AS media,
+                 COUNT(*) AS total
+          FROM avaliacoes
+          GROUP BY id_empresa
+        ) av ON av.id_empresa = e.id_empresa
+        WHERE p.ativo = true
+          ${filtroCategoria ? 'AND LOWER(c.nome) = LOWER(@categoria)' : ''}
+        ORDER BY nota_media DESC, e.id_empresa, p.preco ASC
+      ''';
 
-      final params = categoria != null && categoria.isNotEmpty
+      final params = filtroCategoria
           ? {'categoria': categoria}
           : <String, dynamic>{};
 
@@ -287,12 +284,17 @@ class ProdutoController {
         final catNome     = r[6]?.toString() ?? '';
         final imagem      = r[7]?.toString();
         final fotoPerfil  = r[8]?.toString();
+        final notaMedia   = double.tryParse(r[9]?.toString() ?? '0') ?? 0.0;
+        final notaTotal   = r[10] is int ? r[10] as int
+            : int.tryParse(r[10]?.toString() ?? '0') ?? 0;
 
         empresaMap.putIfAbsent(idEmpresa, () => {
-          'id_empresa':   idEmpresa,
-          'nome':         empresaNome,
-          'foto_perfil':  fotoPerfil,
-          'produtos':     <Map<String, dynamic>>[],
+          'id_empresa':  idEmpresa,
+          'nome':        empresaNome,
+          'foto_perfil': fotoPerfil,
+          'nota_media':  notaMedia,
+          'nota_total':  notaTotal,
+          'produtos':    <Map<String, dynamic>>[],
         });
 
         (empresaMap[idEmpresa]!['produtos'] as List).add({

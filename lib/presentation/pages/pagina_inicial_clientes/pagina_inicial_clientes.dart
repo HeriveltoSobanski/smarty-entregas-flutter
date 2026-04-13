@@ -8,6 +8,7 @@ import '../meus_pedidos/meus_pedidos_page.dart';
 import '../perfil/perfil_page.dart';
 import '../cardapio_empresa/cardapio_empresa_page.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
+import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
 
 const Color _primary = Color(0xFFF5841F);
 const Color _bg = Color(0xFFF5F5F5);
@@ -591,13 +592,23 @@ class _EmpresaCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     // Estrela / tempo / frete
                     Row(children: [
-                      const Icon(Icons.star,
-                          color: Color(0xFFFFC107), size: 14),
-                      const SizedBox(width: 2),
-                      const Text('4.8 •',
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 4),
+                      NotaEstrelas(
+                        nota:  (empresa['nota_media'] is num
+                            ? (empresa['nota_media'] as num).toDouble()
+                            : double.tryParse(
+                                    empresa['nota_media']?.toString() ?? '0') ??
+                                0.0),
+                        total: (empresa['nota_total'] is int
+                            ? empresa['nota_total'] as int
+                            : int.tryParse(
+                                    empresa['nota_total']?.toString() ?? '0') ??
+                                0),
+                        tamanho: 12,
+                      ),
+                      if ((empresa['nota_total'] ?? 0) != 0)
+                        const Text(' • ',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFF757575))),
                       const Icon(Icons.delivery_dining,
                           size: 14, color: Color(0xFF757575)),
                       const SizedBox(width: 2),

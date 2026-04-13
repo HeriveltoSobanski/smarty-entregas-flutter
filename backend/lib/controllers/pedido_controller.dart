@@ -94,10 +94,20 @@ class PedidoController {
                  u.telefone AS cliente_telefone,
                  p.endereco_entrega, p.observacao,
                  COALESCE(p.quase_pronto, false) AS quase_pronto,
-                 COALESCE(p.tipo_entrega, '')    AS tipo_entrega
+                 COALESCE(p.tipo_entrega, '')    AS tipo_entrega,
+                 m.nome  AS motoboy_nome,
+                 m.telefone AS motoboy_telefone,
+                 e.nome  AS empresa_nome,
+                 COALESCE(p.forma_pagamento, '') AS forma_pagamento,
+                 p.motoboy_empresa_nome,
+                 p.motoboy_empresa_telefone,
+                 p.id_empresa,
+                 p.id_motoboy
           FROM pedidos p
           JOIN usuarios u        ON u.id_usuario  = p.id_usuario
           JOIN status_pedidos sp ON sp.id_status  = p.id_status
+          JOIN empresas e        ON e.id_empresa  = p.id_empresa
+          LEFT JOIN usuarios m   ON m.id_usuario  = p.id_motoboy
           WHERE p.id_pedido = @pedido_id
           LIMIT 1
         '''),
@@ -138,9 +148,16 @@ class PedidoController {
           'cliente_telefone': r[7]?.toString() ?? '',
           'endereco_entrega': r[8]?.toString() ?? '',
           'observacao':       r[9]?.toString() ?? '',
-          'quase_pronto':     r[10] as bool? ?? false,
-          'tipo_entrega':     r[11]?.toString() ?? '',
-          'itens':            itens,
+          'quase_pronto':      r[10] as bool? ?? false,
+          'tipo_entrega':      r[11]?.toString() ?? '',
+          // motoboy da plataforma (se houver) ou motoboy da empresa
+          'motoboy_nome':      r[12]?.toString() ?? r[16]?.toString(),
+          'motoboy_telefone':  r[13]?.toString() ?? r[17]?.toString(),
+          'empresa_nome':      r[14]?.toString() ?? '',
+          'forma_pagamento':   r[15]?.toString() ?? '',
+          'id_empresa':        r[18],
+          'id_motoboy':        r[19],
+          'itens':             itens,
         }
       });
     } catch (e) {

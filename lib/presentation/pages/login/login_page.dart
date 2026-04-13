@@ -15,8 +15,7 @@ class PaginaLogin extends StatefulWidget {
   State<PaginaLogin> createState() => _PaginaLoginState();
 }
 
-class _PaginaLoginState extends State<PaginaLogin>
-    with SingleTickerProviderStateMixin {
+class _PaginaLoginState extends State<PaginaLogin> {
   final _formKey    = GlobalKey<FormState>();
   final _emailCtrl  = TextEditingController();
   final _senhaCtrl  = TextEditingController();
@@ -27,100 +26,25 @@ class _PaginaLoginState extends State<PaginaLogin>
   bool    _obscureSenha = true;
   String? _erro;
 
-  late AnimationController _animCtrl;
-  late Animation<double>   _fadeAnim;
-  late Animation<Offset>   _slideAnim;
-
-  static const _orange   = Color(0xFFF5841F);
-  static const _iconGrey = Color(0xFF757575);
+  static const _orange = Color(0xFFF5841F);
+  static const _grey   = Color(0xFF757575);
+  static const _fieldBg = Color(0xFFF5F5F5);
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400));
-    _fadeAnim  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, -0.1),
-      end:   Offset.zero,
-    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-    _animCtrl.forward();
-
     _emailFocus.addListener(() => setState(() {}));
     _senhaFocus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
     _emailCtrl.dispose();
     _senhaCtrl.dispose();
     _emailFocus.dispose();
     _senhaFocus.dispose();
     super.dispose();
   }
-
-  // ── campo com sombra ─────────────────────────────────────────────────────
-
-  InputDecoration _deco({
-    required String    hint,
-    required IconData  icon,
-    required FocusNode focus,
-    Widget?            suffix,
-  }) {
-    final active = focus.hasFocus;
-    return InputDecoration(
-      hintText:  hint,
-      hintStyle: GoogleFonts.poppins(color: _iconGrey, fontSize: 14),
-      prefixIcon: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Icon(icon,
-            color: active ? _orange : _iconGrey, size: 22),
-      ),
-      prefixIconConstraints:
-          const BoxConstraints(minWidth: 48, minHeight: 48),
-      suffixIcon: suffix,
-      filled:    true,
-      fillColor: Colors.white.withValues(alpha: 0.95),
-      isDense:   false,
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.transparent),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: _orange, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-      ),
-      errorStyle: GoogleFonts.poppins(
-          fontSize: 11, color: const Color(0xFFFFCDD2)),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-    );
-  }
-
-  Widget _shadow({required Widget child}) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color:      Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset:     const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: child,
-      );
-
-  // ── login ─────────────────────────────────────────────────────────────────
 
   Future<void> _fazerLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -185,86 +109,120 @@ class _PaginaLoginState extends State<PaginaLogin>
     }
   }
 
-  // ── build ─────────────────────────────────────────────────────────────────
+  InputDecoration _fieldDeco({
+    required String   hint,
+    required IconData icon,
+    required FocusNode focus,
+    Widget? suffix,
+  }) {
+    final active = focus.hasFocus;
+    return InputDecoration(
+      hintText:  hint,
+      hintStyle: GoogleFonts.poppins(color: const Color(0xFFBDBDBD), fontSize: 14),
+      prefixIcon: Icon(icon, color: active ? _orange : const Color(0xFFBDBDBD), size: 20),
+      suffixIcon: suffix,
+      filled:    true,
+      fillColor: _fieldBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _orange, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+      ),
+      errorStyle: GoogleFonts.poppins(fontSize: 11, color: Colors.redAccent),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFFFA726), Color(0xFFFFEB3B)],
-          begin:  Alignment.topCenter,
-          end:    Alignment.bottomCenter,
+        image: DecorationImage(
+          image: AssetImage('assets/bg_login.png'),
+          fit: BoxFit.fill,
         ),
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  const SizedBox(height: 24),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 24),
 
-                  // Logo
-                  FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
+                    // Logo
+                    Center(
                       child: Image.asset(
                         'assets/logo.png',
-                        height: 260,
+                        height: 200,
                         errorBuilder: (_, __, ___) =>
-                            const SizedBox(height: 80),
+                            const SizedBox(height: 100),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 8),
 
-                  // E-mail
-                  _shadow(
-                    child: TextFormField(
+                    // Título
+                    Text(
+                      'Bem-vindo de volta!',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize:   22,
+                        fontWeight: FontWeight.bold,
+                        color:      const Color(0xFF212121),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // E-mail
+                    TextFormField(
                       controller:   _emailCtrl,
                       focusNode:    _emailFocus,
                       keyboardType: TextInputType.emailAddress,
-                      style: GoogleFonts.poppins(fontSize: 14),
-                      decoration: _deco(
-                        hint:  'E-mail',
+                      style: GoogleFonts.poppins(fontSize: 14, color: const Color(0xFF212121)),
+                      decoration: _fieldDeco(
+                        hint:  'Ex: nome@email.com',
                         icon:  Icons.email_outlined,
                         focus: _emailFocus,
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Informe o e-mail';
-                        }
-                        if (!RegExp(r'.+@.+\..+').hasMatch(v.trim())) {
-                          return 'E-mail inválido';
-                        }
+                        if (v == null || v.trim().isEmpty) return 'Informe o e-mail';
+                        if (!RegExp(r'.+@.+\..+').hasMatch(v.trim())) return 'E-mail inválido';
                         return null;
                       },
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                  // Senha
-                  _shadow(
-                    child: TextFormField(
+                    // Senha
+                    TextFormField(
                       controller:  _senhaCtrl,
                       focusNode:   _senhaFocus,
                       obscureText: _obscureSenha,
-                      style: GoogleFonts.poppins(fontSize: 14),
-                      decoration: _deco(
-                        hint:  'Senha',
-                        icon:  Icons.lock_outlined,
+                      style: GoogleFonts.poppins(fontSize: 14, color: const Color(0xFF212121)),
+                      decoration: _fieldDeco(
+                        hint:  'Digite sua senha',
+                        icon:  Icons.lock_outline,
                         focus: _senhaFocus,
                         suffix: IconButton(
                           icon: Icon(
                             _obscureSenha
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: _senhaFocus.hasFocus ? _orange : _iconGrey,
+                            color: _senhaFocus.hasFocus ? _orange : const Color(0xFFBDBDBD),
                             size: 20,
                           ),
                           onPressed: () =>
@@ -277,138 +235,247 @@ class _PaginaLoginState extends State<PaginaLogin>
                         return null;
                       },
                     ),
-                  ),
 
-                  if (_erro != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _erro!,
-                      style: GoogleFonts.poppins(
-                          fontSize: 12, color: const Color(0xFFFFCDD2)),
-                    ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  // Botão Entrar
-                  _primaryBtn(
-                    label:     'Entrar',
-                    loading:   _loading,
-                    onPressed: _loading ? null : _fazerLogin,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Botão Registrar-se
-                  SizedBox(
-                    width:  double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: _loading
-                          ? null
-                          : () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const PaginaRegistro()),
-                              ),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor:
-                            Colors.white.withValues(alpha: 0.20),
-                        side: const BorderSide(color: Colors.white, width: 2),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: Text(
-                        'Registrar-se',
-                        style: GoogleFonts.poppins(
-                          fontSize:   16,
-                          fontWeight: FontWeight.w700,
-                          color:      Colors.white,
+                    // Esqueci minha senha
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const PaginaEsqueciSenha()),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 0, vertical: 4),
+                        ),
+                        child: Text(
+                          'Esqueci minha senha',
+                          style: GoogleFonts.poppins(
+                            fontSize:   13,
+                            fontWeight: FontWeight.w500,
+                            color:      _orange,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
 
-                  _link('Trabalhe conosco', () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const TrabalheConoscoPage()),
-                  )),
-                  const SizedBox(height: 16),
-                  _link('Esqueci minha senha', () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const PaginaEsqueciSenha()),
-                  )),
-                  const SizedBox(height: 24),
-                ],
+                    // Erro
+                    if (_erro != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Colors.redAccent, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _erro!,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ] else
+                      const SizedBox(height: 12),
+
+                    // Botão Entrar
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _fazerLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _orange,
+                          disabledBackgroundColor: _orange.withValues(alpha: 0.6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                          shadowColor: _orange.withValues(alpha: 0.4),
+                        ),
+                        child: _loading
+                            ? const SizedBox(
+                                height: 22,
+                                width:  22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Entrar',
+                                style: GoogleFonts.poppins(
+                                  fontSize:   16,
+                                  fontWeight: FontWeight.bold,
+                                  color:      Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Registrar-se
+                    Center(
+                      child: TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const PaginaRegistro()),
+                                ),
+                        child: RichText(
+                          text: TextSpan(
+                            style: GoogleFonts.poppins(
+                                fontSize: 13, color: _grey),
+                            children: [
+                              const TextSpan(text: 'Ainda não tem conta? '),
+                              TextSpan(
+                                text: 'Registrar-se',
+                                style: GoogleFonts.poppins(
+                                  fontSize:   13,
+                                  fontWeight: FontWeight.w700,
+                                  color:      _orange,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Divisor "Ou entre com"
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Divider(
+                                color: Colors.grey.shade300, thickness: 1)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'Ou entre com',
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, color: _grey),
+                          ),
+                        ),
+                        Expanded(
+                            child: Divider(
+                                color: Colors.grey.shade300, thickness: 1)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Botão Facebook
+                    _socialBtn(
+                      label: 'Continuar com Facebook',
+                      icon: _FacebookIcon(),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Botão Google
+                    _socialBtn(
+                      label: 'Continuar com Google',
+                      icon: _GoogleIcon(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Trabalhe conosco
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const TrabalheConoscoPage()),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: _orange.withValues(alpha: 0.3)),
+                          ),
+                          child: RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13, color: _grey),
+                              children: [
+                                const TextSpan(text: 'Seja um parceiro: '),
+                                TextSpan(
+                                  text: 'Trabalhe Conosco →',
+                                  style: GoogleFonts.poppins(
+                                    fontSize:   13,
+                                    fontWeight: FontWeight.w700,
+                                    color:      _orange,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
-  Widget _primaryBtn({
-    required String label,
-    required bool loading,
-    required VoidCallback? onPressed,
-  }) =>
-      Container(
-        width:  double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: _orange.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
+  Widget _socialBtn({required String label, required Widget icon}) {
+    return SizedBox(
+      height: 50,
+      child: OutlinedButton(
+        onPressed: null, // não funcional por enquanto
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: Colors.white,
+          disabledForegroundColor: const Color(0xFF424242).withValues(alpha: 1),
+          disabledBackgroundColor: Colors.white,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize:   14,
+                fontWeight: FontWeight.w500,
+                color:      const Color(0xFF424242),
+              ),
             ),
           ],
         ),
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _orange,
-            disabledBackgroundColor: _orange.withValues(alpha: 0.6),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-          ),
-          child: loading
-              ? const SizedBox(
-                  height: 22,
-                  width:  22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor:  AlwaysStoppedAnimation(Colors.white),
-                  ),
-                )
-              : Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize:   16,
-                    fontWeight: FontWeight.bold,
-                    color:      Colors.white,
-                  ),
-                ),
-        ),
-      );
+      ),
+    );
+  }
+}
 
-  Widget _link(String text, VoidCallback onTap) => TextButton(
-        onPressed: onTap,
-        child: Text(
-          text,
-          style: GoogleFonts.poppins(
-            fontSize:            14,
-            fontWeight:          FontWeight.w600,
-            color:               Colors.white,
-            decoration:          TextDecoration.underline,
-            decorationColor:     Colors.white,
-            decorationThickness: 1.5,
-          ),
-        ),
-      );
+// ── Ícone Facebook ──────────────────────────────────────────────────────────
+class _FacebookIcon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset('assets/facebook-logo.png', width: 24, height: 24);
+  }
+}
+
+// ── Ícone Google ────────────────────────────────────────────────────────────
+class _GoogleIcon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset('assets/google-logo.png', width: 24, height: 24);
+  }
 }

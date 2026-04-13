@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
 import '../selecionar_endereco/selecionar_endereco_page.dart';
+import '../empresa_motoboys/empresa_motoboys_page.dart';
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -1424,8 +1425,40 @@ class _PedidoDetalheSheetState extends State<_PedidoDetalheSheet> {
   }
 
   Future<void> _entregaPropria() async {
+    final idEmpresa = SessionStore.idEmpresa;
+    if (idEmpresa == null) return;
+
+    // Carrega motoboys da empresa
+    final motoboys = await ApiService.getMotoboysDaEmpresa(idEmpresa);
+
+    if (!mounted) return;
+
+    if (motoboys.isEmpty) {
+      // Sem motoboys cadastrados — usa entrega própria sem seleção
+      setState(() => _atualizando = true);
+      await ApiService.entregaPropria(widget.idPedido);
+      await _carregar();
+      setState(() => _atualizando = false);
+      widget.onStatusAtualizado?.call();
+      return;
+    }
+
+    // Mostra seletor de motoboy
+    final selecionado = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ModalSelecionarMotoboy(motoboys: motoboys),
+    );
+
+    if (selecionado == null) return; // cancelou
+
     setState(() => _atualizando = true);
-    await ApiService.entregaPropria(widget.idPedido);
+    await ApiService.atribuirMotoboyEmpresa(
+      idPedido: widget.idPedido,
+      idMotoboyEmpresa: selecionado['id'] as int,
+    );
     await _carregar();
     setState(() => _atualizando = false);
     widget.onStatusAtualizado?.call();
@@ -2117,6 +2150,54 @@ class _TabContaState extends State<_TabConta> {
               ),
             ),
 
+            // ── Minha Equipe (motoboys) ────────────────────────
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const EmpresaMotoboyPage()),
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 6)
+                  ],
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 46, height: 46,
+                    decoration: BoxDecoration(
+                      color: _cor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delivery_dining,
+                        color: _cor, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Minha Equipe',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                        SizedBox(height: 2),
+                        Text('Gerencie seus motoboys de entrega',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey[400]),
+                ]),
+              ),
+            ),
+
             // Card receita total
             Container(
               width: double.infinity,
@@ -2332,6 +2413,78 @@ class _LinhaTransacao extends StatelessWidget {
             style: const TextStyle(
                 color: Colors.green, fontWeight: FontWeight.bold)),
       ]),
+    );
+  }
+}
+
+// =============================================================
+// MODAL — Selecionar motoboy da empresa para entrega própria
+// =============================================================
+class _ModalSelecionarMotoboy extends StatelessWidget {
+  final List<Map<String, dynamic>> motoboys;
+  const _ModalSelecionarMotoboy({required this.motoboys});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text('Selecionar motoboy',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Quem vai fazer a entrega?',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            const SizedBox(height: 16),
+            ...motoboys.map((m) {
+              final nome = m['nome']?.toString() ?? '';
+              final tel  = m['telefone']?.toString() ?? '';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 1,
+                child: ListTile(
+                  leading: Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: _cor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delivery_dining,
+                        color: _cor, size: 24),
+                  ),
+                  title: Text(nome,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: tel.isNotEmpty
+                      ? Text(tel,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey))
+                      : null,
+                  trailing: const Icon(Icons.chevron_right, color: _cor),
+                  onTap: () => Navigator.pop(context, m),
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

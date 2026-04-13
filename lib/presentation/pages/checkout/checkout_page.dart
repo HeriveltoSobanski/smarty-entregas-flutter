@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
+import '../acompanhamento_pedido/acompanhamento_pedido_page.dart';
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -22,11 +23,40 @@ class CheckoutPage extends StatefulWidget {
   State<CheckoutPage> createState() => _CheckoutPageState();
 }
 
+// Opções de pagamento
+enum _Pagamento { pix, cartaoEntrega, dinheiro }
+
+extension _PagamentoExt on _Pagamento {
+  String get label {
+    switch (this) {
+      case _Pagamento.pix:           return 'Pix';
+      case _Pagamento.cartaoEntrega: return 'Cartão na entrega';
+      case _Pagamento.dinheiro:      return 'Dinheiro';
+    }
+  }
+  String get slug {
+    switch (this) {
+      case _Pagamento.pix:           return 'pix';
+      case _Pagamento.cartaoEntrega: return 'cartao_entrega';
+      case _Pagamento.dinheiro:      return 'dinheiro';
+    }
+  }
+  IconData get icon {
+    switch (this) {
+      case _Pagamento.pix:           return Icons.qr_code;
+      case _Pagamento.cartaoEntrega: return Icons.credit_card;
+      case _Pagamento.dinheiro:      return Icons.attach_money;
+    }
+  }
+}
+
 class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _observacaoCtrl = TextEditingController();
+  final TextEditingController _trocoCtrl      = TextEditingController();
   bool _carregando = false;
 
-  Map<String, dynamic>? _enderecoSel;  // endereço selecionado
+  Map<String, dynamic>? _enderecoSel;
+  _Pagamento? _pagamento;
 
   @override
   void initState() {
@@ -66,6 +96,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void dispose() {
     _observacaoCtrl.dispose();
+    _trocoCtrl.dispose();
     super.dispose();
   }
 
@@ -117,44 +148,66 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    final erro = await ApiService.criarPedido(
+    if (_pagamento == null) {
+      setState(() => _carregando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecione a forma de pagamento.')),
+      );
+      return;
+    }
+
+    double? troco;
+    if (_pagamento == _Pagamento.dinheiro) {
+      final t = double.tryParse(_trocoCtrl.text.replaceAll(',', '.'));
+      if (t != null && t < widget.total) {
+        setState(() => _carregando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(
+            'Troco inválido. O valor deve ser maior que R\$ ${widget.total.toStringAsFixed(2)}.')),
+        );
+        return;
+      }
+      troco = t;
+    }
+
+    final result = await ApiService.criarPedido(
       idUsuario:       idUsuario,
       idEmpresa:       idEmpresa is int ? idEmpresa : int.parse(idEmpresa.toString()),
       itens:           itensParaEnvio,
       enderecoEntrega: endereco,
       observacao:      _observacaoCtrl.text.trim(),
+      formaPagamento:  _pagamento!.slug,
+      trocoPara:       troco,
     );
 
     setState(() => _carregando = false);
-
     if (!mounted) return;
 
-    if (erro != null) {
+    if (result.containsKey('erro')) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(erro),
+          content: Text(result['erro'] as String),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Pedido realizado!'),
-        content: const Text('Seu pedido foi realizado com sucesso.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.of(context)
-                  .pushNamedAndRemoveUntil('/home', (_) => false);
-            },
-            child: const Text('OK', style: TextStyle(color: _cor)),
-          ),
-        ],
+    final idPedido    = result['id_pedido'] as int;
+    final nomeEmpresa = widget.empresa['nome']?.toString() ?? '';
+    final idEmpresaInt = idEmpresa is int
+        ? idEmpresa
+        : int.tryParse(idEmpresa.toString()) ?? 0;
+
+    // Navega para acompanhamento substituindo o checkout na pilha
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => AcompanhamentoPedidoPage(
+          idPedido:        idPedido,
+          idEmpresa:       idEmpresaInt,
+          nomeEmpresa:     nomeEmpresa,
+          enderecoEntrega: endereco,
+        ),
       ),
     );
   }
@@ -393,6 +446,109 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ---- Forma de pagamento ----
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.payment, color: _cor, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Forma de pagamento',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold)),
+                      if (_pagamento == null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text('obrigatório',
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.red.shade700)),
+                        ),
+                      ],
+                    ]),
+                    const SizedBox(height: 12),
+                    ..._Pagamento.values.map((op) {
+                      final sel = _pagamento == op;
+                      return GestureDetector(
+                        onTap: () => setState(() => _pagamento = op),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: sel
+                                ? _cor.withValues(alpha: 0.08)
+                                : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: sel ? _cor : Colors.grey.shade300,
+                              width: sel ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(children: [
+                            Icon(op.icon,
+                                color: sel ? _cor : Colors.grey,
+                                size: 22),
+                            const SizedBox(width: 12),
+                            Text(op.label,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: sel
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: sel ? _cor : Colors.black87,
+                                )),
+                            const Spacer(),
+                            if (sel)
+                              const Icon(Icons.check_circle,
+                                  color: _cor, size: 20),
+                          ]),
+                        ),
+                      );
+                    }),
+                    // Campo de troco (só aparece se dinheiro selecionado)
+                    if (_pagamento == _Pagamento.dinheiro) ...[
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _trocoCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Troco para quanto? (opcional)',
+                          hintText:
+                              'Ex.: 50,00 (deixe vazio se não precisar)',
+                          prefixText: 'R\$ ',
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: _cor, width: 2),
+                          ),
+                          isDense: true,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

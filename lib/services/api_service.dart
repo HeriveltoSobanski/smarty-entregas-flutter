@@ -260,12 +260,16 @@ class ApiService {
     }
   }
 
-  static Future<String?> criarPedido({
+  /// Retorna `{'id_pedido': int}` em caso de sucesso,
+  /// ou `{'erro': String}` em caso de falha.
+  static Future<Map<String, dynamic>> criarPedido({
     required int idUsuario,
     required int idEmpresa,
     required List<Map<String, dynamic>> itens,
     String enderecoEntrega = '',
     String observacao = '',
+    String formaPagamento = '',
+    double? trocoPara,
   }) async {
     try {
       final resp = await http.post(
@@ -277,13 +281,17 @@ class ApiService {
           'itens':            itens,
           'endereco_entrega': enderecoEntrega,
           'observacao':       observacao,
+          if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
+          if (trocoPara != null) 'troco_para': trocoPara,
         }),
       );
-      if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      return data['error']?.toString() ?? 'Erro ao criar pedido';
+      if (resp.statusCode == 201) {
+        return {'id_pedido': data['id_pedido'] as int};
+      }
+      return {'erro': data['error']?.toString() ?? 'Erro ao criar pedido'};
     } catch (_) {
-      return 'Servidor indisponível.';
+      return {'erro': 'Servidor indisponível.'};
     }
   }
 
@@ -718,6 +726,209 @@ class ApiService {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // MOTOBOYS DA EMPRESA
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getMotoboysDaEmpresa(int idEmpresa) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['motoboys'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Busca um motoboy pelo id_usuario para confirmação antes de adicionar à equipe.
+  /// Retorna null se não encontrado ou erro.
+  static Future<Map<String, dynamic>?> buscarMotoboyPorId(int id) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/motoboys/buscar?id=$id'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> criarMotoboyEmpresa({
+    required int idEmpresa,
+    required int idUsuario,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'),
+        headers: _authHeaders,
+        body: jsonEncode({'id_usuario': idUsuario}),
+      );
+      if (resp.statusCode == 201) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao cadastrar motoboy';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<void> deletarMotoboyEmpresa(int id) async {
+    try {
+      await http.delete(
+        Uri.parse('$baseUrl/empresas/motoboys/$id'),
+        headers: _authHeaders,
+      );
+    } catch (_) {}
+  }
+
+  static Future<String?> atribuirMotoboyEmpresa({
+    required int idPedido,
+    required int idMotoboyEmpresa,
+  }) async {
+    try {
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria-motoboy'),
+        headers: _authHeaders,
+        body: jsonEncode({'id_motoboy_empresa': idMotoboyEmpresa}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao atribuir motoboy';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // AVALIAÇÕES
+  // ----------------------------------------------------------------
+
+  static Future<String?> enviarAvaliacao({
+    required int    idPedido,
+    required int    idUsuario,
+    required int    idEmpresa,
+    required int    notaEmpresa,
+    int?            idMotoboy,
+    int?            notaMotoboy,
+    String?         comentario,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'id_pedido':    idPedido,
+        'id_usuario':   idUsuario,
+        'id_empresa':   idEmpresa,
+        'nota_empresa': notaEmpresa,
+        if (idMotoboy   != null) 'id_motoboy':   idMotoboy,
+        if (notaMotoboy != null) 'nota_motoboy':  notaMotoboy,
+        if (comentario  != null && comentario.isNotEmpty) 'comentario': comentario,
+      };
+      final resp = await http.post(
+        Uri.parse('$baseUrl/avaliacoes'),
+        headers: _authHeaders,
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 201) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao enviar avaliação';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  /// Retorna {'avaliado': bool, ...} ou null em caso de erro.
+  static Future<Map<String, dynamic>?> verificarAvaliacao({
+    required int idPedido,
+    required int idUsuario,
+  }) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/pedidos/$idPedido/avaliacao?id_usuario=$idUsuario'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // RECUPERAÇÃO DE SENHA
+  // ----------------------------------------------------------------
+
+  /// Verifica se o código de recuperação é válido.
+  /// Retorna null em caso de sucesso ou mensagem de erro.
+  static Future<String?> verifyCode({
+    required String email,
+    required String codigo,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/verificar-codigo'),
+        headers: _publicHeaders,
+        body: jsonEncode({'email': email, 'codigo': codigo}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body);
+      return data['error']?.toString() ?? 'Código inválido.';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  /// Envia código de recuperação para o e-mail informado.
+  /// Retorna null em caso de sucesso ou mensagem de erro.
+  static Future<String?> forgotPassword({required String email}) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/esqueci-senha'),
+        headers: _publicHeaders,
+        body: jsonEncode({'email': email}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body);
+      return data['error']?.toString() ?? 'Erro ao enviar código.';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  /// Redefine a senha usando o código recebido por e-mail.
+  /// Retorna null em caso de sucesso ou mensagem de erro.
+  static Future<String?> resetPassword({
+    required String email,
+    required String codigo,
+    required String novaSenha,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/redefinir-senha'),
+        headers: _publicHeaders,
+        body: jsonEncode({
+          'email':     email,
+          'codigo':    codigo,
+          'nova_senha': novaSenha,
+        }),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body);
+      return data['error']?.toString() ?? 'Erro ao redefinir senha.';
+    } catch (_) {
+      return 'Servidor indisponível.';
     }
   }
 }

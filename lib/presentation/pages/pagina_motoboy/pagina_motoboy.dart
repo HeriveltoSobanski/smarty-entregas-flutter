@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
@@ -616,6 +617,39 @@ class _TabRelatorioState extends State<_TabRelatorio> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ── Meu ID (para compartilhar com empresas) ──────────
+          Card(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            elevation: 2,
+            color: _cor.withValues(alpha: 0.08),
+            child: ListTile(
+              leading: const Icon(Icons.badge_outlined, color: _cor),
+              title: const Text('Meu ID',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: Text(
+                '${SessionStore.idUsuario ?? '-'}',
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold, color: _cor),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy, color: _cor, size: 20),
+                tooltip: 'Copiar ID',
+                onPressed: () {
+                  final id = SessionStore.idUsuario?.toString() ?? '';
+                  Clipboard.setData(ClipboardData(text: id));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('ID copiado!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // ── Filtro de período ────────────────────────────────
           Card(
             shape: RoundedRectangleBorder(
