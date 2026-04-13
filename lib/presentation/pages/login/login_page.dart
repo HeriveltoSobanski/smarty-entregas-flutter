@@ -118,8 +118,8 @@ class _PaginaLoginState extends State<PaginaLogin> {
     final active = focus.hasFocus;
     return InputDecoration(
       hintText:  hint,
-      hintStyle: GoogleFonts.poppins(color: const Color(0xFFBDBDBD), fontSize: 14),
-      prefixIcon: Icon(icon, color: active ? _orange : const Color(0xFFBDBDBD), size: 20),
+      hintStyle: GoogleFonts.poppins(color: const Color(0xFF9E9E9E), fontSize: 14),
+      prefixIcon: Icon(icon, color: active ? _orange : const Color(0xFF9E9E9E), size: 20),
       suffixIcon: suffix,
       filled:    true,
       fillColor: _fieldBg,
@@ -169,7 +169,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                     Center(
                       child: Image.asset(
                         'assets/logo.png',
-                        height: 200,
+                        height: 240,
                         errorBuilder: (_, __, ___) =>
                             const SizedBox(height: 100),
                       ),
@@ -222,7 +222,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                             _obscureSenha
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: _senhaFocus.hasFocus ? _orange : const Color(0xFFBDBDBD),
+                            color: _senhaFocus.hasFocus ? _orange : const Color(0xFF9E9E9E),
                             size: 20,
                           ),
                           onPressed: () =>
@@ -392,16 +392,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                           MaterialPageRoute(
                               builder: (_) => const TrabalheConoscoPage()),
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _orange.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: _orange.withValues(alpha: 0.3)),
-                          ),
-                          child: RichText(
+                        child: RichText(
                             text: TextSpan(
                               style: GoogleFonts.poppins(
                                   fontSize: 13, color: _grey),
@@ -420,7 +411,6 @@ class _PaginaLoginState extends State<PaginaLogin> {
                           ),
                         ),
                       ),
-                    ),
                     const SizedBox(height: 24),
                   ],
                 ),

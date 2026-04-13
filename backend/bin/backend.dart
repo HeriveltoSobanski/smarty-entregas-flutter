@@ -20,14 +20,18 @@ import 'package:backend/controllers/cliente_endereco_controller.dart';
 import 'package:backend/controllers/empresa_motoboy_controller.dart';
 import 'package:backend/controllers/avaliacao_controller.dart';
 import 'package:backend/services/jwt_service.dart';
+import 'package:backend/services/email_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
 
 void main() async {
   final env = DotEnv(includePlatformEnvironment: true)..load();
 
-  final jwtSecret = env['JWT_SECRET'] ?? 'smarty_entregas_dev_secret';
-  final orsApiKey = env['ORS_API_KEY'] ?? '';
-  final jwtService = JwtService(jwtSecret);
+  final jwtSecret    = env['JWT_SECRET'] ?? 'smarty_entregas_dev_secret';
+  final orsApiKey    = env['ORS_API_KEY'] ?? '';
+  final gmailUser    = env['GMAIL_USER'] ?? '';
+  final gmailPass    = env['GMAIL_APP_PASSWORD'] ?? '';
+  final jwtService   = JwtService(jwtSecret);
+  final emailService = EmailService(gmailUser, gmailPass);
 
   final db = DbConnection(env);
   try {
@@ -163,6 +167,16 @@ void main() async {
     "ALTER TABLE empresa_motoboys ADD COLUMN IF NOT EXISTS id_usuario INT REFERENCES usuarios(id_usuario)",
     "ALTER TABLE empresa_motoboys ALTER COLUMN nome     DROP NOT NULL",
     "ALTER TABLE empresa_motoboys ALTER COLUMN telefone DROP NOT NULL",
+    // Recuperação de senha
+    '''
+      CREATE TABLE IF NOT EXISTS recuperacao_senha (
+        id        SERIAL PRIMARY KEY,
+        email     VARCHAR(200) NOT NULL,
+        codigo    VARCHAR(6)   NOT NULL,
+        expira_em TIMESTAMP    NOT NULL,
+        usado     BOOLEAN      NOT NULL DEFAULT false
+      )
+    ''',
     // Avaliações de restaurantes e motoboys
     '''
       CREATE TABLE IF NOT EXISTS avaliacoes (
@@ -189,7 +203,7 @@ void main() async {
   }
   print('Migrações aplicadas');
 
-  final auth           = AuthController(db.connection, jwtService);
+  final auth           = AuthController(db.connection, jwtService, emailService);
   final produto        = ProdutoController(db.connection);
   final pedido         = PedidoController(db.connection);
   final criarPedido    = CriarPedidoController(db.connection);
@@ -212,6 +226,9 @@ void main() async {
   app.post('/auth/register/cliente',   auth.registerCliente);
   app.post('/auth/register/empresa',   auth.registerEmpresa);
   app.post('/auth/register/motoboy',   auth.registerMotoboy);
+  app.post('/auth/esqueci-senha',      auth.esqueciSenha);
+  app.post('/auth/verificar-codigo',   auth.verificarCodigo);
+  app.post('/auth/redefinir-senha',    auth.redefinirSenha);
 
   // ── PRODUTOS ─────────────────────────────────────────────────
   app.get('/produtos/categorias',      produto.getCategorias);

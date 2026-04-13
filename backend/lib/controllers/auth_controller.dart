@@ -1,16 +1,19 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 import '../services/jwt_service.dart';
 import '../services/password_service.dart';
+import '../services/email_service.dart';
 
 class AuthController {
   final Connection conn;
   final JwtService _jwt;
+  final EmailService _email;
 
-  AuthController(this.conn, this._jwt);
+  AuthController(this.conn, this._jwt, this._email);
 
   // ----------------------------------------------------------------
   // LOGIN
@@ -304,6 +307,120 @@ class AuthController {
         return _json(409, {'error': 'Este CPF já está cadastrado'});
       }
       return _json(500, {'error': 'Erro ao registrar motoboy'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // ESQUECI SENHA — envia código por e-mail
+  // ----------------------------------------------------------------
+  Future<Response> esqueciSenha(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] ?? '').toString().trim();
+
+      if (email.isEmpty) return _json(400, {'error': 'E-mail obrigatório'});
+
+      final result = await conn.execute(
+        Sql.named('SELECT id_usuario FROM usuarios WHERE email = @email LIMIT 1'),
+        parameters: {'email': email},
+      );
+      // Retorna 200 mesmo se não existe (não revela se e-mail está cadastrado)
+      if (result.isEmpty) return _json(200, {'ok': true});
+
+      final code = (Random.secure().nextInt(900000) + 100000).toString();
+
+      await conn.execute(
+        Sql.named('''
+          INSERT INTO recuperacao_senha (email, codigo, expira_em)
+          VALUES (@email, @codigo, NOW() + INTERVAL '15 minutes')
+        '''),
+        parameters: {'email': email, 'codigo': code},
+      );
+
+      await _email.sendRecoveryCode(email, code);
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao enviar código: ${e.toString()}'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // VERIFICAR CÓDIGO
+  // ----------------------------------------------------------------
+  Future<Response> verificarCodigo(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+      final email  = (data['email']  ?? '').toString().trim();
+      final codigo = (data['codigo'] ?? '').toString().trim();
+
+      if (email.isEmpty || codigo.isEmpty) {
+        return _json(400, {'error': 'E-mail e código obrigatórios'});
+      }
+
+      final result = await conn.execute(
+        Sql.named('''
+          SELECT id FROM recuperacao_senha
+          WHERE email = @email AND codigo = @codigo
+            AND usado = false AND expira_em > NOW()
+          ORDER BY id DESC LIMIT 1
+        '''),
+        parameters: {'email': email, 'codigo': codigo},
+      );
+
+      if (result.isEmpty) return _json(400, {'error': 'Código inválido ou expirado'});
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao verificar código'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // REDEFINIR SENHA
+  // ----------------------------------------------------------------
+  Future<Response> redefinirSenha(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+      final email     = (data['email']      ?? '').toString().trim();
+      final codigo    = (data['codigo']     ?? '').toString().trim();
+      final novaSenha = (data['nova_senha'] ?? '').toString();
+
+      if (email.isEmpty || codigo.isEmpty || novaSenha.isEmpty) {
+        return _json(400, {'error': 'E-mail, código e nova senha são obrigatórios'});
+      }
+      if (novaSenha.length < 6) {
+        return _json(400, {'error': 'A senha deve ter ao menos 6 caracteres'});
+      }
+
+      final codeResult = await conn.execute(
+        Sql.named('''
+          SELECT id FROM recuperacao_senha
+          WHERE email = @email AND codigo = @codigo
+            AND usado = false AND expira_em > NOW()
+          ORDER BY id DESC LIMIT 1
+        '''),
+        parameters: {'email': email, 'codigo': codigo},
+      );
+
+      if (codeResult.isEmpty) return _json(400, {'error': 'Código inválido ou expirado'});
+
+      final idCodigo = codeResult.first[0] as int;
+      final senhaHash = PasswordService.hash(novaSenha);
+
+      await conn.execute(
+        Sql.named('UPDATE usuarios SET senha = @senha WHERE email = @email'),
+        parameters: {'senha': senhaHash, 'email': email},
+      );
+      await conn.execute(
+        Sql.named('UPDATE recuperacao_senha SET usado = true WHERE id = @id'),
+        parameters: {'id': idCodigo},
+      );
+
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao redefinir senha'});
     }
   }
 

@@ -7,7 +7,7 @@ class ApiService {
   // Padrão: IP local de desenvolvimento
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://192.168.1.60:8080',
+    defaultValue: 'http://localhost:8080',
   );
 
   // ----------------------------------------------------------------
