@@ -68,7 +68,7 @@ class _AcompanhamentoPedidoPageState
         _ultimoStatus = novoStatus;
       });
 
-      // Quando entregue, navega para avaliação (só uma vez)
+      // Quando entregue, mostra pop-up e navega para avaliação (só uma vez)
       if (novoStatus == 4 && !_navegouAvaliacao && mounted) {
         _navegouAvaliacao = true;
         final idMotoboy = data['id_motoboy'] is int
@@ -76,17 +76,22 @@ class _AcompanhamentoPedidoPageState
             : int.tryParse(data['id_motoboy']?.toString() ?? '');
         final nomeMotoboy = data['motoboy_nome']?.toString();
 
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AvaliacaoPage(
-              idPedido:    widget.idPedido,
-              idEmpresa:   widget.idEmpresa,
-              nomeEmpresa: widget.nomeEmpresa,
-              idMotoboy:   idMotoboy,
-              nomeMotoboy: nomeMotoboy,
+        final avaliar = await _mostrarDialogEntregue();
+        if (!mounted) return;
+
+        if (avaliar == true) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AvaliacaoPage(
+                idPedido:    widget.idPedido,
+                idEmpresa:   widget.idEmpresa,
+                nomeEmpresa: widget.nomeEmpresa,
+                idMotoboy:   idMotoboy,
+                nomeMotoboy: nomeMotoboy,
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     } else {
       setState(() => _carregando = false);
@@ -423,6 +428,61 @@ class _AcompanhamentoPedidoPageState
       ],
     );
   }
+
+  Future<bool?> _mostrarDialogEntregue() => showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_circle,
+                    color: Colors.green, size: 38),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Pedido entregue!',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Seu pedido chegou. Como foi sua experiência?',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _laranja,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Avaliar agora',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text('Avaliar depois',
+                    style: TextStyle(color: Colors.grey.shade500)),
+              ),
+            ],
+          ),
+        ),
+      );
 
   String _descricaoStatus(int id) {
     switch (id) {

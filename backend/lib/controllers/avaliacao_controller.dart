@@ -8,16 +8,14 @@ class AvaliacaoController {
 
   // ----------------------------------------------------------------
   // POST /avaliacoes
-  // Body: { id_pedido, id_usuario, id_empresa, nota_empresa,
-  //         nota_motoboy?, id_motoboy?, comentario? }
   // ----------------------------------------------------------------
   Future<Response> criar(Request request) async {
     try {
       final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
 
-      final idPedido   = _int(body['id_pedido']);
-      final idUsuario  = _int(body['id_usuario']);
-      final idEmpresa  = _int(body['id_empresa']);
+      final idPedido    = _int(body['id_pedido']);
+      final idUsuario   = _int(body['id_usuario']);
+      final idEmpresa   = _int(body['id_empresa']);
       final notaEmpresa = _int(body['nota_empresa']);
 
       if (idPedido == null || idUsuario == null ||
@@ -28,15 +26,25 @@ class AvaliacaoController {
         return _json(400, {'error': 'nota_empresa deve ser entre 1 e 5'});
       }
 
-      final idMotoboy  = _int(body['id_motoboy']);
-      final notaMotoboy = _int(body['nota_motoboy']);
-      final comentario = body['comentario']?.toString().trim();
+      final idMotoboy         = _int(body['id_motoboy']);
+      final notaMotoboy       = _int(body['nota_motoboy']);
+      final comentario        = body['comentario']?.toString().trim();
+      final comentarioEntrega = body['comentario_entrega']?.toString().trim();
+
+      // Critérios entregador
+      final rapidez   = body['rapidez']   as bool?;
+      final educacao  = body['educacao']  as bool?;
+      final cuidado   = body['cuidado']   as bool?;
+      // Critérios restaurante
+      final sabor          = body['sabor']          as bool?;
+      final embalagem      = body['embalagem']      as bool?;
+      final pedidoCorreto  = body['pedido_correto'] as bool?;
 
       if (notaMotoboy != null && (notaMotoboy < 1 || notaMotoboy > 5)) {
         return _json(400, {'error': 'nota_motoboy deve ser entre 1 e 5'});
       }
 
-      // Verifica se já avaliou este pedido
+      // Verifica duplicata
       final existe = await conn.execute(
         Sql.named('''
           SELECT id_avaliacao FROM avaliacoes
@@ -52,19 +60,30 @@ class AvaliacaoController {
         Sql.named('''
           INSERT INTO avaliacoes
             (id_pedido, id_usuario, id_empresa, id_motoboy,
-             nota_empresa, nota_motoboy, comentario)
+             nota_empresa, nota_motoboy, comentario, comentario_entrega,
+             rapidez, educacao, cuidado,
+             sabor, embalagem, pedido_correto)
           VALUES
             (@id_pedido, @id_usuario, @id_empresa, @id_motoboy,
-             @nota_empresa, @nota_motoboy, @comentario)
+             @nota_empresa, @nota_motoboy, @comentario, @comentario_entrega,
+             @rapidez, @educacao, @cuidado,
+             @sabor, @embalagem, @pedido_correto)
         '''),
         parameters: {
-          'id_pedido':    idPedido,
-          'id_usuario':   idUsuario,
-          'id_empresa':   idEmpresa,
-          'id_motoboy':   idMotoboy,
-          'nota_empresa': notaEmpresa,
-          'nota_motoboy': notaMotoboy,
-          'comentario':   comentario,
+          'id_pedido':          idPedido,
+          'id_usuario':         idUsuario,
+          'id_empresa':         idEmpresa,
+          'id_motoboy':         idMotoboy,
+          'nota_empresa':       notaEmpresa,
+          'nota_motoboy':       notaMotoboy,
+          'comentario':         comentario,
+          'comentario_entrega': comentarioEntrega,
+          'rapidez':            rapidez,
+          'educacao':           educacao,
+          'cuidado':            cuidado,
+          'sabor':              sabor,
+          'embalagem':          embalagem,
+          'pedido_correto':     pedidoCorreto,
         },
       );
 
@@ -76,7 +95,6 @@ class AvaliacaoController {
 
   // ----------------------------------------------------------------
   // GET /pedidos/:id/avaliacao
-  // Verifica se o pedido já foi avaliado pelo cliente
   // ----------------------------------------------------------------
   Future<Response> verificar(Request request, String id) async {
     try {
@@ -98,9 +116,7 @@ class AvaliacaoController {
         parameters: {'id_pedido': idPedido, 'id_usuario': idUsuario},
       );
 
-      if (result.isEmpty) {
-        return _json(200, {'avaliado': false});
-      }
+      if (result.isEmpty) return _json(200, {'avaliado': false});
 
       final r = result.first;
       return _json(200, {
@@ -116,7 +132,6 @@ class AvaliacaoController {
 
   // ----------------------------------------------------------------
   // GET /empresas/:id/avaliacao
-  // Retorna média e total de avaliações da empresa
   // ----------------------------------------------------------------
   Future<Response> getEmpresa(Request request, String id) async {
     try {

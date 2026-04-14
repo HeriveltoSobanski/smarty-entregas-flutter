@@ -311,6 +311,124 @@ class AuthController {
   }
 
   // ----------------------------------------------------------------
+  // PERFIL — buscar dados completos
+  // ----------------------------------------------------------------
+  Future<Response> getPerfil(Request request, String id) async {
+    try {
+      final idUsuario = int.tryParse(id);
+      if (idUsuario == null) return _json(400, {'error': 'ID inválido'});
+
+      final result = await conn.execute(
+        Sql.named('''
+          SELECT nome, email, telefone, tipo_usuario
+          FROM usuarios WHERE id_usuario = @id LIMIT 1
+        '''),
+        parameters: {'id': idUsuario},
+      );
+
+      if (result.isEmpty) return _json(404, {'error': 'Usuário não encontrado'});
+
+      final r = result.first;
+      return _json(200, {
+        'nome':        r[0]?.toString() ?? '',
+        'email':       r[1]?.toString() ?? '',
+        'telefone':    r[2]?.toString() ?? '',
+        'tipo_usuario': r[3]?.toString() ?? '',
+      });
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao buscar perfil'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // PERFIL — atualizar nome, e-mail, telefone e/ou senha
+  // ----------------------------------------------------------------
+  Future<Response> atualizarPerfil(Request request, String id) async {
+    try {
+      final idUsuario = int.tryParse(id);
+      if (idUsuario == null) return _json(400, {'error': 'ID inválido'});
+
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+
+      final novoNome     = data['nome']?.toString().trim();
+      final novoEmail    = data['email']?.toString().trim();
+      final novoTelefone = data['telefone']?.toString().trim();
+      final novaSenha    = data['nova_senha']?.toString();
+      final senhaAtual   = data['senha_atual']?.toString();
+
+      // Validações
+      if (novoNome != null && novoNome.isEmpty) {
+        return _json(400, {'error': 'Nome não pode ser vazio'});
+      }
+      if (novoEmail != null) {
+        if (novoEmail.isEmpty) return _json(400, {'error': 'E-mail não pode ser vazio'});
+        if (!RegExp(r'.+@.+\..+').hasMatch(novoEmail)) {
+          return _json(400, {'error': 'E-mail inválido'});
+        }
+      }
+      if (novaSenha != null) {
+        if (novaSenha.length < 6) {
+          return _json(400, {'error': 'Nova senha deve ter ao menos 6 caracteres'});
+        }
+        if (senhaAtual == null || senhaAtual.isEmpty) {
+          return _json(400, {'error': 'Informe a senha atual para alterá-la'});
+        }
+        // Verifica senha atual
+        final senhaResult = await conn.execute(
+          Sql.named('SELECT senha FROM usuarios WHERE id_usuario = @id LIMIT 1'),
+          parameters: {'id': idUsuario},
+        );
+        if (senhaResult.isEmpty) return _json(404, {'error': 'Usuário não encontrado'});
+        final hashAtual = senhaResult.first[0]?.toString() ?? '';
+        if (!PasswordService.verify(senhaAtual, hashAtual)) {
+          return _json(401, {'error': 'Senha atual incorreta'});
+        }
+      }
+
+      // Monta SET dinâmico apenas com campos fornecidos
+      final sets   = <String>[];
+      final params = <String, dynamic>{'id': idUsuario};
+
+      if (novoNome != null)     { sets.add('nome = @nome');         params['nome']     = novoNome; }
+      if (novoEmail != null)    { sets.add('email = @email');       params['email']    = novoEmail; }
+      if (novoTelefone != null) { sets.add('telefone = @telefone'); params['telefone'] = novoTelefone.isEmpty ? null : novoTelefone; }
+      if (novaSenha != null)    { sets.add('senha = @senha');       params['senha']    = PasswordService.hash(novaSenha); }
+
+      if (sets.isEmpty) return _json(400, {'error': 'Nenhum campo para atualizar'});
+
+      sets.add('atualizado_em = NOW()');
+
+      try {
+        await conn.execute(
+          Sql.named('UPDATE usuarios SET ${sets.join(', ')} WHERE id_usuario = @id'),
+          parameters: params,
+        );
+      } catch (e) {
+        if (e.toString().contains('usuarios_email_key')) {
+          return _json(409, {'error': 'Este e-mail já está em uso'});
+        }
+        rethrow;
+      }
+
+      // Retorna dados atualizados
+      final updated = await conn.execute(
+        Sql.named('SELECT nome, email, telefone FROM usuarios WHERE id_usuario = @id LIMIT 1'),
+        parameters: {'id': idUsuario},
+      );
+      final r = updated.first;
+      return _json(200, {
+        'ok':       true,
+        'nome':     r[0]?.toString() ?? '',
+        'email':    r[1]?.toString() ?? '',
+        'telefone': r[2]?.toString() ?? '',
+      });
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao atualizar perfil'});
+    }
+  }
+
+  // ----------------------------------------------------------------
   // ESQUECI SENHA — envia código por e-mail
   // ----------------------------------------------------------------
   Future<Response> esqueciSenha(Request request) async {

@@ -812,6 +812,54 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
+  // PERFIL
+  // ----------------------------------------------------------------
+
+  /// Retorna { nome, email, telefone } ou null em caso de erro.
+  static Future<Map<String, dynamic>?> getPerfil(int idUsuario) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Retorna null em sucesso ou mensagem de erro.
+  static Future<String?> atualizarPerfil({
+    required int     idUsuario,
+    String?          nome,
+    String?          email,
+    String?          telefone,
+    String?          novaSenha,
+    String?          senhaAtual,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        if (nome      != null) 'nome':       nome,
+        if (email     != null) 'email':      email,
+        if (telefone  != null) 'telefone':   telefone,
+        if (novaSenha != null) 'nova_senha': novaSenha,
+        if (senhaAtual!= null) 'senha_atual': senhaAtual,
+      };
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'),
+        headers: _authHeaders,
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao atualizar perfil';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  // ----------------------------------------------------------------
   // AVALIAÇÕES
   // ----------------------------------------------------------------
 
@@ -823,6 +871,15 @@ class ApiService {
     int?            idMotoboy,
     int?            notaMotoboy,
     String?         comentario,
+    String?         comentarioEntrega,
+    // critérios entregador
+    bool?           rapidez,
+    bool?           educacao,
+    bool?           cuidado,
+    // critérios restaurante
+    bool?           sabor,
+    bool?           embalagem,
+    bool?           pedidoCorreto,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -830,9 +887,16 @@ class ApiService {
         'id_usuario':   idUsuario,
         'id_empresa':   idEmpresa,
         'nota_empresa': notaEmpresa,
-        if (idMotoboy   != null) 'id_motoboy':   idMotoboy,
-        if (notaMotoboy != null) 'nota_motoboy':  notaMotoboy,
-        if (comentario  != null && comentario.isNotEmpty) 'comentario': comentario,
+        if (idMotoboy          != null) 'id_motoboy':         idMotoboy,
+        if (notaMotoboy        != null) 'nota_motoboy':        notaMotoboy,
+        if (comentario         != null && comentario.isNotEmpty)         'comentario':         comentario,
+        if (comentarioEntrega  != null && comentarioEntrega.isNotEmpty)  'comentario_entrega': comentarioEntrega,
+        if (rapidez   != null) 'rapidez':        rapidez,
+        if (educacao  != null) 'educacao':        educacao,
+        if (cuidado   != null) 'cuidado':         cuidado,
+        if (sabor     != null) 'sabor':            sabor,
+        if (embalagem != null) 'embalagem':        embalagem,
+        if (pedidoCorreto != null) 'pedido_correto': pedidoCorreto,
       };
       final resp = await http.post(
         Uri.parse('$baseUrl/avaliacoes'),

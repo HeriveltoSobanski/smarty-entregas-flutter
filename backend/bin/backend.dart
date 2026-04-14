@@ -167,6 +167,14 @@ void main() async {
     "ALTER TABLE empresa_motoboys ADD COLUMN IF NOT EXISTS id_usuario INT REFERENCES usuarios(id_usuario)",
     "ALTER TABLE empresa_motoboys ALTER COLUMN nome     DROP NOT NULL",
     "ALTER TABLE empresa_motoboys ALTER COLUMN telefone DROP NOT NULL",
+    // Critérios de avaliação
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS rapidez          BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS educacao          BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS cuidado           BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS sabor             BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS embalagem         BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS pedido_correto    BOOLEAN",
+    "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS comentario_entrega TEXT",
     // Recuperação de senha
     '''
       CREATE TABLE IF NOT EXISTS recuperacao_senha (
@@ -226,6 +234,8 @@ void main() async {
   app.post('/auth/register/cliente',   auth.registerCliente);
   app.post('/auth/register/empresa',   auth.registerEmpresa);
   app.post('/auth/register/motoboy',   auth.registerMotoboy);
+  app.get('/usuarios/<id>/perfil',     auth.getPerfil);
+  app.patch('/usuarios/<id>/perfil',   auth.atualizarPerfil);
   app.post('/auth/esqueci-senha',      auth.esqueciSenha);
   app.post('/auth/verificar-codigo',   auth.verificarCodigo);
   app.post('/auth/redefinir-senha',    auth.redefinirSenha);

@@ -6,6 +6,7 @@ class SessionStore {
   static int?    idUsuario;
   static String? email;
   static String? nome;
+  static String? telefone;
   static String? tipoUsuario; // 'cliente' | 'empresa' | 'motoboy'
   static int?    idEmpresa;
   static String? token; // JWT Bearer token
@@ -20,12 +21,14 @@ class SessionStore {
     required String email,
     required String nome,
     required String tipoUsuario,
+    String?         telefone,
     int?            idEmpresa,
     String?         token,
   }) {
     SessionStore.idUsuario   = idUsuario;
     SessionStore.email       = email;
     SessionStore.nome        = nome;
+    SessionStore.telefone    = telefone;
     SessionStore.tipoUsuario = tipoUsuario;
     SessionStore.idEmpresa   = idEmpresa;
     SessionStore.token       = token;
@@ -35,6 +38,7 @@ class SessionStore {
     idUsuario        = null;
     email            = null;
     nome             = null;
+    telefone         = null;
     tipoUsuario      = null;
     idEmpresa        = null;
     token            = null;
