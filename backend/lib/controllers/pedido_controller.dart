@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import 'notificacao_controller.dart';
 
 class PedidoController {
   final Connection conn;
@@ -218,7 +219,6 @@ class PedidoController {
 
   // ----------------------------------------------------------------
   // PATCH /pedidos/:id/status
-  // Body: { id_status: int }
   // ----------------------------------------------------------------
   Future<Response> atualizarStatus(Request request, String id) async {
     try {
@@ -226,7 +226,7 @@ class PedidoController {
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
 
       final bodyStr = await request.readAsString();
-      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+      final body    = jsonDecode(bodyStr) as Map<String, dynamic>;
       final idStatus = body['id_status'];
       if (idStatus == null) return _json(400, {'error': 'id_status obrigatório'});
 
@@ -238,6 +238,22 @@ class PedidoController {
         parameters: {'novo_status': novoStatus, 'pedido_id': idPedido},
       );
 
+      // Notifica o cliente
+      final idUsuario = await _idUsuarioDoPedido(idPedido);
+      if (idUsuario != null) {
+        final msg = _msgStatus(novoStatus, idPedido);
+        if (msg != null) {
+          await NotificacaoController.criar(
+            conn:      conn,
+            idUsuario: idUsuario,
+            titulo:    msg.$1,
+            corpo:     msg.$2,
+            tipo:      'status_pedido',
+            idPedido:  idPedido,
+          );
+        }
+      }
+
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': e.toString()});
@@ -246,16 +262,29 @@ class PedidoController {
 
   // ----------------------------------------------------------------
   // PATCH /pedidos/:id/quase-pronto
-  // Marca quase_pronto=true e avisa cliente
   // ----------------------------------------------------------------
   Future<Response> marcarQuasePronto(Request request, String id) async {
     try {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
       await conn.execute(
         Sql.named('UPDATE pedidos SET quase_pronto = true WHERE id_pedido = @pedido_id'),
         parameters: {'pedido_id': idPedido},
       );
+
+      final idUsuario = await _idUsuarioDoPedido(idPedido);
+      if (idUsuario != null) {
+        await NotificacaoController.criar(
+          conn:      conn,
+          idUsuario: idUsuario,
+          titulo:    'Pedido quase pronto! 🍽️',
+          corpo:     'Seu pedido #$idPedido está quase pronto. O entregador será chamado em breve.',
+          tipo:      'status_pedido',
+          idPedido:  idPedido,
+        );
+      }
+
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': e.toString()});
@@ -264,12 +293,12 @@ class PedidoController {
 
   // ----------------------------------------------------------------
   // PATCH /pedidos/:id/chamar-motoboy
-  // tipo_entrega='motoboy', avança para status 6 (Aguardando Motoboy)
   // ----------------------------------------------------------------
   Future<Response> chamarMotoboy(Request request, String id) async {
     try {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
       await conn.execute(
         Sql.named('''
           UPDATE pedidos
@@ -278,6 +307,19 @@ class PedidoController {
         '''),
         parameters: {'pedido_id': idPedido},
       );
+
+      final idUsuario = await _idUsuarioDoPedido(idPedido);
+      if (idUsuario != null) {
+        await NotificacaoController.criar(
+          conn:      conn,
+          idUsuario: idUsuario,
+          titulo:    'Entregador a caminho! 🛵',
+          corpo:     'Estamos buscando um entregador para o seu pedido #$idPedido.',
+          tipo:      'motoboy',
+          idPedido:  idPedido,
+        );
+      }
+
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': e.toString()});
@@ -286,12 +328,12 @@ class PedidoController {
 
   // ----------------------------------------------------------------
   // PATCH /pedidos/:id/entrega-propria
-  // tipo_entrega='propria', avança para status 3 (A Caminho)
   // ----------------------------------------------------------------
   Future<Response> entregaPropria(Request request, String id) async {
     try {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
       await conn.execute(
         Sql.named('''
           UPDATE pedidos
@@ -300,9 +342,58 @@ class PedidoController {
         '''),
         parameters: {'pedido_id': idPedido},
       );
+
+      final idUsuario = await _idUsuarioDoPedido(idPedido);
+      if (idUsuario != null) {
+        await NotificacaoController.criar(
+          conn:      conn,
+          idUsuario: idUsuario,
+          titulo:    'Pedido saiu para entrega! 🏍️',
+          corpo:     'Seu pedido #$idPedido está a caminho. Fique de olho!',
+          tipo:      'status_pedido',
+          idPedido:  idPedido,
+        );
+      }
+
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': e.toString()});
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+
+  Future<int?> _idUsuarioDoPedido(int idPedido) async {
+    try {
+      final r = await conn.execute(
+        Sql.named('SELECT id_usuario FROM pedidos WHERE id_pedido = @id LIMIT 1'),
+        parameters: {'id': idPedido},
+      );
+      if (r.isEmpty) return null;
+      final v = r.first[0];
+      return v is int ? v : int.tryParse(v?.toString() ?? '');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Retorna (titulo, corpo) ou null se o status não gera notificação.
+  (String, String)? _msgStatus(int status, int idPedido) {
+    switch (status) {
+      case 2:
+        return ('Pedido confirmado! 👨‍🍳',
+            'Seu pedido #$idPedido foi aceito e está sendo preparado.');
+      case 3:
+        return ('A caminho! 🛵',
+            'Seu pedido #$idPedido saiu para entrega.');
+      case 4:
+        return ('Pedido entregue! ✅',
+            'Seu pedido #$idPedido foi entregue. Que tal avaliar?');
+      case 5:
+        return ('Pedido cancelado ❌',
+            'Infelizmente seu pedido #$idPedido foi cancelado. Entre em contato com o restaurante.');
+      default:
+        return null;
     }
   }
 

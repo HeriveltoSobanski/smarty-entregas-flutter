@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import 'notificacao_controller.dart';
 
 class MotoboyController {
   final Connection conn;
@@ -240,6 +241,33 @@ class MotoboyController {
         '''),
         parameters: {'id_motoboy': idMotoboy, 'id_pedido': idPedido},
       );
+
+      // Busca nome do motoboy e id_usuario do cliente para notificar
+      final motoboyResult = await conn.execute(
+        Sql.named('SELECT nome FROM usuarios WHERE id_usuario = @id LIMIT 1'),
+        parameters: {'id': idMotoboy},
+      );
+      final nomeMotoboy = motoboyResult.isNotEmpty
+          ? motoboyResult.first[0]?.toString() ?? 'Entregador'
+          : 'Entregador';
+
+      final clienteResult = await conn.execute(
+        Sql.named('SELECT id_usuario FROM pedidos WHERE id_pedido = @id LIMIT 1'),
+        parameters: {'id': idPedido},
+      );
+      if (clienteResult.isNotEmpty) {
+        final idUsuario = clienteResult.first[0] as int?;
+        if (idUsuario != null) {
+          await NotificacaoController.criar(
+            conn:      conn,
+            idUsuario: idUsuario,
+            titulo:    'Entregador a caminho! 🛵',
+            corpo:     '$nomeMotoboy está indo buscar seu pedido #$idPedido.',
+            tipo:      'motoboy',
+            idPedido:  idPedido,
+          );
+        }
+      }
 
       return _json(200, {'ok': true});
     } catch (e) {

@@ -19,6 +19,7 @@ import 'package:backend/controllers/motoboy_controller.dart';
 import 'package:backend/controllers/cliente_endereco_controller.dart';
 import 'package:backend/controllers/empresa_motoboy_controller.dart';
 import 'package:backend/controllers/avaliacao_controller.dart';
+import 'package:backend/controllers/notificacao_controller.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
@@ -167,6 +168,20 @@ void main() async {
     "ALTER TABLE empresa_motoboys ADD COLUMN IF NOT EXISTS id_usuario INT REFERENCES usuarios(id_usuario)",
     "ALTER TABLE empresa_motoboys ALTER COLUMN nome     DROP NOT NULL",
     "ALTER TABLE empresa_motoboys ALTER COLUMN telefone DROP NOT NULL",
+    // Notificações in-app
+    '''
+      CREATE TABLE IF NOT EXISTS notificacoes (
+        id         SERIAL PRIMARY KEY,
+        id_usuario INT NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+        titulo     VARCHAR(100) NOT NULL,
+        corpo      TEXT NOT NULL,
+        tipo       VARCHAR(30) NOT NULL DEFAULT 'status_pedido',
+        lida       BOOLEAN NOT NULL DEFAULT false,
+        id_pedido  INT REFERENCES pedidos(id_pedido) ON DELETE SET NULL,
+        criado_em  TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    ''',
+    "CREATE INDEX IF NOT EXISTS idx_notif_usuario ON notificacoes (id_usuario, lida, criado_em DESC)",
     // Critérios de avaliação
     "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS rapidez          BOOLEAN",
     "ALTER TABLE avaliacoes ADD COLUMN IF NOT EXISTS educacao          BOOLEAN",
@@ -221,6 +236,7 @@ void main() async {
   final clienteEndereco  = ClienteEnderecoController(db.connection);
   final empresaMotoboy   = EmpresaMotoboyController(db.connection);
   final avaliacao        = AvaliacaoController(db.connection);
+  final notificacao      = NotificacaoController(db.connection);
 
   final app = Router();
 
@@ -236,6 +252,12 @@ void main() async {
   app.post('/auth/register/motoboy',   auth.registerMotoboy);
   app.get('/usuarios/<id>/perfil',     auth.getPerfil);
   app.patch('/usuarios/<id>/perfil',   auth.atualizarPerfil);
+  // ── NOTIFICAÇÕES ─────────────────────────────────────────────
+  app.get('/notificacoes',                  notificacao.listar);
+  app.get('/notificacoes/nao-lidas',        notificacao.contarNaoLidas);
+  app.patch('/notificacoes/<id>/lida',      notificacao.marcarLida);
+  app.patch('/notificacoes/todas-lidas',    notificacao.marcarTodasLidas);
+
   app.post('/auth/esqueci-senha',      auth.esqueciSenha);
   app.post('/auth/verificar-codigo',   auth.verificarCodigo);
   app.post('/auth/redefinir-senha',    auth.redefinirSenha);

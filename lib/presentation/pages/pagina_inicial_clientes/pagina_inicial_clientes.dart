@@ -9,6 +9,7 @@ import '../perfil/perfil_page.dart';
 import '../cardapio_empresa/cardapio_empresa_page.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
+import '../notificacoes/notificacoes_page.dart';
 
 const Color _primary = Color(0xFFF5841F);
 const Color _bg = Color(0xFFF5F5F5);
@@ -156,6 +157,10 @@ class _HomeContentState extends State<_HomeContent> {
   String _categoriaFiltro = '';
   String _labelEntrega = '';
 
+  // Notificações
+  int    _naoLidas     = 0;
+  Timer? _notifTimer;
+
   // Banner
   final _bannerCtrl = PageController();
   int _bannerAtual = 0;
@@ -173,6 +178,8 @@ class _HomeContentState extends State<_HomeContent> {
   void initState() {
     super.initState();
     _carregar();
+    _atualizarNaoLidas();
+    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
     _bannerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted) return;
       final next = (_bannerAtual + 1) % _banners.length;
@@ -184,9 +191,17 @@ class _HomeContentState extends State<_HomeContent> {
 
   @override
   void dispose() {
+    _notifTimer?.cancel();
     _bannerTimer?.cancel();
     _bannerCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _atualizarNaoLidas() async {
+    final id = SessionStore.idUsuario;
+    if (id == null) return;
+    final total = await ApiService.getNotificacoesNaoLidas(id);
+    if (mounted) setState(() => _naoLidas = total);
   }
 
   Future<void> _carregar() async {
@@ -365,13 +380,51 @@ class _HomeContentState extends State<_HomeContent> {
       ),
       actions: [
         Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Row(children: [
-            Text('Olá, ${nome.split(' ').first}',
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF757575))),
-            const SizedBox(width: 8),
-          ]),
+          padding: const EdgeInsets.only(right: 4),
+          child: Text('Olá, ${nome.split(' ').first}',
+              style: const TextStyle(
+                  fontSize: 13, color: Color(0xFF757575))),
+        ),
+        // Sino de notificações com badge
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined,
+                    color: Color(0xFF757575)),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const NotificacoesPage()),
+                  );
+                  _atualizarNaoLidas();
+                },
+              ),
+              if (_naoLidas > 0)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      _naoLidas > 99 ? '99+' : '$_naoLidas',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         Padding(
           padding: const EdgeInsets.only(right: 12),

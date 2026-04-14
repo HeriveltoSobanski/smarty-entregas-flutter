@@ -812,6 +812,56 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
+  // NOTIFICAÇÕES
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getNotificacoes(int idUsuario) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/notificacoes?id_usuario=$idUsuario'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode != 200) return [];
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return List<Map<String, dynamic>>.from(data['notificacoes'] ?? []);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<int> getNotificacoesNaoLidas(int idUsuario) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/notificacoes/nao-lidas?id_usuario=$idUsuario'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode != 200) return 0;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return (data['total'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> marcarNotificacaoLida(int idNotificacao) async {
+    try {
+      await http.patch(
+        Uri.parse('$baseUrl/notificacoes/$idNotificacao/lida'),
+        headers: _authHeaders,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> marcarTodasNotificacoesLidas(int idUsuario) async {
+    try {
+      await http.patch(
+        Uri.parse('$baseUrl/notificacoes/todas-lidas?id_usuario=$idUsuario'),
+        headers: _authHeaders,
+      );
+    } catch (_) {}
+  }
+
+  // ----------------------------------------------------------------
   // PERFIL
   // ----------------------------------------------------------------
 
