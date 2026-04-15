@@ -16,12 +16,14 @@ class ApiService {
 
   static Map<String, String> get _publicHeaders => {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
       };
 
   static Map<String, String> get _authHeaders {
     final token = SessionStore.token;
     return {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
