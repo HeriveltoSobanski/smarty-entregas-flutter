@@ -10,6 +10,7 @@ import '../cardapio_empresa/cardapio_empresa_page.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
 import '../notificacoes/notificacoes_page.dart';
+import '../../../data/favoritos_store.dart';
 
 const Color _primary = Color(0xFFF5841F);
 const Color _bg = Color(0xFFF5F5F5);
@@ -156,6 +157,7 @@ class _HomeContentState extends State<_HomeContent> {
   bool _loading = true;
   String _categoriaFiltro = '';
   String _labelEntrega = '';
+  Set<int> _favoritos = {};
 
   // Notificações
   int    _naoLidas     = 0;
@@ -178,6 +180,7 @@ class _HomeContentState extends State<_HomeContent> {
   void initState() {
     super.initState();
     _carregar();
+    _carregarFavoritos();
     _atualizarNaoLidas();
     _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
     _bannerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -195,6 +198,16 @@ class _HomeContentState extends State<_HomeContent> {
     _bannerTimer?.cancel();
     _bannerCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _carregarFavoritos() async {
+    final favs = await FavoritosStore.getAll();
+    if (mounted) setState(() => _favoritos = favs);
+  }
+
+  Future<void> _toggleFavorito(int idEmpresa) async {
+    await FavoritosStore.toggle(idEmpresa);
+    await _carregarFavoritos();
   }
 
   Future<void> _atualizarNaoLidas() async {
@@ -248,6 +261,46 @@ class _HomeContentState extends State<_HomeContent> {
             // ── Chips de filtro ────────────────────────────────
             SliverToBoxAdapter(child: _buildFilterChips()),
 
+            // ── Seção favoritos ────────────────────────────────
+            if (!_loading && _favoritos.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(children: [
+                    const Icon(Icons.favorite, color: Colors.red, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Favoritos',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey.shade800)),
+                  ]),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 110,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: _empresas
+                        .where((e) => _favoritos.contains(
+                            e['id_empresa'] is int
+                                ? e['id_empresa'] as int
+                                : int.tryParse(e['id_empresa']?.toString() ?? '') ?? -1))
+                        .map((e) => _FavoritoCard(
+                              empresa: e,
+                              onTap: () => Navigator.push(context,
+                                  MaterialPageRoute(
+                                      builder: (_) => CardapioEmpresaPage(empresa: e))),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 4)),
+            ],
+
             // ── Título seção ───────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
@@ -273,7 +326,19 @@ class _HomeContentState extends State<_HomeContent> {
             else
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, i) => _EmpresaCard(empresa: _empresas[i]),
+                  (_, i) => _EmpresaCard(
+                    empresa: _empresas[i],
+                    isFavorito: _favoritos.contains(
+                        _empresas[i]['id_empresa'] is int
+                            ? _empresas[i]['id_empresa'] as int
+                            : int.tryParse(_empresas[i]['id_empresa']?.toString() ?? '') ?? -1),
+                    onFavoritoToggle: () {
+                      final id = _empresas[i]['id_empresa'] is int
+                          ? _empresas[i]['id_empresa'] as int
+                          : int.tryParse(_empresas[i]['id_empresa']?.toString() ?? '') ?? -1;
+                      _toggleFavorito(id);
+                    },
+                  ),
                   childCount: _empresas.length,
                 ),
               ),
@@ -561,7 +626,13 @@ class _FilterChip extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════
 class _EmpresaCard extends StatelessWidget {
   final Map<String, dynamic> empresa;
-  const _EmpresaCard({required this.empresa});
+  final bool isFavorito;
+  final VoidCallback onFavoritoToggle;
+  const _EmpresaCard({
+    required this.empresa,
+    required this.isFavorito,
+    required this.onFavoritoToggle,
+  });
 
   Color _logoColor(String nome) {
     const colors = [
@@ -635,6 +706,15 @@ class _EmpresaCard extends StatelessWidget {
                                 color: Color(0xFF2E7D32),
                                 fontWeight: FontWeight.bold)),
                       ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: onFavoritoToggle,
+                        child: Icon(
+                          isFavorito ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorito ? Colors.red : Colors.grey.shade400,
+                          size: 20,
+                        ),
+                      ),
                     ]),
                     const SizedBox(height: 3),
                     // Categorias
@@ -678,6 +758,50 @@ class _EmpresaCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Card horizontal de favorito ──────────────────────────────────
+class _FavoritoCard extends StatelessWidget {
+  final Map<String, dynamic> empresa;
+  final VoidCallback onTap;
+  const _FavoritoCard({required this.empresa, required this.onTap});
+
+  Color _logoColor(String nome) {
+    const colors = [
+      Color(0xFFF5841F), Color(0xFF4CAF50), Color(0xFF2196F3),
+      Color(0xFF9C27B0), Color(0xFFE91E63), Color(0xFF00BCD4), Color(0xFFFF5722),
+    ];
+    return nome.isEmpty ? colors[0] : colors[nome.codeUnitAt(0) % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nome = empresa['nome']?.toString() ?? '';
+    final foto = empresa['foto_perfil']?.toString();
+    final color = _logoColor(nome);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LogoEmpresa(nome: nome, fotoPerfil: foto, color: color),
+            const SizedBox(height: 6),
+            Text(
+              nome,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

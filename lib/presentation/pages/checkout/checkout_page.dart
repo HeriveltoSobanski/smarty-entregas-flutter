@@ -199,14 +199,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ? idEmpresa
         : int.tryParse(idEmpresa.toString()) ?? 0;
 
-    // Navega para acompanhamento substituindo o checkout na pilha
+    // Navega para tela de confirmação
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => AcompanhamentoPedidoPage(
+        builder: (_) => _PedidoConfirmadoPage(
           idPedido:        idPedido,
           idEmpresa:       idEmpresaInt,
           nomeEmpresa:     nomeEmpresa,
           enderecoEntrega: endereco,
+          itens:           widget.itens,
+          total:           widget.total,
+          pagamento:       _pagamento!,
         ),
       ),
     );
@@ -630,4 +633,245 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
   }
+}
+
+// ── Tela de confirmação pós-pedido ───────────────────────────────
+class _PedidoConfirmadoPage extends StatelessWidget {
+  final int    idPedido;
+  final int    idEmpresa;
+  final String nomeEmpresa;
+  final String enderecoEntrega;
+  final List<Map<String, dynamic>> itens;
+  final double total;
+  final _Pagamento pagamento;
+
+  const _PedidoConfirmadoPage({
+    required this.idPedido,
+    required this.idEmpresa,
+    required this.nomeEmpresa,
+    required this.enderecoEntrega,
+    required this.itens,
+    required this.total,
+    required this.pagamento,
+  });
+
+  double _precoItem(dynamic preco) {
+    if (preco is num) return preco.toDouble();
+    if (preco is String) return double.tryParse(preco) ?? 0.0;
+    return 0.0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const SizedBox(height: 24),
+              // ── Ícone de sucesso ──
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_circle_rounded,
+                    color: Colors.green, size: 48),
+              ),
+              const SizedBox(height: 16),
+              const Text('Pedido realizado!',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Seu pedido foi enviado para $nomeEmpresa',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _cor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('Pedido #$idPedido',
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: _cor)),
+              ),
+              const SizedBox(height: 24),
+
+              // ── Resumo ──
+              _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Resumo do pedido',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    const Divider(height: 20),
+                    ...itens.map((item) {
+                      final nome  = item['nome']?.toString() ?? '';
+                      final qtd   = item['quantidade'] ?? 1;
+                      final preco = _precoItem(item['preco']);
+                      final sub   = preco * (qtd is num ? qtd.toInt() : 1);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Text('${qtd}x ',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13)),
+                            Expanded(child: Text(nome,
+                                style: const TextStyle(fontSize: 13))),
+                            Text('R\$ ${sub.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 13)),
+                          ],
+                        ),
+                      );
+                    }),
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text('R\$ ${total.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                color: _cor)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Detalhes ──
+              _card(
+                child: Column(
+                  children: [
+                    _infoRow(Icons.location_on_outlined, 'Entrega em', enderecoEntrega),
+                    const SizedBox(height: 10),
+                    _infoRow(pagamento.icon, 'Pagamento', pagamento.label),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Próximos passos ──
+              _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Próximos passos',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    _passo('1', 'Aguardando confirmação do restaurante'),
+                    _passo('2', 'Preparando seu pedido'),
+                    _passo('3', 'Saindo para entrega'),
+                    _passo('4', 'Entregue!'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // ── Botão acompanhar ──
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _cor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => AcompanhamentoPedidoPage(
+                        idPedido:        idPedido,
+                        idEmpresa:       idEmpresa,
+                        nomeEmpresa:     nomeEmpresa,
+                        enderecoEntrega: enderecoEntrega,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.delivery_dining),
+                  label: const Text('Acompanhar pedido',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context)
+                      .pushNamedAndRemoveUntil('/home', (_) => false),
+                  child: Text('Voltar ao início',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: child,
+      );
+
+  Widget _infoRow(IconData icon, String label, String valor) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _cor, size: 18),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            Text(valor,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ]),
+        ],
+      );
+
+  Widget _passo(String num, String texto) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Container(
+            width: 22, height: 22,
+            decoration: BoxDecoration(
+              color: _cor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(num,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: _cor)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(texto, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ]),
+      );
 }
