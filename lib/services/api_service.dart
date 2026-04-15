@@ -7,7 +7,7 @@ class ApiService {
   // Padrão: IP local de desenvolvimento
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: 'https://overplant-overreact-commotion.ngrok-free.dev',
   );
 
   // ----------------------------------------------------------------
