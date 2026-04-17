@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
@@ -163,17 +164,6 @@ class _HomeContentState extends State<_HomeContent> {
   int    _naoLidas     = 0;
   Timer? _notifTimer;
 
-  // Banner
-  final _bannerCtrl = PageController();
-  int _bannerAtual = 0;
-  Timer? _bannerTimer;
-
-  static final _banners = [
-    const _BannerData('assets/banner.png', 'Peça Agora no Smarty Entregas'),
-    const _BannerData('assets/banner2.png', 'Entrega Rápida em Mallet!'),
-    const _BannerData('assets/banner3.png', 'Promoções Imperdíveis!'),
-  ];
-
   static const _categorias = ['Todos', 'Lanches', 'Pizzas', 'Almoços', 'Bebidas', 'Sobremesas'];
 
   @override
@@ -183,20 +173,11 @@ class _HomeContentState extends State<_HomeContent> {
     _carregarFavoritos();
     _atualizarNaoLidas();
     _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
-    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) return;
-      final next = (_bannerAtual + 1) % _banners.length;
-      _bannerCtrl.animateToPage(next,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut);
-    });
   }
 
   @override
   void dispose() {
     _notifTimer?.cancel();
-    _bannerTimer?.cancel();
-    _bannerCtrl.dispose();
     super.dispose();
   }
 
@@ -350,72 +331,7 @@ class _HomeContentState extends State<_HomeContent> {
     );
   }
 
-  Widget _buildBanner() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: SizedBox(
-        height: 150,
-        child: Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            PageView.builder(
-              controller: _bannerCtrl,
-              itemCount: _banners.length,
-              onPageChanged: (i) => setState(() => _bannerAtual = i),
-              itemBuilder: (_, i) {
-                final b = _banners[i];
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    b.path,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_primary, Color(0xFFFFC107)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(b.texto,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 17)),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              bottom: 8,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_banners.length, (i) {
-                  final ativo = _bannerAtual == i;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: ativo ? 18 : 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      color: ativo
-                          ? _primary
-                          : Colors.white.withValues(alpha: 0.7),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildBanner() => const _BannerWidget();
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     final nome = SessionStore.nome ?? 'você';
@@ -589,11 +505,110 @@ class _HomeContentState extends State<_HomeContent> {
   }
 }
 
-// ── Dados do banner ───────────────────────────────────────────────
-class _BannerData {
-  final String path;
-  final String texto;
-  const _BannerData(this.path, this.texto);
+// ── Banner rotativo (widget isolado para não piscar a lista) ──────
+class _BannerWidget extends StatefulWidget {
+  const _BannerWidget();
+  @override
+  State<_BannerWidget> createState() => _BannerWidgetState();
+}
+
+class _BannerWidgetState extends State<_BannerWidget> {
+  static const _banners = [
+    (path: 'assets/banner.png',  texto: 'Peça Agora no Smarty Entregas'),
+    (path: 'assets/banner2.png', texto: 'Entrega Rápida em Mallet!'),
+    (path: 'assets/banner3.png', texto: 'Promoções Imperdíveis!'),
+  ];
+
+  final _ctrl = PageController();
+  int _atual = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      final next = (_atual + 1) % _banners.length;
+      _ctrl.animateToPage(next,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: SizedBox(
+        height: 150,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            PageView.builder(
+              controller: _ctrl,
+              itemCount: _banners.length,
+              onPageChanged: (i) => setState(() => _atual = i),
+              itemBuilder: (_, i) {
+                final b = _banners[i];
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    b.path,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [_primary, Color(0xFFFFC107)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(b.texto,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17)),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 8,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_banners.length, (i) {
+                  final ativo = _atual == i;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: ativo ? 18 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: ativo
+                          ? _primary
+                          : Colors.white.withValues(alpha: 0.7),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Chip de filtro ────────────────────────────────────────────────
@@ -745,13 +760,17 @@ class _EmpresaCard extends StatelessWidget {
                       const Icon(Icons.delivery_dining,
                           size: 14, color: Color(0xFF757575)),
                       const SizedBox(width: 2),
-                      const Text('R\$ 7,99 •',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF757575))),
+                      Text(
+                        'a partir de R\$ ${((empresa['taxa_minima'] is num ? (empresa['taxa_minima'] as num).toDouble() : double.tryParse(empresa['taxa_minima']?.toString() ?? '') ?? 7.0)).toStringAsFixed(2)} •',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF757575)),
+                      ),
                       const SizedBox(width: 4),
-                      const Text('40-60 min',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF757575))),
+                      Text(
+                        '${empresa['tempo_preparo'] ?? 30}+ min',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF757575)),
+                      ),
                     ]),
                   ],
                 ),
@@ -809,36 +828,66 @@ class _FavoritoCard extends StatelessWidget {
 }
 
 // ── Logo da empresa (foto ou inicial) ────────────────────────────
-class _LogoEmpresa extends StatelessWidget {
+class _LogoEmpresa extends StatefulWidget {
   final String nome;
   final String? fotoPerfil;
   final Color color;
   const _LogoEmpresa({required this.nome, required this.fotoPerfil, required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    if (fotoPerfil != null && fotoPerfil!.contains(',')) {
+  State<_LogoEmpresa> createState() => _LogoEmpresaState();
+}
+
+class _LogoEmpresaState extends State<_LogoEmpresa> {
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+  }
+
+  @override
+  void didUpdateWidget(_LogoEmpresa old) {
+    super.didUpdateWidget(old);
+    if (old.fotoPerfil != widget.fotoPerfil) _decode();
+  }
+
+  void _decode() {
+    final foto = widget.fotoPerfil;
+    if (foto != null && foto.contains(',')) {
       try {
-        final bytes = base64Decode(fotoPerfil!.split(',').last);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.memory(bytes, width: 60, height: 60, fit: BoxFit.cover),
-        );
-      } catch (_) {}
+        _bytes = base64Decode(foto.split(',').last);
+      } catch (_) {
+        _bytes = null;
+      }
+    } else {
+      _bytes = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_bytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(_bytes!, width: 60, height: 60, fit: BoxFit.cover,
+            gaplessPlayback: true),
+      );
     }
     return Container(
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: color,
+        color: widget.color,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: widget.color.withValues(alpha: 0.35), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Center(
         child: Text(
-          nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+          widget.nome.isNotEmpty ? widget.nome[0].toUpperCase() : '?',
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 26),
         ),
       ),

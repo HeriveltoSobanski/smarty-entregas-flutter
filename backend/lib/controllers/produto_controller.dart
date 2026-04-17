@@ -251,7 +251,8 @@ class ProdutoController {
                COALESCE(av.media, 0)  AS nota_media,
                COALESCE(av.total, 0)  AS nota_total,
                e.latitude, e.longitude,
-               COALESCE(e.tempo_preparo, 30) AS tempo_preparo
+               COALESCE(e.tempo_preparo, 30) AS tempo_preparo,
+               COALESCE(e.taxa_minima, 7.00) AS taxa_minima
         FROM empresas e
         JOIN usuarios u   ON u.id_usuario   = e.id_usuario
         JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -293,6 +294,8 @@ class ProdutoController {
         final longitude    = r[12] is num ? (r[12] as num).toDouble() : double.tryParse(r[12]?.toString() ?? '');
         final tempoPreparo = r[13] is int ? r[13] as int
             : int.tryParse(r[13]?.toString() ?? '30') ?? 30;
+        final taxaMinima   = r[14] is num ? (r[14] as num).toDouble()
+            : double.tryParse(r[14]?.toString() ?? '7') ?? 7.0;
 
         empresaMap.putIfAbsent(idEmpresa, () => {
           'id_empresa':    idEmpresa,
@@ -303,6 +306,7 @@ class ProdutoController {
           'latitude':      latitude,
           'longitude':     longitude,
           'tempo_preparo': tempoPreparo,
+          'taxa_minima':   taxaMinima,
           'produtos':      <Map<String, dynamic>>[],
         });
 

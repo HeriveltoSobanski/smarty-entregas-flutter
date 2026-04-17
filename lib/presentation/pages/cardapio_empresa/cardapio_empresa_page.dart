@@ -218,7 +218,10 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                   Row(children: [
                     const Icon(Icons.delivery_dining, size: 16, color: Colors.grey),
                     const SizedBox(width: 4),
-                    const Text('a partir de R\$ 7,00', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    Text(
+                      'a partir de R\$ ${((widget.empresa['taxa_minima'] is num ? (widget.empresa['taxa_minima'] as num).toDouble() : double.tryParse(widget.empresa['taxa_minima']?.toString() ?? '') ?? 7.0)).toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
                     const Text(' • ', style: TextStyle(color: Colors.grey)),
                     Text(
                       '${widget.empresa['tempo_preparo'] ?? 30}+ min',

@@ -18,8 +18,9 @@ double calcularDistanciaKm(double lat1, double lon1, double lat2, double lon2) {
   return r * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
 
-/// Taxa = R$ 7,00 mínimo + R$ 1,00/km (somente ida)
-double calcularTaxaEntrega(double distKm) => 7.0 + distKm;
+/// Taxa = taxa_minima do restaurante (mín R$ 7,00) + R$ 1,00/km (somente ida)
+double calcularTaxaEntrega(double distKm, {double taxaMinima = 7.0}) =>
+    taxaMinima + distKm;
 
 /// Tempo estimado em minutos = preparo do restaurante + trânsito (~30 km/h)
 int calcularTempoEstimado(int tempoPreparo, double distKm) =>
@@ -90,6 +91,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final tempoPreparo = (widget.empresa['tempo_preparo'] is int
         ? widget.empresa['tempo_preparo'] as int
         : int.tryParse(widget.empresa['tempo_preparo']?.toString() ?? '') ?? 30);
+    final taxaMinima = widget.empresa['taxa_minima'] is num
+        ? (widget.empresa['taxa_minima'] as num).toDouble()
+        : double.tryParse(widget.empresa['taxa_minima']?.toString() ?? '') ?? 7.0;
 
     if (latEmp is num && lonEmp is num && latEnd is num && lonEnd is num) {
       final dist = calcularDistanciaKm(
@@ -97,13 +101,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         latEnd.toDouble(), lonEnd.toDouble(),
       );
       setState(() {
-        _taxaEntrega  = calcularTaxaEntrega(dist);
+        _taxaEntrega  = calcularTaxaEntrega(dist, taxaMinima: taxaMinima);
         _tempoMinutos = calcularTempoEstimado(tempoPreparo, dist);
       });
     } else {
-      // Restaurante ou endereço sem coordenadas — usa mínimo
+      // Restaurante ou endereço sem coordenadas — usa mínimo da empresa
       setState(() {
-        _taxaEntrega  = 7.0;
+        _taxaEntrega  = taxaMinima;
         _tempoMinutos = tempoPreparo + 30;
       });
     }

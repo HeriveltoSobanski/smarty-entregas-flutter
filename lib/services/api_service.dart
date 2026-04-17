@@ -512,6 +512,22 @@ class ApiService {
     }
   }
 
+  static Future<String?> getFotoEmpresa(int idEmpresa) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['foto_perfil']?.toString();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<String?> atualizarFotoEmpresa(
       int idEmpresa, String fotoPerfil) async {
     try {
@@ -523,6 +539,44 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar foto';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // CONFIGURAÇÕES DA EMPRESA (taxa mínima + tempo preparo)
+  // ----------------------------------------------------------------
+
+  static Future<Map<String, dynamic>?> getConfiguracoes(int idEmpresa) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> atualizarConfiguracoes(
+      int idEmpresa, {double? taxaMinima, int? tempoPreparo}) async {
+    try {
+      final body = <String, dynamic>{};
+      if (taxaMinima  != null) body['taxa_minima']   = taxaMinima;
+      if (tempoPreparo != null) body['tempo_preparo'] = tempoPreparo;
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'),
+        headers: _authHeaders,
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar configurações';
     } catch (_) {
       return 'Servidor indisponível.';
     }

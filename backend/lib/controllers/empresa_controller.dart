@@ -130,6 +130,80 @@ class EmpresaController {
     }
   }
 
+  // ----------------------------------------------------------------
+  // GET /empresas/:id/configuracoes
+  // Retorna taxa_minima e tempo_preparo
+  // ----------------------------------------------------------------
+  Future<Response> getConfiguracoes(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+      final result = await conn.execute(
+        Sql.named(
+            'SELECT taxa_minima, tempo_preparo FROM empresas WHERE id_empresa = @id'),
+        parameters: {'id': idEmpresa},
+      );
+
+      if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+      final r = result.first;
+
+      return _json(200, {
+        'taxa_minima':   r[0] is num ? (r[0] as num).toDouble() : double.tryParse(r[0]?.toString() ?? '7') ?? 7.0,
+        'tempo_preparo': r[1] is int ? r[1] as int : int.tryParse(r[1]?.toString() ?? '30') ?? 30,
+      });
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // PATCH /empresas/:id/configuracoes
+  // Body: { taxa_minima?, tempo_preparo? }
+  // ----------------------------------------------------------------
+  Future<Response> atualizarConfiguracoes(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+      final body = await request.readAsString();
+      final data = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
+
+      final taxaMinima  = data['taxa_minima']  is num
+          ? (data['taxa_minima'] as num).toDouble()
+          : double.tryParse(data['taxa_minima']?.toString() ?? '');
+      final tempoPreparo = data['tempo_preparo'] is int
+          ? data['tempo_preparo'] as int
+          : int.tryParse(data['tempo_preparo']?.toString() ?? '');
+
+      if (taxaMinima == null && tempoPreparo == null) {
+        return _json(400, {'error': 'Informe taxa_minima ou tempo_preparo'});
+      }
+      if (taxaMinima != null && taxaMinima < 0) {
+        return _json(400, {'error': 'taxa_minima não pode ser negativa'});
+      }
+      if (tempoPreparo != null && tempoPreparo < 1) {
+        return _json(400, {'error': 'tempo_preparo deve ser pelo menos 1 minuto'});
+      }
+
+      final sets = <String>[];
+      final params = <String, dynamic>{'id': idEmpresa};
+      if (taxaMinima  != null) { sets.add('taxa_minima   = @taxa');   params['taxa'] = taxaMinima; }
+      if (tempoPreparo != null) { sets.add('tempo_preparo = @tempo'); params['tempo'] = tempoPreparo; }
+
+      await conn.execute(
+        Sql.named('UPDATE empresas SET ${sets.join(', ')} WHERE id_empresa = @id'),
+        parameters: params,
+      );
+
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
   Response _json(int status, Map<String, dynamic> body) => Response(
         status,
         body: jsonEncode(body),

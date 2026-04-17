@@ -1834,6 +1834,8 @@ class _TabContaState extends State<_TabConta> {
   String? _endereco;
   double? _lat;
   double? _lng;
+  double _taxaMinima   = 7.0;
+  int    _tempoPreparo = 30;
 
   @override
   void initState() {
@@ -1848,15 +1850,25 @@ class _TabContaState extends State<_TabConta> {
       final results = await Future.wait([
         ApiService.getPedidosByEmpresa(id),
         ApiService.getEnderecoEmpresa(id),
+        ApiService.getFotoEmpresa(id),
+        ApiService.getConfiguracoes(id),
       ]);
-      final lista = results[0] as List<Map<String, dynamic>>;
+      final lista   = results[0] as List<Map<String, dynamic>>;
       final endData = results[1] as Map<String, dynamic>?;
+      final foto    = results[2] as String?;
+      final config  = results[3] as Map<String, dynamic>?;
       if (mounted) {
         setState(() {
-          _pedidos  = lista;
-          _endereco = endData?['endereco']?.toString();
-          _lat      = endData?['latitude']  is num ? (endData!['latitude']  as num).toDouble() : null;
-          _lng      = endData?['longitude'] is num ? (endData!['longitude'] as num).toDouble() : null;
+          _pedidos    = lista;
+          _endereco   = endData?['endereco']?.toString();
+          _lat        = endData?['latitude']  is num ? (endData!['latitude']  as num).toDouble() : null;
+          _lng        = endData?['longitude'] is num ? (endData!['longitude'] as num).toDouble() : null;
+          if (foto != null && foto.isNotEmpty) _fotoPerfil = foto;
+          if (config != null) {
+            _taxaMinima   = config['taxa_minima']   is num ? (config['taxa_minima']   as num).toDouble() : _taxaMinima;
+            _tempoPreparo = config['tempo_preparo'] is int ?  config['tempo_preparo'] as int
+                : int.tryParse(config['tempo_preparo']?.toString() ?? '') ?? _tempoPreparo;
+          }
         });
       }
     }
@@ -1912,6 +1924,111 @@ class _TabContaState extends State<_TabConta> {
       if (mounted) setState(() { _fotoPerfil = b64; _salvandoFoto = false; });
     } else {
       setState(() => _salvandoFoto = false);
+    }
+  }
+
+  Future<void> _editarConfiguracoes() async {
+    final taxaCtrl  = TextEditingController(text: _taxaMinima.toStringAsFixed(2));
+    final tempoCtrl = TextEditingController(text: _tempoPreparo.toString());
+    String? erro;
+
+    final salvo = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Configurações de entrega',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: taxaCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Taxa mínima (R\$)',
+                  prefixText: 'R\$ ',
+                  helperText: 'Mínimo cobrado por entrega. Ex: 7.00',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: Colors.grey.shade50,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: tempoCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Tempo de preparo (min)',
+                  suffixText: 'min',
+                  helperText: 'Tempo médio até ficar pronto. Ex: 30',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: Colors.grey.shade50,
+                ),
+              ),
+              if (erro != null) ...[
+                const SizedBox(height: 8),
+                Text(erro!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _cor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final taxa  = double.tryParse(taxaCtrl.text.trim().replaceAll(',', '.'));
+                final tempo = int.tryParse(tempoCtrl.text.trim());
+                if (taxa == null || taxa < 0) {
+                  setS(() => erro = 'Taxa inválida. Use um número ≥ 0.');
+                  return;
+                }
+                if (tempo == null || tempo < 1) {
+                  setS(() => erro = 'Tempo inválido. Mínimo 1 minuto.');
+                  return;
+                }
+                final id = SessionStore.idEmpresa;
+                if (id == null) return;
+                final erroApi = await ApiService.atualizarConfiguracoes(
+                    id, taxaMinima: taxa, tempoPreparo: tempo);
+                if (!ctx.mounted) return;
+                if (erroApi != null) {
+                  setS(() => erro = erroApi);
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Salvar', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    taxaCtrl.dispose();
+    tempoCtrl.dispose();
+
+    if (salvo == true && mounted) {
+      final id = SessionStore.idEmpresa;
+      if (id == null) return;
+      final config = await ApiService.getConfiguracoes(id);
+      if (config != null && mounted) {
+        setState(() {
+          _taxaMinima   = config['taxa_minima']   is num ? (config['taxa_minima']   as num).toDouble() : _taxaMinima;
+          _tempoPreparo = config['tempo_preparo'] is int ?  config['tempo_preparo'] as int
+              : int.tryParse(config['tempo_preparo']?.toString() ?? '') ?? _tempoPreparo;
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configurações salvas!'),
+            backgroundColor: Colors.green),
+      );
     }
   }
 
@@ -2146,6 +2263,50 @@ class _TabContaState extends State<_TabConta> {
                   ),
                   Icon(Icons.edit_outlined,
                       color: Colors.grey[400], size: 20),
+                ]),
+              ),
+            ),
+
+            // ── Configurações de entrega ──────────────────────
+            GestureDetector(
+              onTap: _editarConfiguracoes,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 6)
+                  ],
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 46, height: 46,
+                    decoration: BoxDecoration(
+                      color: _cor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.tune, color: _cor, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Configurações de entrega',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Taxa mínima: R\$ ${_taxaMinima.toStringAsFixed(2)}  •  Preparo: $_tempoPreparo min',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.edit_outlined, color: Colors.grey[400], size: 20),
                 ]),
               ),
             ),

@@ -218,6 +218,8 @@ void main() async {
     // Taxa de entrega por pedido e tempo de preparo do restaurante
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS tempo_preparo INT DEFAULT 30",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS taxa_entrega NUMERIC(10,2) DEFAULT 0",
+    // Taxa mínima de entrega configurável por restaurante
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS taxa_minima NUMERIC(10,2) DEFAULT 7.00",
   ];
 
   for (final sql in migrations) {
@@ -281,10 +283,12 @@ void main() async {
   app.delete('/adicionais/<id>',        adicional.deleteAdicional);
 
   // ── EMPRESAS ─────────────────────────────────────────────────
-  app.patch('/empresas/<id>/foto',      empresa.atualizarFoto);
-  app.get('/empresas/<id>/foto',        empresa.getFoto);
-  app.get('/empresas/<id>/endereco',    empresa.getEndereco);
-  app.patch('/empresas/<id>/endereco',  empresa.atualizarEndereco);
+  app.patch('/empresas/<id>/foto',           empresa.atualizarFoto);
+  app.get('/empresas/<id>/foto',             empresa.getFoto);
+  app.get('/empresas/<id>/endereco',         empresa.getEndereco);
+  app.patch('/empresas/<id>/endereco',       empresa.atualizarEndereco);
+  app.get('/empresas/<id>/configuracoes',    empresa.getConfiguracoes);
+  app.patch('/empresas/<id>/configuracoes',  empresa.atualizarConfiguracoes);
 
   // ── ENDEREÇOS DO CLIENTE ─────────────────────────────────────
   app.get('/clientes/<id>/enderecos',              clienteEndereco.listar);
