@@ -252,6 +252,8 @@ void main() async {
 
   // ── AUTH (públicas) ──────────────────────────────────────────
   app.post('/auth/login',              auth.login);
+  app.post('/auth/google',             auth.loginGoogle);
+  app.post('/auth/facebook',           auth.loginFacebook);
   app.post('/auth/register/cliente',   auth.registerCliente);
   app.post('/auth/register/empresa',   auth.registerEmpresa);
   app.post('/auth/register/motoboy',   auth.registerMotoboy);

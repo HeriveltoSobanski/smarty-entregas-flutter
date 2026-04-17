@@ -47,6 +47,28 @@ class ApiService {
     throw Exception((data['error'] ?? 'Erro ao fazer login').toString());
   }
 
+  static Future<Map<String, dynamic>> loginGoogle(String idToken) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: _publicHeaders,
+      body: jsonEncode({'id_token': idToken}),
+    );
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode == 200) return data;
+    throw Exception((data['error'] ?? 'Erro ao fazer login com Google').toString());
+  }
+
+  static Future<Map<String, dynamic>> loginFacebook(String accessToken) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/auth/facebook'),
+      headers: _publicHeaders,
+      body: jsonEncode({'access_token': accessToken}),
+    );
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode == 200) return data;
+    throw Exception((data['error'] ?? 'Erro ao fazer login com Facebook').toString());
+  }
+
   static Future<Map<String, dynamic>> registerCliente({
     required String nome,
     required String email,

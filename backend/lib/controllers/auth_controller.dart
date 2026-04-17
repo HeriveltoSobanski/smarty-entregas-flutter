@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
@@ -540,6 +541,156 @@ class AuthController {
     } catch (e) {
       return _json(500, {'error': 'Erro ao redefinir senha'});
     }
+  }
+
+  // ----------------------------------------------------------------
+  // LOGIN GOOGLE
+  // ----------------------------------------------------------------
+  Future<Response> loginGoogle(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+
+      final idToken = (data['id_token'] ?? '').toString().trim();
+      if (idToken.isEmpty) {
+        return _json(400, {'error': 'Token Google obrigatório'});
+      }
+
+      final googleResp = await http.get(
+        Uri.parse('https://oauth2.googleapis.com/tokeninfo?id_token=$idToken'),
+      );
+
+      if (googleResp.statusCode != 200) {
+        return _json(401, {'error': 'Token Google inválido'});
+      }
+
+      final googleData = jsonDecode(googleResp.body) as Map<String, dynamic>;
+      if (googleData.containsKey('error_description')) {
+        return _json(401, {'error': 'Token Google inválido'});
+      }
+
+      final email = googleData['email']?.toString().trim() ?? '';
+      final nome  = (googleData['name'] ?? googleData['given_name'] ?? 'Usuário Google').toString().trim();
+
+      if (email.isEmpty) {
+        return _json(400, {'error': 'E-mail não fornecido pelo Google'});
+      }
+
+      return await _socialLogin(email: email, nome: nome);
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao autenticar com Google'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // LOGIN FACEBOOK
+  // ----------------------------------------------------------------
+  Future<Response> loginFacebook(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
+
+      final accessToken = (data['access_token'] ?? '').toString().trim();
+      if (accessToken.isEmpty) {
+        return _json(400, {'error': 'Token Facebook obrigatório'});
+      }
+
+      final fbResp = await http.get(
+        Uri.parse('https://graph.facebook.com/me?fields=id,name,email&access_token=$accessToken'),
+      );
+
+      if (fbResp.statusCode != 200) {
+        return _json(401, {'error': 'Token Facebook inválido'});
+      }
+
+      final fbData = jsonDecode(fbResp.body) as Map<String, dynamic>;
+      if (fbData.containsKey('error')) {
+        return _json(401, {'error': 'Token Facebook inválido'});
+      }
+
+      final email = fbData['email']?.toString().trim() ?? '';
+      final nome  = fbData['name']?.toString().trim() ?? 'Usuário Facebook';
+
+      if (email.isEmpty) {
+        return _json(400, {'error': 'E-mail não fornecido pelo Facebook. Verifique as permissões do app.'});
+      }
+
+      return await _socialLogin(email: email, nome: nome);
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao autenticar com Facebook'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // SOCIAL LOGIN — lógica compartilhada: busca ou cria usuário
+  // ----------------------------------------------------------------
+  Future<Response> _socialLogin({required String email, required String nome}) async {
+    final result = await conn.execute(
+      Sql.named('''
+        SELECT u.id_usuario, u.ativo, u.tipo_usuario, u.nome,
+               COALESCE(e.id_empresa, 0) AS id_empresa
+        FROM usuarios u
+        LEFT JOIN empresas e ON e.id_usuario = u.id_usuario
+        WHERE u.email = @email
+        LIMIT 1
+      '''),
+      parameters: {'email': email},
+    );
+
+    int    idUsuario;
+    String tipoUsuario;
+    String nomeUsuario;
+    int    idEmpresa;
+
+    if (result.isNotEmpty) {
+      final row = result.first;
+      idUsuario   = row[0] as int;
+      final ativo = row[1] as bool;
+      tipoUsuario = row[2]?.toString() ?? 'cliente';
+      nomeUsuario = row[3]?.toString() ?? nome;
+      idEmpresa   = (row[4] as int?) ?? 0;
+
+      if (!ativo) return _json(403, {'error': 'Usuário inativo'});
+    } else {
+      // Cria novo usuário com senha aleatória (não usada em social login)
+      final senhaHash = PasswordService.hash(
+        '${DateTime.now().millisecondsSinceEpoch}$email',
+      );
+
+      final ins = await conn.execute(
+        Sql.named('''
+          INSERT INTO usuarios
+            (nome, email, senha, ativo, tipo_usuario, criado_em, atualizado_em)
+          VALUES
+            (@nome, @email, @senha, true, 'cliente', now(), now())
+          RETURNING id_usuario
+        '''),
+        parameters: {'nome': nome, 'email': email, 'senha': senhaHash},
+      );
+
+      idUsuario   = ins.first[0] as int;
+      tipoUsuario = 'cliente';
+      nomeUsuario = nome;
+      idEmpresa   = 0;
+    }
+
+    final token = _jwt.generateToken(
+      idUsuario:   idUsuario,
+      tipoUsuario: tipoUsuario,
+      idEmpresa:   idEmpresa,
+    );
+
+    return _json(200, {
+      'ok':    true,
+      'token': token,
+      'user':  {
+        'id_usuario':   idUsuario,
+        'email':        email,
+        'nome':         nomeUsuario,
+        'tipo_usuario': tipoUsuario,
+        'id_empresa':   idEmpresa,
+      },
+    });
   }
 
   Response _json(int status, Map<String, dynamic> body) {

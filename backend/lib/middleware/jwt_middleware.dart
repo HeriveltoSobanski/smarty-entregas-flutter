@@ -18,6 +18,8 @@ const _publicPaths = {
   'auth/esqueci-senha',
   'auth/verificar-codigo',
   'auth/redefinir-senha',
+  'auth/google',
+  'auth/facebook',
 };
 
 /// Middleware que valida o token JWT em todas as rotas protegidas.

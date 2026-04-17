@@ -5,6 +5,7 @@ import '../register/register_page.dart';
 import '../trabalhe_conosco/trabalhe_conosco_page.dart';
 import '../pagina_esqueci_senha/pagina_esqueci_senha.dart';
 import '../../../services/api_service.dart';
+import '../../../services/social_auth_service.dart';
 import '../../../data/session_store.dart';
 import '../../../data/auth_storage.dart';
 
@@ -106,6 +107,77 @@ class _PaginaLoginState extends State<PaginaLogin> {
       Navigator.pushReplacementNamed(context, '/motoboy');
     } else {
       Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
+  Future<void> _loginComSocial(Map<String, dynamic> resp) async {
+    final user        = resp['user'] as Map<String, dynamic>? ?? {};
+    final tipoUsuario = user['tipo_usuario']?.toString() ?? 'cliente';
+    final idEmpresa   = user['id_empresa'] is int
+        ? user['id_empresa'] as int
+        : int.tryParse(user['id_empresa']?.toString() ?? '0') ?? 0;
+    final idUsuario   = user['id_usuario'] is int
+        ? user['id_usuario'] as int
+        : int.tryParse(user['id_usuario']?.toString() ?? '0') ?? 0;
+    final token = resp['token']?.toString() ?? '';
+
+    SessionStore.set(
+      idUsuario:   idUsuario,
+      email:       user['email']?.toString() ?? '',
+      nome:        user['nome']?.toString()  ?? '',
+      tipoUsuario: tipoUsuario,
+      idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
+      token:       token,
+    );
+    if (token.isNotEmpty) {
+      await AuthStorage.save(
+        token:       token,
+        idUsuario:   idUsuario,
+        email:       user['email']?.toString() ?? '',
+        nome:        user['nome']?.toString()  ?? '',
+        tipoUsuario: tipoUsuario,
+        idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
+      );
+    }
+    if (!mounted) return;
+    if (tipoUsuario == 'empresa') {
+      Navigator.pushReplacementNamed(context, '/empresa');
+    } else if (tipoUsuario == 'motoboy') {
+      Navigator.pushReplacementNamed(context, '/motoboy');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
+  Future<void> _loginGoogle() async {
+    setState(() { _loading = true; _erro = null; });
+    try {
+      final idToken = await SocialAuthService.signInWithGoogle();
+      if (idToken == null) { setState(() => _loading = false); return; }
+      final resp = await ApiService.loginGoogle(idToken);
+      await _loginComSocial(resp);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _erro    = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _loginFacebook() async {
+    setState(() { _loading = true; _erro = null; });
+    try {
+      final token = await SocialAuthService.signInWithFacebook();
+      if (token == null) { setState(() => _loading = false); return; }
+      final resp = await ApiService.loginFacebook(token);
+      await _loginComSocial(resp);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _erro    = e.toString().replaceFirst('Exception: ', '');
+      });
     }
   }
 
@@ -374,6 +446,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                     _socialBtn(
                       label: 'Continuar com Facebook',
                       icon: _FacebookIcon(),
+                      onPressed: _loading ? null : _loginFacebook,
                     ),
                     const SizedBox(height: 10),
 
@@ -381,6 +454,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                     _socialBtn(
                       label: 'Continuar com Google',
                       icon: _GoogleIcon(),
+                      onPressed: _loading ? null : _loginGoogle,
                     ),
                     const SizedBox(height: 24),
 
@@ -421,11 +495,11 @@ class _PaginaLoginState extends State<PaginaLogin> {
       );
   }
 
-  Widget _socialBtn({required String label, required Widget icon}) {
+  Widget _socialBtn({required String label, required Widget icon, VoidCallback? onPressed}) {
     return SizedBox(
       height: 50,
       child: OutlinedButton(
-        onPressed: null, // não funcional por enquanto
+        onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: Colors.grey.shade300, width: 1.2),
           shape:
