@@ -1,9 +1,29 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../acompanhamento_pedido/acompanhamento_pedido_page.dart';
+
+// ── Cálculo de taxa de entrega por distância ─────────────────────────────────
+double calcularDistanciaKm(double lat1, double lon1, double lat2, double lon2) {
+  const r = 6371.0;
+  final dLat = (lat2 - lat1) * pi / 180;
+  final dLon = (lon2 - lon1) * pi / 180;
+  final a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
+      sin(dLon / 2) * sin(dLon / 2);
+  return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+}
+
+/// Taxa = R$ 7,00 mínimo + R$ 1,00/km (somente ida)
+double calcularTaxaEntrega(double distKm) => 7.0 + distKm;
+
+/// Tempo estimado em minutos = preparo do restaurante + trânsito (~30 km/h)
+int calcularTempoEstimado(int tempoPreparo, double distKm) =>
+    tempoPreparo + (distKm * 2).ceil();
 
 const Color _cor = Color(0xFFFFA726);
 
@@ -58,6 +78,37 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Map<String, dynamic>? _enderecoSel;
   _Pagamento? _pagamento;
 
+  // Taxa e tempo calculados a partir da distância
+  double _taxaEntrega  = 7.0;
+  int    _tempoMinutos = 30;
+
+  void _recalcularEntrega(Map<String, dynamic> endereco) {
+    final latEmp = widget.empresa['latitude'];
+    final lonEmp = widget.empresa['longitude'];
+    final latEnd = endereco['latitude'];
+    final lonEnd = endereco['longitude'];
+    final tempoPreparo = (widget.empresa['tempo_preparo'] is int
+        ? widget.empresa['tempo_preparo'] as int
+        : int.tryParse(widget.empresa['tempo_preparo']?.toString() ?? '') ?? 30);
+
+    if (latEmp is num && lonEmp is num && latEnd is num && lonEnd is num) {
+      final dist = calcularDistanciaKm(
+        latEmp.toDouble(), lonEmp.toDouble(),
+        latEnd.toDouble(), lonEnd.toDouble(),
+      );
+      setState(() {
+        _taxaEntrega  = calcularTaxaEntrega(dist);
+        _tempoMinutos = calcularTempoEstimado(tempoPreparo, dist);
+      });
+    } else {
+      // Restaurante ou endereço sem coordenadas — usa mínimo
+      setState(() {
+        _taxaEntrega  = 7.0;
+        _tempoMinutos = tempoPreparo + 30;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +125,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       (e) => e['principal'] as bool? ?? false,
       orElse: () => lista.isNotEmpty ? lista.first : {},
     );
+    if (!mounted) return;
     setState(() => _enderecoSel = sel.isEmpty ? null : sel);
+    if (_enderecoSel != null) _recalcularEntrega(_enderecoSel!);
   }
 
   Future<void> _selecionarEndereco() async {
@@ -86,9 +139,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
     if (escolhido != null && mounted) {
       setState(() => _enderecoSel = escolhido);
+      _recalcularEntrega(escolhido);
       // Recarrega lista caso tenha adicionado novo
       _carregarEnderecos().then((_) {
-        if (mounted) setState(() => _enderecoSel = escolhido);
+        if (mounted) {
+          setState(() => _enderecoSel = escolhido);
+          _recalcularEntrega(escolhido);
+        }
       });
     }
   }
@@ -178,6 +235,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       observacao:      _observacaoCtrl.text.trim(),
       formaPagamento:  _pagamento!.slug,
       trocoPara:       troco,
+      taxaEntrega:     _taxaEntrega,
     );
 
     setState(() => _carregando = false);
@@ -208,7 +266,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           nomeEmpresa:     nomeEmpresa,
           enderecoEntrega: endereco,
           itens:           widget.itens,
-          total:           widget.total,
+          subtotal:        widget.total,
+          taxaEntrega:     _taxaEntrega,
+          tempoMinutos:    _tempoMinutos,
           pagamento:       _pagamento!,
         ),
       ),
@@ -642,7 +702,9 @@ class _PedidoConfirmadoPage extends StatelessWidget {
   final String nomeEmpresa;
   final String enderecoEntrega;
   final List<Map<String, dynamic>> itens;
-  final double total;
+  final double subtotal;
+  final double taxaEntrega;
+  final int    tempoMinutos;
   final _Pagamento pagamento;
 
   const _PedidoConfirmadoPage({
@@ -651,7 +713,9 @@ class _PedidoConfirmadoPage extends StatelessWidget {
     required this.nomeEmpresa,
     required this.enderecoEntrega,
     required this.itens,
-    required this.total,
+    required this.subtotal,
+    required this.taxaEntrega,
+    required this.tempoMinutos,
     required this.pagamento,
   });
 
@@ -735,9 +799,29 @@ class _PedidoConfirmadoPage extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        const Text('Subtotal',
+                            style: TextStyle(fontSize: 13, color: Colors.black54)),
+                        Text('R\$ ${subtotal.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Taxa de entrega',
+                            style: TextStyle(fontSize: 13, color: Colors.black54)),
+                        Text('R\$ ${taxaEntrega.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                         const Text('Total',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text('R\$ ${total.toStringAsFixed(2)}',
+                        Text('R\$ ${(subtotal + taxaEntrega).toStringAsFixed(2)}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 17,

@@ -215,12 +215,15 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 20)),
                   const SizedBox(height: 4),
-                  Row(children: const [
-                    Icon(Icons.delivery_dining, size: 16, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Text('R\$ 7,99', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                    Text(' • ', style: TextStyle(color: Colors.grey)),
-                    Text('40-60 min', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Row(children: [
+                    const Icon(Icons.delivery_dining, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    const Text('a partir de R\$ 7,00', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    const Text(' • ', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      '${widget.empresa['tempo_preparo'] ?? 30}+ min',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
                   ]),
                   const SizedBox(height: 6),
                   Row(children: [

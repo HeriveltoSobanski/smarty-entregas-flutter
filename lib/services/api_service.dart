@@ -272,6 +272,7 @@ class ApiService {
     String observacao = '',
     String formaPagamento = '',
     double? trocoPara,
+    double taxaEntrega = 0.0,
   }) async {
     try {
       final resp = await http.post(
@@ -283,6 +284,7 @@ class ApiService {
           'itens':            itens,
           'endereco_entrega': enderecoEntrega,
           'observacao':       observacao,
+          'taxa_entrega':     taxaEntrega,
           if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
           if (trocoPara != null) 'troco_para': trocoPara,
         }),

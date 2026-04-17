@@ -249,7 +249,9 @@ class ProdutoController {
                p.preco, c.nome AS categoria_nome, p.imagem,
                e.foto_perfil,
                COALESCE(av.media, 0)  AS nota_media,
-               COALESCE(av.total, 0)  AS nota_total
+               COALESCE(av.total, 0)  AS nota_total,
+               e.latitude, e.longitude,
+               COALESCE(e.tempo_preparo, 30) AS tempo_preparo
         FROM empresas e
         JOIN usuarios u   ON u.id_usuario   = e.id_usuario
         JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -275,26 +277,33 @@ class ProdutoController {
       // Agrupa produtos por empresa
       final Map<int, Map<String, dynamic>> empresaMap = {};
       for (final r in result) {
-        final idEmpresa   = r[0] as int;
-        final empresaNome = r[1]?.toString() ?? '';
-        final idProduto   = r[2];
-        final produtoNome = r[3]?.toString() ?? '';
-        final descricao   = r[4]?.toString() ?? '';
-        final preco       = r[5];
-        final catNome     = r[6]?.toString() ?? '';
-        final imagem      = r[7]?.toString();
-        final fotoPerfil  = r[8]?.toString();
-        final notaMedia   = double.tryParse(r[9]?.toString() ?? '0') ?? 0.0;
-        final notaTotal   = r[10] is int ? r[10] as int
+        final idEmpresa    = r[0] as int;
+        final empresaNome  = r[1]?.toString() ?? '';
+        final idProduto    = r[2];
+        final produtoNome  = r[3]?.toString() ?? '';
+        final descricao    = r[4]?.toString() ?? '';
+        final preco        = r[5];
+        final catNome      = r[6]?.toString() ?? '';
+        final imagem       = r[7]?.toString();
+        final fotoPerfil   = r[8]?.toString();
+        final notaMedia    = double.tryParse(r[9]?.toString() ?? '0') ?? 0.0;
+        final notaTotal    = r[10] is int ? r[10] as int
             : int.tryParse(r[10]?.toString() ?? '0') ?? 0;
+        final latitude     = r[11] is num ? (r[11] as num).toDouble() : double.tryParse(r[11]?.toString() ?? '');
+        final longitude    = r[12] is num ? (r[12] as num).toDouble() : double.tryParse(r[12]?.toString() ?? '');
+        final tempoPreparo = r[13] is int ? r[13] as int
+            : int.tryParse(r[13]?.toString() ?? '30') ?? 30;
 
         empresaMap.putIfAbsent(idEmpresa, () => {
-          'id_empresa':  idEmpresa,
-          'nome':        empresaNome,
-          'foto_perfil': fotoPerfil,
-          'nota_media':  notaMedia,
-          'nota_total':  notaTotal,
-          'produtos':    <Map<String, dynamic>>[],
+          'id_empresa':    idEmpresa,
+          'nome':          empresaNome,
+          'foto_perfil':   fotoPerfil,
+          'nota_media':    notaMedia,
+          'nota_total':    notaTotal,
+          'latitude':      latitude,
+          'longitude':     longitude,
+          'tempo_preparo': tempoPreparo,
+          'produtos':      <Map<String, dynamic>>[],
         });
 
         (empresaMap[idEmpresa]!['produtos'] as List).add({

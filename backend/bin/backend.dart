@@ -215,6 +215,9 @@ void main() async {
         UNIQUE (id_pedido, id_usuario)
       )
     ''',
+    // Taxa de entrega por pedido e tempo de preparo do restaurante
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS tempo_preparo INT DEFAULT 30",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS taxa_entrega NUMERIC(10,2) DEFAULT 0",
   ];
 
   for (final sql in migrations) {

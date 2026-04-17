@@ -37,6 +37,7 @@ class CriarPedidoController {
       final observacao      = body['observacao']?.toString() ?? '';
       final formaPagamento  = body['forma_pagamento']?.toString() ?? '';
       final trocoPara       = _parseDouble(body['troco_para']);
+      final taxaEntrega     = _parseDouble(body['taxa_entrega']) ?? 0.0;
 
       final rawItens = body['itens'];
       if (rawItens == null || rawItens is! List || rawItens.isEmpty) {
@@ -80,10 +81,10 @@ class CriarPedidoController {
         Sql.named('''
           INSERT INTO pedidos
             (id_usuario, id_empresa, id_status, valor_total,
-             endereco_entrega, observacao, forma_pagamento, troco_para)
+             endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega)
           VALUES
             (@id_usuario, @id_empresa, 1, @valor_total,
-             @endereco_entrega, @observacao, @forma_pagamento, @troco_para)
+             @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega)
           RETURNING id_pedido
         '''),
         parameters: {
@@ -94,6 +95,7 @@ class CriarPedidoController {
           'observacao':       observacao,
           'forma_pagamento':  formaPagamento.isNotEmpty ? formaPagamento : null,
           'troco_para':       trocoPara,
+          'taxa_entrega':     taxaEntrega,
         },
       );
 
