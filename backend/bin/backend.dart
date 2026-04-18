@@ -20,6 +20,7 @@ import 'package:backend/controllers/cliente_endereco_controller.dart';
 import 'package:backend/controllers/empresa_motoboy_controller.dart';
 import 'package:backend/controllers/avaliacao_controller.dart';
 import 'package:backend/controllers/notificacao_controller.dart';
+import 'package:backend/controllers/pizza_controller.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
@@ -221,6 +222,20 @@ void main() async {
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS taxa_entrega NUMERIC(10,2) DEFAULT 0",
     // Taxa mínima de entrega configurável por restaurante
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS taxa_minima NUMERIC(10,2) DEFAULT 7.00",
+    // Sistema de pizza
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS is_pizza BOOLEAN DEFAULT false",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS pizza_meio_a_meio BOOLEAN DEFAULT false",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS pizza_tres_sabores BOOLEAN DEFAULT false",
+    '''
+      CREATE TABLE IF NOT EXISTS pizza_sabores (
+        id_sabor    SERIAL PRIMARY KEY,
+        id_empresa  INT NOT NULL REFERENCES empresas(id_empresa) ON DELETE CASCADE,
+        nome        VARCHAR(100) NOT NULL,
+        descricao   TEXT NOT NULL DEFAULT '',
+        preco       NUMERIC(10,2) NOT NULL DEFAULT 0,
+        ativo       BOOLEAN NOT NULL DEFAULT true
+      )
+    ''',
   ];
 
   for (final sql in migrations) {
@@ -243,6 +258,7 @@ void main() async {
   final empresaMotoboy   = EmpresaMotoboyController(db.connection);
   final avaliacao        = AvaliacaoController(db.connection);
   final notificacao      = NotificacaoController(db.connection);
+  final pizza            = PizzaController(db.connection);
 
   final app = Router();
 
@@ -285,6 +301,12 @@ void main() async {
   app.get('/produtos/<id>/adicionais',  adicional.getAdicionais);
   app.post('/produtos/<id>/adicionais', adicional.createAdicional);
   app.delete('/adicionais/<id>',        adicional.deleteAdicional);
+
+  // ── PIZZA ────────────────────────────────────────────────────
+  app.get('/empresas/<id>/pizza/sabores',  pizza.getSabores);
+  app.post('/empresas/<id>/pizza/sabores', pizza.createSabor);
+  app.patch('/pizza/sabores/<id>',         pizza.updateSabor);
+  app.delete('/pizza/sabores/<id>',        pizza.deleteSabor);
 
   // ── EMPRESAS ─────────────────────────────────────────────────
   app.patch('/empresas/<id>/foto',           empresa.atualizarFoto);

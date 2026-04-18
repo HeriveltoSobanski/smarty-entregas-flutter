@@ -203,14 +203,20 @@ class ApiService {
     required String descricao,
     required double preco,
     String?         imagem,
+    bool            isPizza         = false,
+    bool            pizzaMeioAMeio  = false,
+    bool            pizzaTresSabores = false,
   }) async {
     try {
       final body = <String, dynamic>{
-        'id_empresa':   idEmpresa,
-        'id_categoria': idCategoria,
-        'nome':         nome,
-        'descricao':    descricao,
-        'preco':        preco,
+        'id_empresa':          idEmpresa,
+        'id_categoria':        idCategoria,
+        'nome':                nome,
+        'descricao':           descricao,
+        'preco':               preco,
+        'is_pizza':            isPizza,
+        'pizza_meio_a_meio':   pizzaMeioAMeio,
+        'pizza_tres_sabores':  pizzaTresSabores,
       };
       if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
 
@@ -235,13 +241,19 @@ class ApiService {
     required String descricao,
     required double preco,
     String?         imagem,
+    bool            isPizza          = false,
+    bool            pizzaMeioAMeio   = false,
+    bool            pizzaTresSabores = false,
   }) async {
     try {
       final body = <String, dynamic>{
-        'id_categoria': idCategoria,
-        'nome':         nome,
-        'descricao':    descricao,
-        'preco':        preco,
+        'id_categoria':        idCategoria,
+        'nome':                nome,
+        'descricao':           descricao,
+        'preco':               preco,
+        'is_pizza':            isPizza,
+        'pizza_meio_a_meio':   pizzaMeioAMeio,
+        'pizza_tres_sabores':  pizzaTresSabores,
       };
       if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
 
@@ -1103,6 +1115,82 @@ class ApiService {
     } catch (_) {
       return null;
     }
+  }
+
+  // ----------------------------------------------------------------
+  // PIZZA — sabores por empresa
+  // ----------------------------------------------------------------
+
+  static Future<List<Map<String, dynamic>>> getPizzaSabores(int idEmpresa) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/pizza/sabores'),
+        headers: _authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['sabores'] ?? []);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<String?> createPizzaSabor({
+    required int    idEmpresa,
+    required String nome,
+    required String descricao,
+    required double preco,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/pizza/sabores'),
+        headers: _authHeaders,
+        body: jsonEncode({'nome': nome, 'descricao': descricao, 'preco': preco}),
+      );
+      if (resp.statusCode == 201) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar sabor';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<String?> updatePizzaSabor({
+    required int     idSabor,
+    String?          nome,
+    String?          descricao,
+    double?          preco,
+    bool?            ativo,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        if (nome      != null) 'nome':      nome,
+        if (descricao != null) 'descricao': descricao,
+        if (preco     != null) 'preco':     preco,
+        if (ativo     != null) 'ativo':     ativo,
+      };
+      final resp = await http.patch(
+        Uri.parse('$baseUrl/pizza/sabores/$idSabor'),
+        headers: _authHeaders,
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao atualizar sabor';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<void> deletePizzaSabor(int idSabor) async {
+    try {
+      await http.delete(
+        Uri.parse('$baseUrl/pizza/sabores/$idSabor'),
+        headers: _authHeaders,
+      );
+    } catch (_) {}
   }
 
   // ----------------------------------------------------------------

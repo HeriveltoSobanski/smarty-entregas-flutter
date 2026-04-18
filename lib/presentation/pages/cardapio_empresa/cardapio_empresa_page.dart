@@ -101,10 +101,17 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
       _carrinho.fold(0, (acc, i) => acc + i.quantidade);
 
   void _abrirProduto(Map<String, dynamic> produto) async {
+    final isPizza = produto['is_pizza'] as bool? ?? false;
+    final idEmpresa = widget.empresa['id_empresa'] is int
+        ? widget.empresa['id_empresa'] as int
+        : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
+
     final resultado = await Navigator.push<_ItemCarrinho>(
       context,
       MaterialPageRoute(
-        builder: (_) => _ProdutoDetalhePage(produto: produto),
+        builder: (_) => isPizza
+            ? _PizzaDetalhePage(produto: produto, idEmpresa: idEmpresa)
+            : _ProdutoDetalhePage(produto: produto),
         fullscreenDialog: true,
       ),
     );
@@ -994,5 +1001,344 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
     } catch (_) {
       return const SizedBox.shrink();
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PÁGINA DE PIZZA — escolha de sabores
+// ══════════════════════════════════════════════════════════════════
+class _PizzaDetalhePage extends StatefulWidget {
+  final Map<String, dynamic> produto;
+  final int idEmpresa;
+  const _PizzaDetalhePage({required this.produto, required this.idEmpresa});
+
+  @override
+  State<_PizzaDetalhePage> createState() => _PizzaDetalhePageState();
+}
+
+class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
+  List<Map<String, dynamic>> _sabores = [];
+  bool _loading = true;
+  final List<Map<String, dynamic>> _selecionados = [];
+  int _quantidade = 1;
+  final _obsCtrl = TextEditingController();
+
+  bool get _meioAMeio   => widget.produto['pizza_meio_a_meio']  as bool? ?? false;
+  bool get _tresSabores => widget.produto['pizza_tres_sabores'] as bool? ?? false;
+
+  int get _maxSabores {
+    if (_tresSabores) return 3;
+    if (_meioAMeio)  return 2;
+    return 1;
+  }
+
+  double get _precoBase {
+    final v = widget.produto['preco'];
+    return v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+
+  double get _precoSabores {
+    if (_selecionados.isEmpty) return 0;
+    final soma = _selecionados.fold(0.0, (acc, s) {
+      final p = s['preco'];
+      return acc + (p is num ? p.toDouble() : double.tryParse(p?.toString() ?? '') ?? 0.0);
+    });
+    return soma / _selecionados.length; // média
+  }
+
+  double get _precoTotal => (_precoBase + _precoSabores) * _quantidade;
+
+  bool get _podePedir => _selecionados.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  @override
+  void dispose() {
+    _obsCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _carregar() async {
+    final sabores = await ApiService.getPizzaSabores(widget.idEmpresa);
+    if (mounted) {
+      setState(() {
+        _sabores = sabores.where((s) => s['ativo'] as bool? ?? true).toList();
+        _loading = false;
+      });
+    }
+  }
+
+  void _toggleSabor(Map<String, dynamic> sabor) {
+    setState(() {
+      final id = sabor['id_sabor'];
+      final idx = _selecionados.indexWhere((s) => s['id_sabor'] == id);
+      if (idx >= 0) {
+        _selecionados.removeAt(idx);
+      } else if (_selecionados.length < _maxSabores) {
+        _selecionados.add(sabor);
+      }
+    });
+  }
+
+  void _adicionar() {
+    if (!_podePedir) return;
+    final nomesSabores = _selecionados.map((s) => s['nome']?.toString() ?? '').join(' / ');
+    // Representa sabores como "adicionais" com preço médio para compatibilidade com o carrinho
+    final adicionalPizza = {
+      'nome': nomesSabores,
+      'preco': _precoSabores,
+    };
+    Navigator.pop(
+      context,
+      _ItemCarrinho(
+        produto: widget.produto,
+        adicionais: [adicionalPizza],
+        observacao: _obsCtrl.text.trim(),
+        quantidade: _quantidade,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nome     = widget.produto['nome']?.toString() ?? '';
+    final descricao = widget.produto['descricao']?.toString() ?? '';
+    final imagem   = widget.produto['imagem']?.toString();
+
+    String divisaoLabel;
+    if (_tresSabores && _meioAMeio) {
+      divisaoLabel = 'Escolha até 3 sabores (preço = média)';
+    } else if (_tresSabores) {
+      divisaoLabel = 'Escolha até 3 sabores (preço = média)';
+    } else if (_meioAMeio) {
+      divisaoLabel = 'Escolha até 2 sabores (preço = média)';
+    } else {
+      divisaoLabel = 'Escolha 1 sabor';
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(nome,
+            style: const TextStyle(
+                color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
+            overflow: TextOverflow.ellipsis),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: _primary))
+          : ListView(
+              children: [
+                // Imagem
+                if (imagem != null && imagem.contains(','))
+                  Builder(builder: (_) {
+                    try {
+                      return Image.memory(base64Decode(imagem.split(',').last),
+                          width: double.infinity, height: 200, fit: BoxFit.cover);
+                    } catch (_) { return const SizedBox.shrink(); }
+                  })
+                else
+                  Container(
+                    height: 160,
+                    color: _primary.withValues(alpha: 0.08),
+                    child: const Center(child: Icon(Icons.local_pizza_outlined, color: _primary, size: 72)),
+                  ),
+
+                // Info
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(nome,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                      if (descricao.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(descricao,
+                            style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5)),
+                      ],
+                      const SizedBox(height: 8),
+                      Text('A partir de R\$ ${_precoBase.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _primary)),
+                    ],
+                  ),
+                ),
+
+                const Divider(height: 1),
+
+                // Seção sabores
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  color: const Color(0xFFF5F5F5),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Sabores', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(divisaoLabel,
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('OBRIGATÓRIO',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ]),
+                ),
+
+                if (_sabores.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: Text('Nenhum sabor disponível', style: TextStyle(color: Colors.grey))),
+                  )
+                else
+                  ..._sabores.map((s) {
+                    final id = s['id_sabor'];
+                    final nomeSabor = s['nome']?.toString() ?? '';
+                    final desc = s['descricao']?.toString() ?? '';
+                    final preco = s['preco'] is num ? (s['preco'] as num).toDouble()
+                        : double.tryParse(s['preco']?.toString() ?? '') ?? 0.0;
+                    final selecionado = _selecionados.any((x) => x['id_sabor'] == id);
+                    final podeSelecionar = selecionado || _selecionados.length < _maxSabores;
+
+                    return InkWell(
+                      onTap: podeSelecionar ? () => _toggleSabor(s) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(nomeSabor, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                                if (desc.isNotEmpty)
+                                  Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                if (preco > 0)
+                                  Text('+ R\$ ${preco.toStringAsFixed(2)}',
+                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                              ],
+                            ),
+                          ),
+                          Checkbox(
+                            value: selecionado,
+                            onChanged: podeSelecionar ? (_) => _toggleSabor(s) : null,
+                            activeColor: _primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                        ]),
+                      ),
+                    );
+                  }),
+
+                const Divider(height: 1),
+
+                // Observação
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: const [
+                        Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey),
+                        SizedBox(width: 6),
+                        Text('Alguma observação?',
+                            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                      ]),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _obsCtrl,
+                        maxLength: 140,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Ex: borda recheada, bem assada...',
+                          hintStyle: const TextStyle(color: Colors.grey),
+                          filled: true,
+                          fillColor: const Color(0xFFF5F5F5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 100),
+              ],
+            ),
+      bottomNavigationBar: _loading
+          ? null
+          : SafeArea(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove, size: 18),
+                          onPressed: _quantidade > 1 ? () => setState(() => _quantidade--) : null,
+                          color: _quantidade > 1 ? _primary : Colors.grey,
+                        ),
+                        Text('$_quantidade',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 18, color: _primary),
+                          onPressed: () => setState(() => _quantidade++),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _podePedir ? _primary : Colors.grey.shade300,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        onPressed: _podePedir ? _adicionar : null,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _podePedir ? 'Adicionar' : 'Escolha um sabor',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: _podePedir ? 15 : 13),
+                            ),
+                            if (_podePedir)
+                              Text('R\$ ${_precoTotal.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
   }
 }

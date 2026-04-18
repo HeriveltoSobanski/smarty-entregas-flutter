@@ -53,7 +53,10 @@ class ProdutoController {
         Sql.named('''
           SELECT p.id_produto, p.nome, p.descricao, p.preco, p.ativo,
                  c.nome AS categoria_nome, p.id_categoria,
-                 p.criado_em, p.imagem
+                 p.criado_em, p.imagem,
+                 COALESCE(p.is_pizza, false)            AS is_pizza,
+                 COALESCE(p.pizza_meio_a_meio, false)   AS pizza_meio_a_meio,
+                 COALESCE(p.pizza_tres_sabores, false)  AS pizza_tres_sabores
           FROM produtos p
           LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
           WHERE p.id_empresa = @id_empresa
@@ -63,15 +66,18 @@ class ProdutoController {
       );
 
       final list = result.map((r) => {
-        'id_produto':     r[0],
-        'nome':           r[1]?.toString(),
-        'descricao':      r[2]?.toString() ?? '',
-        'preco':          r[3],
-        'ativo':          r[4],
-        'categoria_nome': r[5]?.toString() ?? '',
-        'id_categoria':   r[6],
-        'criado_em':      r[7]?.toString(),
-        'imagem':         r[8]?.toString(),
+        'id_produto':          r[0],
+        'nome':                r[1]?.toString(),
+        'descricao':           r[2]?.toString() ?? '',
+        'preco':               r[3],
+        'ativo':               r[4],
+        'categoria_nome':      r[5]?.toString() ?? '',
+        'id_categoria':        r[6],
+        'criado_em':           r[7]?.toString(),
+        'imagem':              r[8]?.toString(),
+        'is_pizza':            r[9] as bool? ?? false,
+        'pizza_meio_a_meio':   r[10] as bool? ?? false,
+        'pizza_tres_sabores':  r[11] as bool? ?? false,
       }).toList();
 
       return _json(200, {'produtos': list});
@@ -155,7 +161,10 @@ class ProdutoController {
           : double.tryParse(
                   data['preco']?.toString().replaceAll(',', '.') ?? '0') ??
               0.0;
-      final imagem    = data['imagem']?.toString();
+      final imagem           = data['imagem']?.toString();
+      final isPizza          = data['is_pizza'] as bool? ?? false;
+      final pizzaMeioAMeio   = data['pizza_meio_a_meio'] as bool? ?? false;
+      final pizzaTresSabores = data['pizza_tres_sabores'] as bool? ?? false;
 
       if (idEmpresa == null || idCategoria == null ||
           nome.isEmpty || preco <= 0) {
@@ -167,18 +176,25 @@ class ProdutoController {
       final result = await conn.execute(
         Sql.named('''
           INSERT INTO produtos
-            (id_empresa, id_categoria, nome, descricao, preco, imagem, ativo, criado_em, atualizado_em)
+            (id_empresa, id_categoria, nome, descricao, preco, imagem,
+             is_pizza, pizza_meio_a_meio, pizza_tres_sabores,
+             ativo, criado_em, atualizado_em)
           VALUES
-            (@id_empresa, @id_categoria, @nome, @descricao, @preco, @imagem, true, now(), now())
+            (@id_empresa, @id_categoria, @nome, @descricao, @preco, @imagem,
+             @is_pizza, @pizza_meio_a_meio, @pizza_tres_sabores,
+             true, now(), now())
           RETURNING id_produto
         '''),
         parameters: {
-          'id_empresa':   idEmpresa,
-          'id_categoria': idCategoria,
-          'nome':         nome,
-          'descricao':    descricao,
-          'preco':        preco,
-          'imagem':       imagem,
+          'id_empresa':          idEmpresa,
+          'id_categoria':        idCategoria,
+          'nome':                nome,
+          'descricao':           descricao,
+          'preco':               preco,
+          'imagem':              imagem,
+          'is_pizza':            isPizza,
+          'pizza_meio_a_meio':   pizzaMeioAMeio,
+          'pizza_tres_sabores':  pizzaTresSabores,
         },
       );
 
@@ -203,11 +219,14 @@ class ProdutoController {
       final body = await request.readAsString();
       final data = jsonDecode(body) as Map<String, dynamic>;
 
-      final nome       = data['nome']?.toString().trim() ?? '';
-      final descricao  = data['descricao']?.toString().trim() ?? '';
-      final preco      = (data['preco'] is num) ? (data['preco'] as num).toDouble() : double.tryParse(data['preco']?.toString() ?? '') ?? 0;
-      final idCat      = data['id_categoria'] is int ? data['id_categoria'] as int : int.tryParse(data['id_categoria']?.toString() ?? '') ?? 0;
-      final imagem     = data['imagem']?.toString();
+      final nome             = data['nome']?.toString().trim() ?? '';
+      final descricao        = data['descricao']?.toString().trim() ?? '';
+      final preco            = (data['preco'] is num) ? (data['preco'] as num).toDouble() : double.tryParse(data['preco']?.toString() ?? '') ?? 0;
+      final idCat            = data['id_categoria'] is int ? data['id_categoria'] as int : int.tryParse(data['id_categoria']?.toString() ?? '') ?? 0;
+      final imagem           = data['imagem']?.toString();
+      final isPizza          = data['is_pizza'] as bool? ?? false;
+      final pizzaMeioAMeio   = data['pizza_meio_a_meio'] as bool? ?? false;
+      final pizzaTresSabores = data['pizza_tres_sabores'] as bool? ?? false;
 
       if (nome.isEmpty || preco <= 0 || idCat == 0) {
         return _json(400, {'error': 'nome, preço e categoria são obrigatórios'});
@@ -218,16 +237,22 @@ class ProdutoController {
         'descricao = @descricao',
         'preco = @preco',
         'id_categoria = @idCat',
+        'is_pizza = @is_pizza',
+        'pizza_meio_a_meio = @pizza_meio_a_meio',
+        'pizza_tres_sabores = @pizza_tres_sabores',
         'atualizado_em = now()',
         if (imagem != null) 'imagem = @imagem',
       ];
 
       final params = <String, dynamic>{
-        'id':       idProduto,
-        'nome':     nome,
-        'descricao': descricao,
-        'preco':    preco,
-        'idCat':    idCat,
+        'id':                  idProduto,
+        'nome':                nome,
+        'descricao':           descricao,
+        'preco':               preco,
+        'idCat':               idCat,
+        'is_pizza':            isPizza,
+        'pizza_meio_a_meio':   pizzaMeioAMeio,
+        'pizza_tres_sabores':  pizzaTresSabores,
         if (imagem != null) 'imagem': imagem,
       };
 
@@ -301,8 +326,11 @@ class ProdutoController {
                COALESCE(av.media, 0)  AS nota_media,
                COALESCE(av.total, 0)  AS nota_total,
                e.latitude, e.longitude,
-               COALESCE(e.tempo_preparo, 30) AS tempo_preparo,
-               COALESCE(e.taxa_minima, 7.00) AS taxa_minima
+               COALESCE(e.tempo_preparo, 30)          AS tempo_preparo,
+               COALESCE(e.taxa_minima, 7.00)           AS taxa_minima,
+               COALESCE(p.is_pizza, false)             AS is_pizza,
+               COALESCE(p.pizza_meio_a_meio, false)    AS pizza_meio_a_meio,
+               COALESCE(p.pizza_tres_sabores, false)   AS pizza_tres_sabores
         FROM empresas e
         JOIN usuarios u   ON u.id_usuario   = e.id_usuario
         JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -345,8 +373,11 @@ class ProdutoController {
         final longitude    = r[13] is num ? (r[13] as num).toDouble() : double.tryParse(r[13]?.toString() ?? '');
         final tempoPreparo = r[14] is int ? r[14] as int
             : int.tryParse(r[14]?.toString() ?? '30') ?? 30;
-        final taxaMinima   = r[15] is num ? (r[15] as num).toDouble()
+        final taxaMinima       = r[15] is num ? (r[15] as num).toDouble()
             : double.tryParse(r[15]?.toString() ?? '7') ?? 7.0;
+        final isPizza          = r[16] as bool? ?? false;
+        final pizzaMeioAMeio   = r[17] as bool? ?? false;
+        final pizzaTresSabores = r[18] as bool? ?? false;
 
         empresaMap.putIfAbsent(idEmpresa, () => {
           'id_empresa':    idEmpresa,
@@ -363,12 +394,15 @@ class ProdutoController {
         });
 
         (empresaMap[idEmpresa]!['produtos'] as List).add({
-          'id_produto':     idProduto,
-          'nome':           produtoNome,
-          'descricao':      descricao,
-          'preco':          preco,
-          'categoria_nome': catNome,
-          'imagem':         imagem,
+          'id_produto':          idProduto,
+          'nome':                produtoNome,
+          'descricao':           descricao,
+          'preco':               preco,
+          'categoria_nome':      catNome,
+          'imagem':              imagem,
+          'is_pizza':            isPizza,
+          'pizza_meio_a_meio':   pizzaMeioAMeio,
+          'pizza_tres_sabores':  pizzaTresSabores,
         });
       }
 
