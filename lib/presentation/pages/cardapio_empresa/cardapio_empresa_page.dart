@@ -166,6 +166,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     final categorias = _categoriasOrdenadas;
     final color = _headerColor;
     final fotoPerfil = widget.empresa['foto_perfil']?.toString();
+    final fotoCapa = widget.empresa['foto_capa']?.toString();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -188,17 +189,28 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
             ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.parallax,
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withValues(alpha: 0.65)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Center(
-                  child: _buildLogo(nome, fotoPerfil),
-                ),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (fotoCapa != null && fotoCapa.contains(','))
+                    Image.memory(
+                      base64Decode(fotoCapa.split(',').last),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    )
+                  else
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color, color.withValues(alpha: 0.65)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                    ),
+                  Container(color: Colors.black.withValues(alpha: 0.22)),
+                  Center(child: _buildLogo(nome, fotoPerfil)),
+                ],
               ),
             ),
           ),

@@ -193,6 +193,56 @@ class ProdutoController {
   }
 
   // ----------------------------------------------------------------
+  // PUT /produtos/:id
+  // ----------------------------------------------------------------
+  Future<Response> updateProduto(Request request, String id) async {
+    try {
+      final idProduto = int.tryParse(id);
+      if (idProduto == null) return _json(400, {'error': 'id inválido'});
+
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+
+      final nome       = data['nome']?.toString().trim() ?? '';
+      final descricao  = data['descricao']?.toString().trim() ?? '';
+      final preco      = (data['preco'] is num) ? (data['preco'] as num).toDouble() : double.tryParse(data['preco']?.toString() ?? '') ?? 0;
+      final idCat      = data['id_categoria'] is int ? data['id_categoria'] as int : int.tryParse(data['id_categoria']?.toString() ?? '') ?? 0;
+      final imagem     = data['imagem']?.toString();
+
+      if (nome.isEmpty || preco <= 0 || idCat == 0) {
+        return _json(400, {'error': 'nome, preço e categoria são obrigatórios'});
+      }
+
+      final sets = <String>[
+        'nome = @nome',
+        'descricao = @descricao',
+        'preco = @preco',
+        'id_categoria = @idCat',
+        'atualizado_em = now()',
+        if (imagem != null) 'imagem = @imagem',
+      ];
+
+      final params = <String, dynamic>{
+        'id':       idProduto,
+        'nome':     nome,
+        'descricao': descricao,
+        'preco':    preco,
+        'idCat':    idCat,
+        if (imagem != null) 'imagem': imagem,
+      };
+
+      await conn.execute(
+        Sql.named('UPDATE produtos SET ${sets.join(', ')} WHERE id_produto = @id'),
+        parameters: params,
+      );
+
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
+  // ----------------------------------------------------------------
   // DELETE /produtos/:id
   // ----------------------------------------------------------------
   Future<Response> deleteProduto(Request request, String id) async {
@@ -247,7 +297,7 @@ class ProdutoController {
         SELECT e.id_empresa, u.nome AS empresa_nome,
                p.id_produto, p.nome AS produto_nome, p.descricao,
                p.preco, c.nome AS categoria_nome, p.imagem,
-               e.foto_perfil,
+               e.foto_perfil, e.foto_capa,
                COALESCE(av.media, 0)  AS nota_media,
                COALESCE(av.total, 0)  AS nota_total,
                e.latitude, e.longitude,
@@ -287,20 +337,22 @@ class ProdutoController {
         final catNome      = r[6]?.toString() ?? '';
         final imagem       = r[7]?.toString();
         final fotoPerfil   = r[8]?.toString();
-        final notaMedia    = double.tryParse(r[9]?.toString() ?? '0') ?? 0.0;
-        final notaTotal    = r[10] is int ? r[10] as int
-            : int.tryParse(r[10]?.toString() ?? '0') ?? 0;
-        final latitude     = r[11] is num ? (r[11] as num).toDouble() : double.tryParse(r[11]?.toString() ?? '');
-        final longitude    = r[12] is num ? (r[12] as num).toDouble() : double.tryParse(r[12]?.toString() ?? '');
-        final tempoPreparo = r[13] is int ? r[13] as int
-            : int.tryParse(r[13]?.toString() ?? '30') ?? 30;
-        final taxaMinima   = r[14] is num ? (r[14] as num).toDouble()
-            : double.tryParse(r[14]?.toString() ?? '7') ?? 7.0;
+        final fotoCapa     = r[9]?.toString();
+        final notaMedia    = double.tryParse(r[10]?.toString() ?? '0') ?? 0.0;
+        final notaTotal    = r[11] is int ? r[11] as int
+            : int.tryParse(r[11]?.toString() ?? '0') ?? 0;
+        final latitude     = r[12] is num ? (r[12] as num).toDouble() : double.tryParse(r[12]?.toString() ?? '');
+        final longitude    = r[13] is num ? (r[13] as num).toDouble() : double.tryParse(r[13]?.toString() ?? '');
+        final tempoPreparo = r[14] is int ? r[14] as int
+            : int.tryParse(r[14]?.toString() ?? '30') ?? 30;
+        final taxaMinima   = r[15] is num ? (r[15] as num).toDouble()
+            : double.tryParse(r[15]?.toString() ?? '7') ?? 7.0;
 
         empresaMap.putIfAbsent(idEmpresa, () => {
           'id_empresa':    idEmpresa,
           'nome':          empresaNome,
           'foto_perfil':   fotoPerfil,
+          'foto_capa':     fotoCapa,
           'nota_media':    notaMedia,
           'nota_total':    notaTotal,
           'latitude':      latitude,
@@ -342,7 +394,7 @@ class ProdutoController {
           SELECT e.id_empresa, u.nome AS empresa_nome,
                  p.id_produto, p.nome AS produto_nome, p.descricao,
                  p.preco, c.nome AS categoria_nome, p.imagem,
-                 e.foto_perfil
+                 e.foto_perfil, e.foto_capa
           FROM empresas e
           JOIN usuarios u   ON u.id_usuario   = e.id_usuario
           JOIN produtos p   ON p.id_empresa   = e.id_empresa
@@ -368,11 +420,13 @@ class ProdutoController {
         final catNome     = r[6]?.toString() ?? '';
         final imagem      = r[7]?.toString();
         final fotoPerfil  = r[8]?.toString();
+        final fotoCapa    = r[9]?.toString();
 
         empresaMap.putIfAbsent(idEmpresa, () => {
           'id_empresa':  idEmpresa,
           'nome':        empresaNome,
           'foto_perfil': fotoPerfil,
+          'foto_capa':   fotoCapa,
           'produtos':    <Map<String, dynamic>>[],
         });
 

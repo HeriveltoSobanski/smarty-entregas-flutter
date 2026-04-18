@@ -8,30 +8,46 @@ class EmpresaController {
 
   // ----------------------------------------------------------------
   // PATCH /empresas/:id/foto
-  // Body: { foto_perfil: "data:image/jpeg;base64,..." }
+  // Body: { foto_perfil?: "data:image/jpeg;base64,...", foto_capa?: "data:image/jpeg;base64,..." }
   // ----------------------------------------------------------------
   Future<Response> atualizarFoto(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final body = await request.readAsString();
       final data = body.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
 
-      final foto = data['foto_perfil']?.toString();
-      if (foto == null || foto.isEmpty) {
-        return _json(400, {'error': 'foto_perfil é obrigatório'});
+      final fotoPerfil = data['foto_perfil']?.toString();
+      final fotoCapa = data['foto_capa']?.toString();
+      final temFotoPerfil = fotoPerfil != null && fotoPerfil.isNotEmpty;
+      final temFotoCapa = fotoCapa != null && fotoCapa.isNotEmpty;
+
+      if (!temFotoPerfil && !temFotoCapa) {
+        return _json(400, {'error': 'foto_perfil ou foto_capa e obrigatorio'});
+      }
+
+      final sets = <String>[];
+      final params = <String, dynamic>{'id': idEmpresa};
+
+      if (temFotoPerfil) {
+        sets.add('foto_perfil = @foto_perfil');
+        params['foto_perfil'] = fotoPerfil;
+      }
+      if (temFotoCapa) {
+        sets.add('foto_capa = @foto_capa');
+        params['foto_capa'] = fotoCapa;
       }
 
       await conn.execute(
         Sql.named('''
           UPDATE empresas
-          SET foto_perfil = @foto
+          SET ${sets.join(', ')}
           WHERE id_empresa = @id
         '''),
-        parameters: {'foto': foto, 'id': idEmpresa},
+        parameters: params,
       );
 
       return _json(200, {'ok': true});
@@ -46,16 +62,19 @@ class EmpresaController {
   Future<Response> getFoto(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final result = await conn.execute(
-        Sql.named('SELECT foto_perfil FROM empresas WHERE id_empresa = @id'),
+        Sql.named('SELECT foto_perfil, foto_capa FROM empresas WHERE id_empresa = @id'),
         parameters: {'id': idEmpresa},
       );
 
-      if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+      if (result.isEmpty) return _json(404, {'error': 'Empresa nao encontrada'});
 
-      return _json(200, {'foto_perfil': result.first[0]?.toString()});
+      return _json(200, {
+        'foto_perfil': result.first[0]?.toString(),
+        'foto_capa': result.first[1]?.toString(),
+      });
     } catch (e) {
       return _json(500, {'error': e.toString()});
     }
@@ -67,7 +86,7 @@ class EmpresaController {
   Future<Response> getEndereco(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final result = await conn.execute(
         Sql.named(
@@ -75,12 +94,12 @@ class EmpresaController {
         parameters: {'id': idEmpresa},
       );
 
-      if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+      if (result.isEmpty) return _json(404, {'error': 'Empresa nao encontrada'});
       final r = result.first;
 
       return _json(200, {
-        'endereco':  r[0]?.toString(),
-        'latitude':  r[1],
+        'endereco': r[0]?.toString(),
+        'latitude': r[1],
         'longitude': r[2],
       });
     } catch (e) {
@@ -95,19 +114,19 @@ class EmpresaController {
   Future<Response> atualizarEndereco(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final body = await request.readAsString();
       final data = body.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
 
-      final endereco  = data['endereco']?.toString();
-      final latitude  = data['latitude']  is num ? (data['latitude']  as num).toDouble() : null;
+      final endereco = data['endereco']?.toString();
+      final latitude = data['latitude'] is num ? (data['latitude'] as num).toDouble() : null;
       final longitude = data['longitude'] is num ? (data['longitude'] as num).toDouble() : null;
 
       if (endereco == null || endereco.isEmpty) {
-        return _json(400, {'error': 'endereco é obrigatório'});
+        return _json(400, {'error': 'endereco e obrigatorio'});
       }
 
       await conn.execute(
@@ -118,9 +137,9 @@ class EmpresaController {
         '''),
         parameters: {
           'endereco': endereco,
-          'lat':      latitude,
-          'lng':      longitude,
-          'id':       idEmpresa,
+          'lat': latitude,
+          'lng': longitude,
+          'id': idEmpresa,
         },
       );
 
@@ -137,7 +156,7 @@ class EmpresaController {
   Future<Response> getConfiguracoes(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final result = await conn.execute(
         Sql.named(
@@ -145,11 +164,11 @@ class EmpresaController {
         parameters: {'id': idEmpresa},
       );
 
-      if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+      if (result.isEmpty) return _json(404, {'error': 'Empresa nao encontrada'});
       final r = result.first;
 
       return _json(200, {
-        'taxa_minima':   r[0] is num ? (r[0] as num).toDouble() : double.tryParse(r[0]?.toString() ?? '7') ?? 7.0,
+        'taxa_minima': r[0] is num ? (r[0] as num).toDouble() : double.tryParse(r[0]?.toString() ?? '7') ?? 7.0,
         'tempo_preparo': r[1] is int ? r[1] as int : int.tryParse(r[1]?.toString() ?? '30') ?? 30,
       });
     } catch (e) {
@@ -164,14 +183,14 @@ class EmpresaController {
   Future<Response> atualizarConfiguracoes(Request request, String id) async {
     try {
       final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
 
       final body = await request.readAsString();
       final data = body.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
 
-      final taxaMinima  = data['taxa_minima']  is num
+      final taxaMinima = data['taxa_minima'] is num
           ? (data['taxa_minima'] as num).toDouble()
           : double.tryParse(data['taxa_minima']?.toString() ?? '');
       final tempoPreparo = data['tempo_preparo'] is int
@@ -182,7 +201,7 @@ class EmpresaController {
         return _json(400, {'error': 'Informe taxa_minima ou tempo_preparo'});
       }
       if (taxaMinima != null && taxaMinima < 0) {
-        return _json(400, {'error': 'taxa_minima não pode ser negativa'});
+        return _json(400, {'error': 'taxa_minima nao pode ser negativa'});
       }
       if (tempoPreparo != null && tempoPreparo < 1) {
         return _json(400, {'error': 'tempo_preparo deve ser pelo menos 1 minuto'});
@@ -190,8 +209,14 @@ class EmpresaController {
 
       final sets = <String>[];
       final params = <String, dynamic>{'id': idEmpresa};
-      if (taxaMinima  != null) { sets.add('taxa_minima   = @taxa');   params['taxa'] = taxaMinima; }
-      if (tempoPreparo != null) { sets.add('tempo_preparo = @tempo'); params['tempo'] = tempoPreparo; }
+      if (taxaMinima != null) {
+        sets.add('taxa_minima   = @taxa');
+        params['taxa'] = taxaMinima;
+      }
+      if (tempoPreparo != null) {
+        sets.add('tempo_preparo = @tempo');
+        params['tempo'] = tempoPreparo;
+      }
 
       await conn.execute(
         Sql.named('UPDATE empresas SET ${sets.join(', ')} WHERE id_empresa = @id'),

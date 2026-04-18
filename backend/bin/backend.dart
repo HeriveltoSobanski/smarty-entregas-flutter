@@ -47,6 +47,7 @@ void main() async {
   final migrations = [
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS imagem TEXT",
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS foto_perfil TEXT",
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS foto_capa TEXT",
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS endereco TEXT",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS endereco_entrega TEXT",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS observacao TEXT",
@@ -276,6 +277,7 @@ void main() async {
   app.get('/produtos/publico',         produto.getProdutosPublico);
   app.get('/produtos/empresas',        produto.getEmpresasComProdutos);
   app.post('/produtos',                produto.createProduto);
+  app.put('/produtos/<id>',            produto.updateProduto);
   app.delete('/produtos/<id>',         produto.deleteProduto);
   app.patch('/produtos/<id>/ativo',    produto.toggleAtivo);
 

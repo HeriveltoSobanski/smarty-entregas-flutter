@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../data/session_store.dart';
 
@@ -7,7 +8,7 @@ class ApiService {
   // Padrão: IP local de desenvolvimento
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://overplant-overreact-commotion.ngrok-free.dev',
+    defaultValue: 'http://localhost:8080',
   );
 
   // ----------------------------------------------------------------
@@ -16,14 +17,14 @@ class ApiService {
 
   static Map<String, String> get _publicHeaders => {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
+        if (!kIsWeb) 'ngrok-skip-browser-warning': 'true',
       };
 
   static Map<String, String> get _authHeaders {
     final token = SessionStore.token;
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
+      if (!kIsWeb) 'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -222,6 +223,37 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar produto';
+    } catch (_) {
+      return 'Servidor indisponível.';
+    }
+  }
+
+  static Future<String?> updateProduto({
+    required int    idProduto,
+    required int    idCategoria,
+    required String nome,
+    required String descricao,
+    required double preco,
+    String?         imagem,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'id_categoria': idCategoria,
+        'nome':         nome,
+        'descricao':    descricao,
+        'preco':        preco,
+      };
+      if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
+
+      final resp = await http.put(
+        Uri.parse('$baseUrl/produtos/$idProduto'),
+        headers: _authHeaders,
+        body: jsonEncode(body),
+      );
+
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao atualizar produto';
     } catch (_) {
       return 'Servidor indisponível.';
     }
@@ -534,7 +566,7 @@ class ApiService {
     }
   }
 
-  static Future<String?> getFotoEmpresa(int idEmpresa) async {
+  static Future<Map<String, String?>> getFotosEmpresa(int idEmpresa) async {
     try {
       final resp = await http.get(
         Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
@@ -542,21 +574,34 @@ class ApiService {
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        return data['foto_perfil']?.toString();
+        return {
+          'foto_perfil': data['foto_perfil']?.toString(),
+          'foto_capa': data['foto_capa']?.toString(),
+        };
       }
-      return null;
+      return {};
     } catch (_) {
-      return null;
+      return {};
     }
   }
 
   static Future<String?> atualizarFotoEmpresa(
-      int idEmpresa, String fotoPerfil) async {
+      int idEmpresa, {
+        String? fotoPerfil,
+        String? fotoCapa,
+      }) async {
     try {
+      final body = <String, dynamic>{};
+      if (fotoPerfil != null && fotoPerfil.isNotEmpty) {
+        body['foto_perfil'] = fotoPerfil;
+      }
+      if (fotoCapa != null && fotoCapa.isNotEmpty) {
+        body['foto_capa'] = fotoCapa;
+      }
       final resp = await http.patch(
         Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
         headers: _authHeaders,
-        body: jsonEncode({'foto_perfil': fotoPerfil}),
+        body: jsonEncode(body),
       );
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
