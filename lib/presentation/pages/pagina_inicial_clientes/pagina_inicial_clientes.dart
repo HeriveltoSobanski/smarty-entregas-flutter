@@ -166,6 +166,10 @@ class _HomeContentState extends State<_HomeContent> {
 
   static const _categorias = ['Todos', 'Lanches', 'Pizzas', 'Almoços', 'Bebidas', 'Sobremesas'];
 
+  bool _filtroEntregaGratis = false;
+  bool _filtroPromocoes     = false;
+  bool _filtroMaisAvaliados = false;
+
   @override
   void initState() {
     super.initState();
@@ -341,34 +345,39 @@ class _HomeContentState extends State<_HomeContent> {
       scrolledUnderElevation: 2,
       shadowColor: const Color(0x1A000000),
       titleSpacing: 16,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const Text('Entregar em',
-              style: TextStyle(fontSize: 11, color: Color(0xFF757575))),
-          Row(children: [
-            Text(
-              _labelEntrega.isNotEmpty ? _labelEntrega : 'Meu endereço',
-              style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A)),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.keyboard_arrow_down, color: _primary, size: 18),
-          ]),
+          // Lado esquerdo: endereço de entrega
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Entregar em',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF757575))),
+              Row(children: [
+                Text(
+                  _labelEntrega.isNotEmpty ? _labelEntrega : 'Meu endereço',
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A)),
+                ),
+                const SizedBox(width: 2),
+                const Icon(Icons.keyboard_arrow_down, color: _primary, size: 18),
+              ]),
+            ],
+          ),
+          const Spacer(),
+          // "Olá, nome" alinhado à base da coluna esquerda (mesma altura do endereço)
+          Text('Olá, ${nome.split(' ').first}',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
         ],
       ),
       actions: [
+        // Sino de notificações com badge (no lugar do avatar)
         Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: Text('Olá, ${nome.split(' ').first}',
-              style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF757575))),
-        ),
-        // Sino de notificações com badge
-        Padding(
-          padding: const EdgeInsets.only(right: 4),
+          padding: const EdgeInsets.only(right: 8),
           child: Stack(
             children: [
               IconButton(
@@ -390,8 +399,7 @@ class _HomeContentState extends State<_HomeContent> {
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle),
+                        color: Colors.red, shape: BoxShape.circle),
                     constraints:
                         const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
@@ -405,22 +413,6 @@ class _HomeContentState extends State<_HomeContent> {
                   ),
                 ),
             ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: _primary,
-            child: Text(
-              (SessionStore.nome ?? 'U').isNotEmpty
-                  ? (SessionStore.nome ?? 'U')[0].toUpperCase()
-                  : 'U',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14),
-            ),
           ),
         ),
       ],
@@ -476,11 +468,26 @@ class _HomeContentState extends State<_HomeContent> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       child: Row(children: [
-        _FilterChip(icon: Icons.tune, label: 'filtros'),
+        _FiltroToggle(
+          icon: Icons.delivery_dining_outlined,
+          label: 'Entrega grátis',
+          active: _filtroEntregaGratis,
+          onTap: () => setState(() => _filtroEntregaGratis = !_filtroEntregaGratis),
+        ),
         const SizedBox(width: 8),
-        _FilterChip(icon: Icons.delivery_dining, label: 'entrega grátis'),
+        _FiltroToggle(
+          icon: Icons.percent,
+          label: 'Promoções',
+          active: _filtroPromocoes,
+          onTap: () => setState(() => _filtroPromocoes = !_filtroPromocoes),
+        ),
         const SizedBox(width: 8),
-        _FilterChip(icon: Icons.local_offer, label: 'promoções'),
+        _FiltroToggle(
+          icon: Icons.star_outline,
+          label: 'Mais avaliados',
+          active: _filtroMaisAvaliados,
+          onTap: () => setState(() => _filtroMaisAvaliados = !_filtroMaisAvaliados),
+        ),
       ]),
     );
   }
@@ -611,27 +618,46 @@ class _BannerWidgetState extends State<_BannerWidget> {
   }
 }
 
-// ── Chip de filtro ────────────────────────────────────────────────
-class _FilterChip extends StatelessWidget {
+// ── Chip de filtro (estilo diferente das categorias) ─────────────
+class _FiltroToggle extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _FilterChip({required this.icon, required this.label});
+  final bool active;
+  final VoidCallback onTap;
+  const _FiltroToggle({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDDDDDD)),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFFFF3E8) : const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? _primary : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14,
+              color: active ? _primary : const Color(0xFF666666)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                fontSize: 12,
+                color: active ? _primary : const Color(0xFF666666),
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              )),
+        ]),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: Colors.black54),
-        const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(fontSize: 12, color: Colors.black87)),
-      ]),
     );
   }
 }
