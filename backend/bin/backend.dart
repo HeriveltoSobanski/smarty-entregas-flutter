@@ -229,13 +229,16 @@ void main() async {
     '''
       CREATE TABLE IF NOT EXISTS pizza_sabores (
         id_sabor    SERIAL PRIMARY KEY,
-        id_empresa  INT NOT NULL REFERENCES empresas(id_empresa) ON DELETE CASCADE,
+        id_produto  INT NOT NULL REFERENCES produtos(id_produto) ON DELETE CASCADE,
         nome        VARCHAR(100) NOT NULL,
         descricao   TEXT NOT NULL DEFAULT '',
         preco       NUMERIC(10,2) NOT NULL DEFAULT 0,
         ativo       BOOLEAN NOT NULL DEFAULT true
       )
     ''',
+    // Migração: mover pizza_sabores de id_empresa para id_produto (se tabela já existia)
+    "ALTER TABLE pizza_sabores DROP COLUMN IF EXISTS id_empresa",
+    "ALTER TABLE pizza_sabores ADD COLUMN IF NOT EXISTS id_produto INT REFERENCES produtos(id_produto) ON DELETE CASCADE",
   ];
 
   for (final sql in migrations) {
@@ -303,8 +306,8 @@ void main() async {
   app.delete('/adicionais/<id>',        adicional.deleteAdicional);
 
   // ── PIZZA ────────────────────────────────────────────────────
-  app.get('/empresas/<id>/pizza/sabores',  pizza.getSabores);
-  app.post('/empresas/<id>/pizza/sabores', pizza.createSabor);
+  app.get('/produtos/<id>/pizza/sabores',  pizza.getSabores);
+  app.post('/produtos/<id>/pizza/sabores', pizza.createSabor);
   app.patch('/pizza/sabores/<id>',         pizza.updateSabor);
   app.delete('/pizza/sabores/<id>',        pizza.deleteSabor);
 

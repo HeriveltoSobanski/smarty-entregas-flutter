@@ -405,6 +405,19 @@ class _TabProdutosState extends State<_TabProdutos> {
                               builder: (_) => _AdicionaisSheet(idProduto: id),
                             );
                           },
+                          onPizza: (_produtos[i]['is_pizza'] as bool? ?? false) ? () {
+                            final id = _produtos[i]['id_produto'] is int
+                                ? _produtos[i]['id_produto'] as int
+                                : int.tryParse(_produtos[i]['id_produto'].toString()) ?? 0;
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.white,
+                              shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                              builder: (_) => _PizzaSaboresSheet(idProduto: id),
+                            );
+                          } : null,
                         ),
                       ),
                     ),
@@ -421,6 +434,7 @@ class _CardProduto extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onEdit;
   final VoidCallback onAdicionais;
+  final VoidCallback? onPizza;
 
   const _CardProduto({
     required this.produto,
@@ -428,6 +442,7 @@ class _CardProduto extends StatelessWidget {
     required this.onDelete,
     required this.onEdit,
     required this.onAdicionais,
+    this.onPizza,
   });
 
   @override
@@ -600,6 +615,18 @@ class _CardProduto extends StatelessWidget {
                   ),
                 ),
                 _divider(),
+                // Sabores pizza
+                if (produto['is_pizza'] as bool? ?? false) ...[
+                  Expanded(
+                    child: _ActionBtn(
+                      icon: Icons.local_pizza_outlined,
+                      label: 'Sabores',
+                      color: _corDeep,
+                      onTap: onPizza ?? () {},
+                    ),
+                  ),
+                  _divider(),
+                ],
                 // Deletar
                 Expanded(
                   child: _ActionBtn(
@@ -722,17 +749,26 @@ class _FormProdutoState extends State<_FormProduto> {
             orElse: () => cats.first,
           )
         : cats.first;
-    setState(() { _categorias = cats; _catSel = catInicial; });
+    setState(() {
+      _categorias = cats;
+      _catSel = catInicial;
+      _isPizza = (catInicial['nome']?.toString().toLowerCase() == 'pizzas');
+    });
   }
 
   Future<void> _salvar() async {
     final nome      = _nomeCtrl.text.trim();
     final descricao = _descricaoCtrl.text.trim();
-    final preco = double.tryParse(
+    final precoRaw = double.tryParse(
             _precoCtrl.text.trim().replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), '')) ??
         0;
-    if (nome.isEmpty || preco <= 0 || _catSel == null) {
-      setState(() => _erro = 'Preencha nome, preço e categoria.');
+    final preco = _isPizza ? 0.0 : precoRaw;
+    if (nome.isEmpty || _catSel == null) {
+      setState(() => _erro = 'Preencha nome e categoria.');
+      return;
+    }
+    if (!_isPizza && preco <= 0) {
+      setState(() => _erro = 'Preencha o preço.');
       return;
     }
     final idCategoria = _catSel!['id_categoria'] is int
@@ -811,12 +847,14 @@ class _FormProdutoState extends State<_FormProduto> {
 
             TextField(controller: _nomeCtrl, decoration: _deco('Nome do produto *')),
             const SizedBox(height: 12),
-            TextField(
-              controller: _precoCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: _deco('Preço (R\$) *'),
-            ),
-            const SizedBox(height: 12),
+            if (!_isPizza) ...[ 
+              TextField(
+                controller: _precoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: _deco('Preço (R\$) *'),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _descricaoCtrl,
               maxLines: 3,
@@ -884,24 +922,14 @@ class _FormProdutoState extends State<_FormProduto> {
                     items: _categorias
                         .map((c) => DropdownMenuItem(value: c, child: Text(c['nome']?.toString() ?? '')))
                         .toList(),
-                    onChanged: (v) => setState(() => _catSel = v),
+                    onChanged: (v) => setState(() {
+                      _catSel = v;
+                      _isPizza = (v != null && (v['nome']?.toString().toLowerCase() == 'pizzas'));
+                      if (!_isPizza) { _pizzaMeioAMeio = false; _pizzaTresSabores = false; }
+                    }),
                   ),
             const SizedBox(height: 16),
 
-            // Opção pizza
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Este produto é uma pizza',
-                  style: GoogleFonts.poppins(fontSize: 14, color: _darkText)),
-              subtitle: Text('Ativa seleção de sabores no pedido',
-                  style: GoogleFonts.poppins(fontSize: 11, color: _muted)),
-              value: _isPizza,
-              activeColor: _cor,
-              onChanged: (v) => setState(() {
-                _isPizza = v;
-                if (!v) { _pizzaMeioAMeio = false; _pizzaTresSabores = false; }
-              }),
-            ),
             if (_isPizza) ...[
               const SizedBox(height: 4),
               Container(
@@ -1967,8 +1995,8 @@ class _PedidoDetalheSheetState extends State<_PedidoDetalheSheet> {
 // SHEET: SABORES DE PIZZA DA EMPRESA
 // =============================================================
 class _PizzaSaboresSheet extends StatefulWidget {
-  final int idEmpresa;
-  const _PizzaSaboresSheet({required this.idEmpresa});
+  final int idProduto;
+  const _PizzaSaboresSheet({required this.idProduto});
 
   @override
   State<_PizzaSaboresSheet> createState() => _PizzaSaboresSheetState();
@@ -1996,7 +2024,7 @@ class _PizzaSaboresSheetState extends State<_PizzaSaboresSheet> {
 
   Future<void> _carregar() async {
     setState(() => _loading = true);
-    final s = await ApiService.getPizzaSabores(widget.idEmpresa);
+    final s = await ApiService.getPizzaSabores(widget.idProduto);
     if (mounted) setState(() { _sabores = s; _loading = false; });
   }
 
@@ -2010,7 +2038,7 @@ class _PizzaSaboresSheetState extends State<_PizzaSaboresSheet> {
     }
     setState(() { _salvando = true; _erro = null; });
     final erro = await ApiService.createPizzaSabor(
-      idEmpresa: widget.idEmpresa, nome: nome, descricao: desc, preco: preco,
+      idProduto: widget.idProduto, nome: nome, descricao: desc, preco: preco,
     );
     if (!mounted) return;
     setState(() => _salvando = false);
@@ -2680,28 +2708,6 @@ class _TabContaState extends State<_TabConta> {
                     title: 'Entrega e preparo',
                     subtitle: 'Taxa mínima: R\$ ${_taxaMinima.toStringAsFixed(2)}  ·  Preparo: $_tempoPreparo min',
                     onTap: _editarConfiguracoes,
-                  ),
-                  Divider(height: 1, indent: 60, color: Colors.grey.shade100),
-
-                  // Sabores de pizza
-                  _SettingsRow(
-                    icon: Icons.local_pizza_outlined,
-                    iconColor: _corDeep,
-                    iconBg: _cor.withValues(alpha: 0.12),
-                    title: 'Sabores de Pizza',
-                    subtitle: 'Cadastre os sabores disponíveis',
-                    onTap: () {
-                      final id = SessionStore.idEmpresa;
-                      if (id == null) return;
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.white,
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                        builder: (_) => _PizzaSaboresSheet(idEmpresa: id),
-                      );
-                    },
                   ),
                   Divider(height: 1, indent: 60, color: Colors.grey.shade100),
 

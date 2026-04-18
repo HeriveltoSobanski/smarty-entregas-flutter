@@ -7,21 +7,21 @@ class PizzaController {
   PizzaController(this.conn);
 
   // ----------------------------------------------------------------
-  // GET /empresas/:id/pizza/sabores
+  // GET /produtos/:id/pizza/sabores
   // ----------------------------------------------------------------
   Future<Response> getSabores(Request request, String id) async {
     try {
-      final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      final idProduto = int.tryParse(id);
+      if (idProduto == null) return _json(400, {'error': 'id invalido'});
 
       final result = await conn.execute(
         Sql.named('''
           SELECT id_sabor, nome, descricao, preco, ativo
           FROM pizza_sabores
-          WHERE id_empresa = @id
+          WHERE id_produto = @id
           ORDER BY nome ASC
         '''),
-        parameters: {'id': idEmpresa},
+        parameters: {'id': idProduto},
       );
 
       final list = result.map((r) => {
@@ -39,33 +39,33 @@ class PizzaController {
   }
 
   // ----------------------------------------------------------------
-  // POST /empresas/:id/pizza/sabores
+  // POST /produtos/:id/pizza/sabores
   // Body: { nome, descricao?, preco }
   // ----------------------------------------------------------------
   Future<Response> createSabor(Request request, String id) async {
     try {
-      final idEmpresa = int.tryParse(id);
-      if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+      final idProduto = int.tryParse(id);
+      if (idProduto == null) return _json(400, {'error': 'id invalido'});
 
       final body = await request.readAsString();
       final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
 
-      final nome     = data['nome']?.toString().trim() ?? '';
+      final nome      = data['nome']?.toString().trim() ?? '';
       final descricao = data['descricao']?.toString().trim() ?? '';
-      final preco    = data['preco'] is num
+      final preco     = data['preco'] is num
           ? (data['preco'] as num).toDouble()
           : double.tryParse(data['preco']?.toString() ?? '') ?? 0.0;
 
-      if (nome.isEmpty) return _json(400, {'error': 'nome é obrigatório'});
+      if (nome.isEmpty) return _json(400, {'error': 'nome e obrigatorio'});
 
       final result = await conn.execute(
         Sql.named('''
-          INSERT INTO pizza_sabores (id_empresa, nome, descricao, preco)
-          VALUES (@id_empresa, @nome, @descricao, @preco)
+          INSERT INTO pizza_sabores (id_produto, nome, descricao, preco)
+          VALUES (@id_produto, @nome, @descricao, @preco)
           RETURNING id_sabor
         '''),
         parameters: {
-          'id_empresa': idEmpresa,
+          'id_produto': idProduto,
           'nome':       nome,
           'descricao':  descricao,
           'preco':      preco,
@@ -85,7 +85,7 @@ class PizzaController {
   Future<Response> updateSabor(Request request, String id) async {
     try {
       final idSabor = int.tryParse(id);
-      if (idSabor == null) return _json(400, {'error': 'id inválido'});
+      if (idSabor == null) return _json(400, {'error': 'id invalido'});
 
       final body = await request.readAsString();
       final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
@@ -132,7 +132,7 @@ class PizzaController {
   Future<Response> deleteSabor(Request request, String id) async {
     try {
       final idSabor = int.tryParse(id);
-      if (idSabor == null) return _json(400, {'error': 'id inválido'});
+      if (idSabor == null) return _json(400, {'error': 'id invalido'});
 
       await conn.execute(
         Sql.named('DELETE FROM pizza_sabores WHERE id_sabor = @id'),

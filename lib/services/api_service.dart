@@ -1121,10 +1121,10 @@ class ApiService {
   // PIZZA — sabores por empresa
   // ----------------------------------------------------------------
 
-  static Future<List<Map<String, dynamic>>> getPizzaSabores(int idEmpresa) async {
+  static Future<List<Map<String, dynamic>>> getPizzaSabores(int idProduto) async {
     try {
       final resp = await http.get(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/pizza/sabores'),
+        Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'),
         headers: _authHeaders,
       );
       if (resp.statusCode == 200) {
@@ -1138,14 +1138,14 @@ class ApiService {
   }
 
   static Future<String?> createPizzaSabor({
-    required int    idEmpresa,
+    required int    idProduto,
     required String nome,
     required String descricao,
     required double preco,
   }) async {
     try {
       final resp = await http.post(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/pizza/sabores'),
+        Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'),
         headers: _authHeaders,
         body: jsonEncode({'nome': nome, 'descricao': descricao, 'preco': preco}),
       );

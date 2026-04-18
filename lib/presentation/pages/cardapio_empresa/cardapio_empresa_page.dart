@@ -102,15 +102,15 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
 
   void _abrirProduto(Map<String, dynamic> produto) async {
     final isPizza = produto['is_pizza'] as bool? ?? false;
-    final idEmpresa = widget.empresa['id_empresa'] is int
-        ? widget.empresa['id_empresa'] as int
-        : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
+    final idProduto = produto['id_produto'] is int
+        ? produto['id_produto'] as int
+        : int.tryParse(produto['id_produto']?.toString() ?? '') ?? 0;
 
     final resultado = await Navigator.push<_ItemCarrinho>(
       context,
       MaterialPageRoute(
         builder: (_) => isPizza
-            ? _PizzaDetalhePage(produto: produto, idEmpresa: idEmpresa)
+            ? _PizzaDetalhePage(produto: produto, idProduto: idProduto)
             : _ProdutoDetalhePage(produto: produto),
         fullscreenDialog: true,
       ),
@@ -1009,8 +1009,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
 // ══════════════════════════════════════════════════════════════════
 class _PizzaDetalhePage extends StatefulWidget {
   final Map<String, dynamic> produto;
-  final int idEmpresa;
-  const _PizzaDetalhePage({required this.produto, required this.idEmpresa});
+  final int idProduto;
+  const _PizzaDetalhePage({required this.produto, required this.idProduto});
 
   @override
   State<_PizzaDetalhePage> createState() => _PizzaDetalhePageState();
@@ -1032,21 +1032,17 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
     return 1;
   }
 
-  double get _precoBase {
-    final v = widget.produto['preco'];
-    return v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
-  }
-
   double get _precoSabores {
     if (_selecionados.isEmpty) return 0;
     final soma = _selecionados.fold(0.0, (acc, s) {
       final p = s['preco'];
       return acc + (p is num ? p.toDouble() : double.tryParse(p?.toString() ?? '') ?? 0.0);
     });
-    return soma / _selecionados.length; // média
+    return soma / _selecionados.length; // média dos sabores
   }
 
-  double get _precoTotal => (_precoBase + _precoSabores) * _quantidade;
+  // Para pizza, preço = apenas média dos sabores (sem base)
+  double get _precoTotal => _precoSabores * _quantidade;
 
   bool get _podePedir => _selecionados.isNotEmpty;
 
@@ -1063,7 +1059,7 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
   }
 
   Future<void> _carregar() async {
-    final sabores = await ApiService.getPizzaSabores(widget.idEmpresa);
+    final sabores = await ApiService.getPizzaSabores(widget.idProduto);
     if (mounted) {
       setState(() {
         _sabores = sabores.where((s) => s['ativo'] as bool? ?? true).toList();
@@ -1167,8 +1163,12 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                             style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5)),
                       ],
                       const SizedBox(height: 8),
-                      Text('A partir de R\$ ${_precoBase.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _primary)),
+                      Text(
+                        _selecionados.isEmpty
+                            ? 'Preço definido pelo sabor'
+                            : 'R\$ ${_precoTotal.toStringAsFixed(2)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _primary),
+                      ),
                     ],
                   ),
                 ),
