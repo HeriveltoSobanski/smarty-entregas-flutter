@@ -1,9 +1,104 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../data/session_store.dart';
+import 'push_notification_service.dart';
 
 class ApiService {
+  // ----------------------------------------------------------------
+  // TOKEN HELPERS
+  // ----------------------------------------------------------------
+
+  static bool _isTokenExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      var payload = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      switch (payload.length % 4) {
+        case 2:
+          payload += '==';
+          break;
+        case 3:
+          payload += '=';
+          break;
+      }
+      final decoded = utf8.decode(base64.decode(payload));
+      final map = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = map['exp'] as int?;
+      if (exp == null) return false;
+      return DateTime.now()
+          .isAfter(DateTime.fromMillisecondsSinceEpoch(exp * 1000));
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<void> _handleUnauthorized() async {
+    await SessionStore.logout();
+    PushNotificationService.navigatorKey.currentState
+        ?.pushNamedAndRemoveUntil('/login', (_) => false);
+  }
+
+  // Wrappers que checam expiração antes e 401 depois.
+  static Future<http.Response> _get(Uri uri) async {
+    final token = SessionStore.token;
+    if (token != null && _isTokenExpired(token)) {
+      await _handleUnauthorized();
+      throw Exception('Sessão expirada');
+    }
+    final resp = await _get(uri);
+    if (resp.statusCode == 401) await _handleUnauthorized();
+    return resp;
+  }
+
+  static Future<http.Response> _post(Uri uri, {Object? body}) async {
+    final token = SessionStore.token;
+    if (token != null && _isTokenExpired(token)) {
+      await _handleUnauthorized();
+      throw Exception('Sessão expirada');
+    }
+    final resp =
+        await http.post(uri, headers: _authHeaders, body: body);
+    if (resp.statusCode == 401) await _handleUnauthorized();
+    return resp;
+  }
+
+  static Future<http.Response> _put(Uri uri, {Object? body}) async {
+    final token = SessionStore.token;
+    if (token != null && _isTokenExpired(token)) {
+      await _handleUnauthorized();
+      throw Exception('Sessão expirada');
+    }
+    final resp =
+        await http.put(uri, headers: _authHeaders, body: body);
+    if (resp.statusCode == 401) await _handleUnauthorized();
+    return resp;
+  }
+
+  static Future<http.Response> _patch(Uri uri, {Object? body}) async {
+    final token = SessionStore.token;
+    if (token != null && _isTokenExpired(token)) {
+      await _handleUnauthorized();
+      throw Exception('Sessão expirada');
+    }
+    final resp =
+        await http.patch(uri, headers: _authHeaders, body: body);
+    if (resp.statusCode == 401) await _handleUnauthorized();
+    return resp;
+  }
+
+  static Future<http.Response> _delete(Uri uri) async {
+    final token = SessionStore.token;
+    if (token != null && _isTokenExpired(token)) {
+      await _handleUnauthorized();
+      throw Exception('Sessão expirada');
+    }
+    final resp = await http.delete(uri, headers: _authHeaders);
+    if (resp.statusCode == 401) await _handleUnauthorized();
+    return resp;
+  }
+
+
   // URL configurada via --dart-define=API_URL=http://...
   // Padrão: IP local de desenvolvimento
   static const String baseUrl = String.fromEnvironment(
@@ -141,10 +236,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getCategorias() async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/produtos/categorias'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/produtos/categorias'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['categorias'] ?? []);
@@ -162,10 +254,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getProdutosByEmpresa(
       int idEmpresa) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/produtos/empresa?id_empresa=$idEmpresa'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/produtos/empresa?id_empresa=$idEmpresa'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['produtos'] ?? []);
@@ -185,7 +274,7 @@ class ApiService {
               '$baseUrl/produtos/publico?categoria=${Uri.encodeComponent(categoria)}')
           : Uri.parse('$baseUrl/produtos/publico');
 
-      final resp = await http.get(uri, headers: _authHeaders);
+      final resp = await _get(uri);
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['produtos'] ?? []);
@@ -220,11 +309,7 @@ class ApiService {
       };
       if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
 
-      final resp = await http.post(
-        Uri.parse('$baseUrl/produtos'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _post(Uri.parse('$baseUrl/produtos'), body: jsonEncode(body));
 
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -257,11 +342,7 @@ class ApiService {
       };
       if (imagem != null && imagem.isNotEmpty) body['imagem'] = imagem;
 
-      final resp = await http.put(
-        Uri.parse('$baseUrl/produtos/$idProduto'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _put(Uri.parse('$baseUrl/produtos/$idProduto'), body: jsonEncode(body));
 
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -273,19 +354,13 @@ class ApiService {
 
   static Future<void> deleteProduto(int idProduto) async {
     try {
-      await http.delete(
-        Uri.parse('$baseUrl/produtos/$idProduto'),
-        headers: _authHeaders,
-      );
+      await _delete(Uri.parse('$baseUrl/produtos/$idProduto'));
     } catch (_) {}
   }
 
   static Future<void> toggleProdutoAtivo(int idProduto) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/produtos/$idProduto/ativo'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/produtos/$idProduto/ativo'));
     } catch (_) {}
   }
 
@@ -297,7 +372,7 @@ class ApiService {
     try {
       final uri = Uri.parse(
           '$baseUrl/produtos/busca?q=${Uri.encodeComponent(termo)}');
-      final resp = await http.get(uri, headers: _authHeaders);
+      final resp = await _get(uri);
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['empresas'] ?? []);
@@ -314,10 +389,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getPedidoDetalhes(int idPedido) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/pedidos/$idPedido/detalhes'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/pedidos/$idPedido/detalhes'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return data['pedido'] as Map<String, dynamic>?;
@@ -341,10 +413,7 @@ class ApiService {
     double taxaEntrega = 0.0,
   }) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/pedidos'),
-        headers: _authHeaders,
-        body: jsonEncode({
+      final resp = await _post(Uri.parse('$baseUrl/pedidos'), body: jsonEncode({
           'id_usuario':       idUsuario,
           'id_empresa':       idEmpresa,
           'itens':            itens,
@@ -353,8 +422,7 @@ class ApiService {
           'taxa_entrega':     taxaEntrega,
           if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
           if (trocoPara != null) 'troco_para': trocoPara,
-        }),
-      );
+        }));
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode == 201) {
         return {'id_pedido': data['id_pedido'] as int};
@@ -368,10 +436,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getPedidosByCliente(
       int idUsuario) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/pedidos/cliente?id_usuario=$idUsuario'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/pedidos/cliente?id_usuario=$idUsuario'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -384,11 +449,7 @@ class ApiService {
 
   static Future<void> atualizarStatusPedido(int idPedido, int idStatus) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/pedidos/$idPedido/status'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_status': idStatus}),
-      );
+      await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/status'), body: jsonEncode({'id_status': idStatus}));
     } catch (_) {}
   }
 
@@ -404,7 +465,7 @@ class ApiService {
           ? Uri.parse(
               '$baseUrl/produtos/empresas?categoria=${Uri.encodeComponent(categoria)}')
           : Uri.parse('$baseUrl/produtos/empresas');
-      final resp = await http.get(uri, headers: _authHeaders);
+      final resp = await _get(uri);
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['empresas'] ?? []);
@@ -421,10 +482,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getAdicionais(int idProduto) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/produtos/$idProduto/adicionais'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/produtos/$idProduto/adicionais'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['grupos'] ?? []);
@@ -445,18 +503,14 @@ class ApiService {
     required double preco,
   }) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/produtos/$idProduto/adicionais'),
-        headers: _authHeaders,
-        body: jsonEncode({
+      final resp = await _post(Uri.parse('$baseUrl/produtos/$idProduto/adicionais'), body: jsonEncode({
           'grupo':        grupo,
           'maximo_grupo': maximoGrupo,
           'obrigatorio':  obrigatorio,
           'nome':         nome,
           'descricao':    descricao,
           'preco':        preco,
-        }),
-      );
+        }));
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar adicional';
@@ -467,10 +521,7 @@ class ApiService {
 
   static Future<void> deleteAdicional(int idAdicional) async {
     try {
-      await http.delete(
-        Uri.parse('$baseUrl/adicionais/$idAdicional'),
-        headers: _authHeaders,
-      );
+      await _delete(Uri.parse('$baseUrl/adicionais/$idAdicional'));
     } catch (_) {}
   }
 
@@ -481,10 +532,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getEnderecosCliente(
       int idUsuario) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['enderecos'] ?? []);
@@ -503,16 +551,12 @@ class ApiService {
     double? longitude,
   }) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'),
-        headers: _authHeaders,
-        body: jsonEncode({
+      final resp = await _post(Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'), body: jsonEncode({
           'apelido':   apelido,
           'endereco':  endereco,
           'latitude':  latitude,
           'longitude': longitude,
-        }),
-      );
+        }));
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar endereço';
@@ -523,19 +567,13 @@ class ApiService {
 
   static Future<void> deletarEnderecoCliente(int idEndereco) async {
     try {
-      await http.delete(
-        Uri.parse('$baseUrl/clientes/enderecos/$idEndereco'),
-        headers: _authHeaders,
-      );
+      await _delete(Uri.parse('$baseUrl/clientes/enderecos/$idEndereco'));
     } catch (_) {}
   }
 
   static Future<void> marcarEnderecoClientePrincipal(int idEndereco) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/clientes/enderecos/$idEndereco/principal'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/clientes/enderecos/$idEndereco/principal'));
     } catch (_) {}
   }
 
@@ -545,10 +583,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getEnderecoEmpresa(int idEmpresa) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -561,15 +596,11 @@ class ApiService {
   static Future<String?> atualizarEnderecoEmpresa(
       int idEmpresa, String endereco, double lat, double lng) async {
     try {
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'),
-        headers: _authHeaders,
-        body: jsonEncode({
+      final resp = await _patch(Uri.parse('$baseUrl/empresas/$idEmpresa/endereco'), body: jsonEncode({
           'endereco':  endereco,
           'latitude':  lat,
           'longitude': lng,
-        }),
-      );
+        }));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar endereço';
@@ -580,10 +611,7 @@ class ApiService {
 
   static Future<Map<String, String?>> getFotosEmpresa(int idEmpresa) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/foto'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return {
@@ -610,11 +638,7 @@ class ApiService {
       if (fotoCapa != null && fotoCapa.isNotEmpty) {
         body['foto_capa'] = fotoCapa;
       }
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/foto'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/empresas/$idEmpresa/foto'), body: jsonEncode(body));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar foto';
@@ -629,10 +653,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getConfiguracoes(int idEmpresa) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -648,11 +669,7 @@ class ApiService {
       final body = <String, dynamic>{};
       if (taxaMinima  != null) body['taxa_minima']   = taxaMinima;
       if (tempoPreparo != null) body['tempo_preparo'] = tempoPreparo;
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/empresas/$idEmpresa/configuracoes'), body: jsonEncode(body));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar configurações';
@@ -667,10 +684,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getMotoboyCount() async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/motoboys/count'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/motoboys/count'));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -683,21 +697,14 @@ class ApiService {
   static Future<void> atualizarMeuStatusMotoboy(
       int idMotoboy, String status) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/motoboy/meu-status'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_motoboy': idMotoboy, 'status': status}),
-      );
+      await _patch(Uri.parse('$baseUrl/motoboy/meu-status'), body: jsonEncode({'id_motoboy': idMotoboy, 'status': status}));
     } catch (_) {}
   }
 
   static Future<List<Map<String, dynamic>>> getEntregasEmRota(
       int idMotoboy) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/motoboy/em-rota?id_motoboy=$idMotoboy'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/motoboy/em-rota?id_motoboy=$idMotoboy'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -710,19 +717,13 @@ class ApiService {
 
   static Future<void> marcarQuasePronto(int idPedido) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/pedidos/$idPedido/quase-pronto'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/quase-pronto'));
     } catch (_) {}
   }
 
   static Future<String?> chamarMotoboy(int idPedido) async {
     try {
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/pedidos/$idPedido/chamar-motoboy'),
-        headers: _authHeaders,
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/chamar-motoboy'));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro';
@@ -733,19 +734,13 @@ class ApiService {
 
   static Future<void> entregaPropria(int idPedido) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria'));
     } catch (_) {}
   }
 
   static Future<List<Map<String, dynamic>>> getEntregasDisponiveis() async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/motoboy/disponiveis'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/motoboy/disponiveis'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -759,10 +754,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getMinhasEntregas(
       int idMotoboy) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/motoboy/minhas?id_motoboy=$idMotoboy'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/motoboy/minhas?id_motoboy=$idMotoboy'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -776,11 +768,7 @@ class ApiService {
   static Future<String?> aceitarEntrega(
       {required int idPedido, required int idMotoboy}) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/motoboy/aceitar'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_pedido': idPedido, 'id_motoboy': idMotoboy}),
-      );
+      final resp = await _post(Uri.parse('$baseUrl/motoboy/aceitar'), body: jsonEncode({'id_pedido': idPedido, 'id_motoboy': idMotoboy}));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao aceitar entrega';
@@ -792,11 +780,7 @@ class ApiService {
   static Future<void> atualizarStatusMotoboy(
       int idPedido, int idStatus) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/motoboy/status'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_pedido': idPedido, 'id_status': idStatus}),
-      );
+      await _patch(Uri.parse('$baseUrl/motoboy/status'), body: jsonEncode({'id_pedido': idPedido, 'id_status': idStatus}));
     } catch (_) {}
   }
 
@@ -805,7 +789,7 @@ class ApiService {
     try {
       String url = '$baseUrl/motoboy/historico?id_motoboy=$idMotoboy';
       if (inicio != null && fim != null) url += '&inicio=$inicio&fim=$fim';
-      final resp = await http.get(Uri.parse(url), headers: _authHeaders);
+      final resp = await _get(Uri.parse(url));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -827,7 +811,7 @@ class ApiService {
     try {
       String url = '$baseUrl/pedidos/empresa?id_empresa=$idEmpresa';
       if (inicio != null && fim != null) url += '&inicio=$inicio&fim=$fim';
-      final resp = await http.get(Uri.parse(url), headers: _authHeaders);
+      final resp = await _get(Uri.parse(url));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -856,7 +840,7 @@ class ApiService {
         '&destLat=$destLat'
         '&destLng=$destLng',
       );
-      final resp = await http.get(uri, headers: _authHeaders);
+      final resp = await _get(uri);
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -872,10 +856,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getMotoboysDaEmpresa(int idEmpresa) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['motoboys'] ?? []);
@@ -890,10 +871,7 @@ class ApiService {
   /// Retorna null se não encontrado ou erro.
   static Future<Map<String, dynamic>?> buscarMotoboyPorId(int id) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/motoboys/buscar?id=$id'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/motoboys/buscar?id=$id'));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -908,11 +886,7 @@ class ApiService {
     required int idUsuario,
   }) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_usuario': idUsuario}),
-      );
+      final resp = await _post(Uri.parse('$baseUrl/empresas/$idEmpresa/motoboys'), body: jsonEncode({'id_usuario': idUsuario}));
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao cadastrar motoboy';
@@ -923,10 +897,7 @@ class ApiService {
 
   static Future<void> deletarMotoboyEmpresa(int id) async {
     try {
-      await http.delete(
-        Uri.parse('$baseUrl/empresas/motoboys/$id'),
-        headers: _authHeaders,
-      );
+      await _delete(Uri.parse('$baseUrl/empresas/motoboys/$id'));
     } catch (_) {}
   }
 
@@ -935,11 +906,7 @@ class ApiService {
     required int idMotoboyEmpresa,
   }) async {
     try {
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria-motoboy'),
-        headers: _authHeaders,
-        body: jsonEncode({'id_motoboy_empresa': idMotoboyEmpresa}),
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria-motoboy'), body: jsonEncode({'id_motoboy_empresa': idMotoboyEmpresa}));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atribuir motoboy';
@@ -954,10 +921,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getNotificacoes(int idUsuario) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/notificacoes?id_usuario=$idUsuario'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/notificacoes?id_usuario=$idUsuario'));
       if (resp.statusCode != 200) return [];
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return List<Map<String, dynamic>>.from(data['notificacoes'] ?? []);
@@ -968,10 +932,7 @@ class ApiService {
 
   static Future<int> getNotificacoesNaoLidas(int idUsuario) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/notificacoes/nao-lidas?id_usuario=$idUsuario'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/notificacoes/nao-lidas?id_usuario=$idUsuario'));
       if (resp.statusCode != 200) return 0;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return (data['total'] as num?)?.toInt() ?? 0;
@@ -982,19 +943,13 @@ class ApiService {
 
   static Future<void> marcarNotificacaoLida(int idNotificacao) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/notificacoes/$idNotificacao/lida'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/notificacoes/$idNotificacao/lida'));
     } catch (_) {}
   }
 
   static Future<void> marcarTodasNotificacoesLidas(int idUsuario) async {
     try {
-      await http.patch(
-        Uri.parse('$baseUrl/notificacoes/todas-lidas?id_usuario=$idUsuario'),
-        headers: _authHeaders,
-      );
+      await _patch(Uri.parse('$baseUrl/notificacoes/todas-lidas?id_usuario=$idUsuario'));
     } catch (_) {}
   }
 
@@ -1005,10 +960,7 @@ class ApiService {
   /// Retorna { nome, email, telefone } ou null em caso de erro.
   static Future<Map<String, dynamic>?> getPerfil(int idUsuario) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'));
       if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
       return null;
     } catch (_) {
@@ -1033,11 +985,7 @@ class ApiService {
         if (novaSenha != null) 'nova_senha': novaSenha,
         if (senhaAtual!= null) 'senha_atual': senhaAtual,
       };
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'), body: jsonEncode(body));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atualizar perfil';
@@ -1085,11 +1033,7 @@ class ApiService {
         if (embalagem != null) 'embalagem':        embalagem,
         if (pedidoCorreto != null) 'pedido_correto': pedidoCorreto,
       };
-      final resp = await http.post(
-        Uri.parse('$baseUrl/avaliacoes'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _post(Uri.parse('$baseUrl/avaliacoes'), body: jsonEncode(body));
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao enviar avaliação';
@@ -1104,10 +1048,7 @@ class ApiService {
     required int idUsuario,
   }) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/pedidos/$idPedido/avaliacao?id_usuario=$idUsuario'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/pedidos/$idPedido/avaliacao?id_usuario=$idUsuario'));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
@@ -1123,10 +1064,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getPizzaSabores(int idProduto) async {
     try {
-      final resp = await http.get(
-        Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'),
-        headers: _authHeaders,
-      );
+      final resp = await _get(Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['sabores'] ?? []);
@@ -1144,11 +1082,7 @@ class ApiService {
     required double preco,
   }) async {
     try {
-      final resp = await http.post(
-        Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'),
-        headers: _authHeaders,
-        body: jsonEncode({'nome': nome, 'descricao': descricao, 'preco': preco}),
-      );
+      final resp = await _post(Uri.parse('$baseUrl/produtos/$idProduto/pizza/sabores'), body: jsonEncode({'nome': nome, 'descricao': descricao, 'preco': preco}));
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar sabor';
@@ -1171,11 +1105,7 @@ class ApiService {
         if (preco     != null) 'preco':     preco,
         if (ativo     != null) 'ativo':     ativo,
       };
-      final resp = await http.patch(
-        Uri.parse('$baseUrl/pizza/sabores/$idSabor'),
-        headers: _authHeaders,
-        body: jsonEncode(body),
-      );
+      final resp = await _patch(Uri.parse('$baseUrl/pizza/sabores/$idSabor'), body: jsonEncode(body));
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atualizar sabor';
@@ -1186,10 +1116,7 @@ class ApiService {
 
   static Future<void> deletePizzaSabor(int idSabor) async {
     try {
-      await http.delete(
-        Uri.parse('$baseUrl/pizza/sabores/$idSabor'),
-        headers: _authHeaders,
-      );
+      await _delete(Uri.parse('$baseUrl/pizza/sabores/$idSabor'));
     } catch (_) {}
   }
 
@@ -1270,15 +1197,11 @@ class ApiService {
     final idUsuario = SessionStore.idUsuario;
     if (idUsuario == null) return;
     try {
-      await http.post(
-        Uri.parse('$baseUrl/dispositivos/fcm-token'),
-        headers: _authHeaders,
-        body: jsonEncode({
+      await _post(Uri.parse('$baseUrl/dispositivos/fcm-token'), body: jsonEncode({
           'id_usuario': idUsuario,
           'fcm_token':  token,
           'plataforma': plataforma,
-        }),
-      );
+        }));
     } catch (_) {}
   }
 }

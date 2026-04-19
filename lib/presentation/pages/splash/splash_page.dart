@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../data/auth_storage.dart';
@@ -39,18 +40,41 @@ class _SplashPageState extends State<SplashPage>
     ]);
   }
 
+  static bool _isTokenExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      var payload = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      switch (payload.length % 4) {
+        case 2:
+          payload += '==';
+          break;
+        case 3:
+          payload += '=';
+          break;
+      }
+      final map = jsonDecode(utf8.decode(base64.decode(payload))) as Map<String, dynamic>;
+      final exp = map['exp'] as int?;
+      if (exp == null) return false;
+      return DateTime.now().isAfter(DateTime.fromMillisecondsSinceEpoch(exp * 1000));
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _tryAutoLogin() async {
     final saved = await AuthStorage.load();
     if (!mounted) return;
 
-    if (saved != null && (saved['token'] as String).isNotEmpty) {
+    final token = saved != null ? (saved['token'] as String?) ?? '' : '';
+    if (saved != null && token.isNotEmpty && !_isTokenExpired(token)) {
       SessionStore.set(
         idUsuario:   saved['idUsuario'] as int,
         email:       saved['email']    as String,
         nome:        saved['nome']     as String,
         tipoUsuario: saved['tipoUsuario'] as String,
         idEmpresa:   saved['idEmpresa']  as int?,
-        token:       saved['token']      as String,
+        token:       token,
       );
 
       PushNotificationService.registrarAposLogin();
@@ -63,6 +87,8 @@ class _SplashPageState extends State<SplashPage>
         Navigator.of(context).pushReplacementNamed('/home');
       }
     } else {
+      if (saved != null) await AuthStorage.clear();
+      if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }
