@@ -3,6 +3,7 @@ import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
 import '../detalhes_pedido/detalhes_pedido_page.dart';
 import '../acompanhamento_pedido/acompanhamento_pedido_page.dart';
+import '../../widgets/offline_banner.dart';
 
 const Color _laranja = Color(0xFFF5841F);
 
@@ -18,6 +19,7 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
   bool _loading = true;
   bool _carregandoMais = false;
   bool _temMais = false;
+  bool _fromCache = false;
   int _pagina = 1;
   String? _erro;
   final ScrollController _scroll = ScrollController();
@@ -55,6 +57,7 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
       setState(() {
         _pedidos = res.pedidos;
         _temMais = res.temMais;
+        _fromCache = res.fromCache;
         _loading = false;
       });
     }
@@ -119,20 +122,36 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _laranja))
-          : _erro != null
-              ? Center(child: Text(_erro!, style: const TextStyle(color: Colors.red)))
-              : _pedidos.isEmpty
-                  ? Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.receipt_long_outlined, size: 80, color: Colors.grey.shade300),
-                        const SizedBox(height: 16),
-                        Text('Nenhum pedido ainda',
-                            style: TextStyle(fontSize: 18, color: Colors.grey.shade500)),
-                      ]),
-                    )
-                  : RefreshIndicator(
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          if (_fromCache)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFFFF3E0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: const Row(children: [
+                Icon(Icons.info_outline, size: 14, color: Color(0xFFE65100)),
+                SizedBox(width: 6),
+                Text('Dados salvos — puxe para atualizar',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFE65100))),
+              ]),
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: _laranja))
+                : _erro != null
+                    ? Center(child: Text(_erro!, style: const TextStyle(color: Colors.red)))
+                    : _pedidos.isEmpty
+                        ? Center(
+                            child: Column(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.receipt_long_outlined, size: 80, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              Text('Nenhum pedido ainda',
+                                  style: TextStyle(fontSize: 18, color: Colors.grey.shade500)),
+                            ]),
+                          )
+                        : RefreshIndicator(
                       onRefresh: _carregar,
                       color: _laranja,
                       child: ListView.builder(
@@ -241,6 +260,9 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                         },
                       ),
                     ),
+          ),    // Expanded
+        ],      // Column
+      ),        // body
     );
   }
 }

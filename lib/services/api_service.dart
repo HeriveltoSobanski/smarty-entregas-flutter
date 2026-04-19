@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../data/session_store.dart';
+import '../data/cache_store.dart';
 import 'push_notification_service.dart';
 
 class ApiService {
@@ -46,7 +47,7 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp = await _get(uri);
+    final resp = await http.get(uri, headers: _authHeaders);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -433,23 +434,36 @@ class ApiService {
     }
   }
 
-  static Future<({List<Map<String, dynamic>> pedidos, bool temMais})>
+  static Future<({List<Map<String, dynamic>> pedidos, bool temMais, bool fromCache})>
       getPedidosByCliente(int idUsuario,
           {int pagina = 1, int limite = 20}) async {
+    const cacheKey = 'pedidos_cliente_p1';
     try {
       final resp = await _get(Uri.parse(
           '$baseUrl/pedidos/cliente?id_usuario=$idUsuario&pagina=$pagina&limite=$limite'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final lista = List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+        if (pagina == 1) await CacheStore.save(cacheKey, lista);
         return (
-          pedidos: List<Map<String, dynamic>>.from(data['pedidos'] ?? []),
+          pedidos: lista,
           temMais: data['tem_mais'] as bool? ?? false,
+          fromCache: false,
         );
       }
-      return (pedidos: <Map<String, dynamic>>[], temMais: false);
-    } catch (_) {
-      return (pedidos: <Map<String, dynamic>>[], temMais: false);
+    } catch (_) {}
+
+    if (pagina == 1) {
+      final cached = await CacheStore.load<List>(cacheKey);
+      if (cached != null) {
+        return (
+          pedidos: cached.cast<Map<String, dynamic>>(),
+          temMais: false,
+          fromCache: true,
+        );
+      }
     }
+    return (pedidos: <Map<String, dynamic>>[], temMais: false, fromCache: false);
   }
 
   static Future<void> atualizarStatusPedido(int idPedido, int idStatus) async {
@@ -462,9 +476,9 @@ class ApiService {
   // EMPRESAS COM PRODUTOS
   // ----------------------------------------------------------------
 
-  static Future<List<Map<String, dynamic>>> getEmpresasComProdutos({
-    String? categoria,
-  }) async {
+  static Future<({List<Map<String, dynamic>> empresas, bool fromCache})>
+      getEmpresasComProdutos({String? categoria}) async {
+    final cacheKey = 'empresas_${categoria ?? 'todos'}';
     try {
       final uri = categoria != null && categoria.isNotEmpty
           ? Uri.parse(
@@ -473,12 +487,20 @@ class ApiService {
       final resp = await _get(uri);
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        return List<Map<String, dynamic>>.from(data['empresas'] ?? []);
+        final lista = List<Map<String, dynamic>>.from(data['empresas'] ?? []);
+        await CacheStore.save(cacheKey, lista);
+        return (empresas: lista, fromCache: false);
       }
-      return [];
-    } catch (_) {
-      return [];
+    } catch (_) {}
+
+    final cached = await CacheStore.load<List>(cacheKey);
+    if (cached != null) {
+      return (
+        empresas: cached.cast<Map<String, dynamic>>(),
+        fromCache: true,
+      );
     }
+    return (empresas: <Map<String, dynamic>>[], fromCache: false);
   }
 
   // ----------------------------------------------------------------

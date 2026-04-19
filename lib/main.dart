@@ -10,11 +10,13 @@ import 'presentation/pages/trabalhe_conosco/trabalhe_conosco_page.dart';
 import 'presentation/pages/pagina_esqueci_senha/pagina_esqueci_senha.dart';
 import 'core/theme/app_theme.dart';
 import 'services/push_notification_service.dart';
+import 'services/connectivity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await PushNotificationService.init();
+  await ConnectivityService.instance.init();
   runApp(const MyApp());
 }
 

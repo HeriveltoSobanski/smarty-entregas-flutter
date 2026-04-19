@@ -12,6 +12,7 @@ import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
 import '../notificacoes/notificacoes_page.dart';
 import '../../../data/favoritos_store.dart';
+import '../../widgets/offline_banner.dart';
 
 const Color _primary = Color(0xFFF5841F);
 const Color _bg = Color(0xFFF5F5F5);
@@ -156,6 +157,7 @@ class _HomeContent extends StatefulWidget {
 class _HomeContentState extends State<_HomeContent> {
   List<Map<String, dynamic>> _empresas = [];
   bool _loading = true;
+  bool _fromCache = false;
   String _categoriaFiltro = '';
   String _labelEntrega = '';
   Set<int> _favoritos = {};
@@ -205,26 +207,35 @@ class _HomeContentState extends State<_HomeContent> {
   Future<void> _carregar() async {
     setState(() => _loading = true);
     final id = SessionStore.idUsuario;
-    final results = await Future.wait([
-      ApiService.getEmpresasComProdutos(
-        categoria: _categoriaFiltro.isEmpty ? null : _categoriaFiltro,
-      ),
-      if (id != null) ApiService.getEnderecosCliente(id),
-    ]);
+
+    final empresasFuture = ApiService.getEmpresasComProdutos(
+      categoria: _categoriaFiltro.isEmpty ? null : _categoriaFiltro,
+    );
+    final enderecosFuture =
+        id != null ? ApiService.getEnderecosCliente(id) : Future.value(<Map<String, dynamic>>[]);
+
+    final results = await Future.wait([empresasFuture, enderecosFuture]);
     if (!mounted) return;
-    final lista = results[0];
-    if (id != null && results.length > 1) {
-      final enderecos = results[1];
-      if (enderecos.isNotEmpty) {
-        final principal = enderecos.firstWhere(
-          (e) => e['principal'] == true,
-          orElse: () => enderecos.first,
-        );
-        final apelido = (principal['apelido'] ?? '').toString().trim();
-        _labelEntrega = apelido.isNotEmpty ? apelido : 'Meu endereço';
-      }
+
+    final empresasResult =
+        results[0] as ({List<Map<String, dynamic>> empresas, bool fromCache});
+    final enderecos =
+        results[1] as List<Map<String, dynamic>>;
+
+    if (enderecos.isNotEmpty) {
+      final principal = enderecos.firstWhere(
+        (e) => e['principal'] == true,
+        orElse: () => enderecos.first,
+      );
+      final apelido = (principal['apelido'] ?? '').toString().trim();
+      _labelEntrega = apelido.isNotEmpty ? apelido : 'Meu endereço';
     }
-    setState(() { _empresas = lista; _loading = false; });
+
+    setState(() {
+      _empresas = empresasResult.empresas;
+      _fromCache = empresasResult.fromCache;
+      _loading = false;
+    });
   }
 
   @override
@@ -232,7 +243,23 @@ class _HomeContentState extends State<_HomeContent> {
     return Scaffold(
       backgroundColor: _bg,
       appBar: _buildAppBar(context),
-      body: RefreshIndicator(
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          if (_fromCache)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFFFF3E0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: const Row(children: [
+                Icon(Icons.info_outline, size: 14, color: Color(0xFFE65100)),
+                SizedBox(width: 6),
+                Text('Dados salvos — puxe para atualizar',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFE65100))),
+              ]),
+            ),
+          Expanded(
+            child: RefreshIndicator(
         color: _primary,
         onRefresh: _carregar,
         child: CustomScrollView(
@@ -332,6 +359,9 @@ class _HomeContentState extends State<_HomeContent> {
           ],
         ),
       ),
+          ),  // Expanded
+        ],    // Column
+      ),      // body
     );
   }
 
