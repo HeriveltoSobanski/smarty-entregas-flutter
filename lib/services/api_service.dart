@@ -1258,4 +1258,27 @@ class ApiService {
       return 'Servidor indisponível.';
     }
   }
+
+  // ----------------------------------------------------------------
+  // FCM TOKEN
+  // ----------------------------------------------------------------
+
+  static Future<void> registrarFcmToken({
+    required String token,
+    required String plataforma,
+  }) async {
+    final idUsuario = SessionStore.idUsuario;
+    if (idUsuario == null) return;
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/dispositivos/fcm-token'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'id_usuario': idUsuario,
+          'fcm_token':  token,
+          'plataforma': plataforma,
+        }),
+      );
+    } catch (_) {}
+  }
 }

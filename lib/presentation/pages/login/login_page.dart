@@ -6,6 +6,7 @@ import '../trabalhe_conosco/trabalhe_conosco_page.dart';
 import '../pagina_esqueci_senha/pagina_esqueci_senha.dart';
 import '../../../services/api_service.dart';
 import '../../../services/social_auth_service.dart';
+import '../../../services/push_notification_service.dart';
 import '../../../data/session_store.dart';
 import '../../../data/auth_storage.dart';
 
@@ -100,6 +101,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
       );
     }
 
+    PushNotificationService.registrarAposLogin();
     if (!mounted) return;
     if (tipoUsuario == 'empresa') {
       Navigator.pushReplacementNamed(context, '/empresa');
@@ -139,6 +141,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
         idEmpresa:   idEmpresa > 0 ? idEmpresa : null,
       );
     }
+    PushNotificationService.registrarAposLogin();
     if (!mounted) return;
     if (tipoUsuario == 'empresa') {
       Navigator.pushReplacementNamed(context, '/empresa');

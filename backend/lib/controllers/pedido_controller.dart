@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'notificacao_controller.dart';
+import '../services/fcm_service.dart';
 
 class PedidoController {
   final Connection conn;
+  final FcmService? fcmService;
 
-  PedidoController(this.conn);
+  PedidoController(this.conn, {this.fcmService});
 
   // ----------------------------------------------------------------
   // GET /pedidos/empresa?id_empresa=X&inicio=YYYY-MM-DD&fim=YYYY-MM-DD
@@ -244,12 +246,13 @@ class PedidoController {
         final msg = _msgStatus(novoStatus, idPedido);
         if (msg != null) {
           await NotificacaoController.criar(
-            conn:      conn,
-            idUsuario: idUsuario,
-            titulo:    msg.$1,
-            corpo:     msg.$2,
-            tipo:      'status_pedido',
-            idPedido:  idPedido,
+            conn:       conn,
+            idUsuario:  idUsuario,
+            titulo:     msg.$1,
+            corpo:      msg.$2,
+            tipo:       'status_pedido',
+            idPedido:   idPedido,
+            fcmService: fcmService,
           );
         }
       }
@@ -276,12 +279,13 @@ class PedidoController {
       final idUsuario = await _idUsuarioDoPedido(idPedido);
       if (idUsuario != null) {
         await NotificacaoController.criar(
-          conn:      conn,
-          idUsuario: idUsuario,
-          titulo:    'Pedido quase pronto! 🍽️',
-          corpo:     'Seu pedido #$idPedido está quase pronto. O entregador será chamado em breve.',
-          tipo:      'status_pedido',
-          idPedido:  idPedido,
+          conn:       conn,
+          idUsuario:  idUsuario,
+          titulo:     'Pedido quase pronto! 🍽️',
+          corpo:      'Seu pedido #$idPedido está quase pronto. O entregador será chamado em breve.',
+          tipo:       'status_pedido',
+          idPedido:   idPedido,
+          fcmService: fcmService,
         );
       }
 
@@ -311,12 +315,13 @@ class PedidoController {
       final idUsuario = await _idUsuarioDoPedido(idPedido);
       if (idUsuario != null) {
         await NotificacaoController.criar(
-          conn:      conn,
-          idUsuario: idUsuario,
-          titulo:    'Entregador a caminho! 🛵',
-          corpo:     'Estamos buscando um entregador para o seu pedido #$idPedido.',
-          tipo:      'motoboy',
-          idPedido:  idPedido,
+          conn:       conn,
+          idUsuario:  idUsuario,
+          titulo:     'Entregador a caminho! 🛵',
+          corpo:      'Estamos buscando um entregador para o seu pedido #$idPedido.',
+          tipo:       'motoboy',
+          idPedido:   idPedido,
+          fcmService: fcmService,
         );
       }
 
@@ -346,12 +351,13 @@ class PedidoController {
       final idUsuario = await _idUsuarioDoPedido(idPedido);
       if (idUsuario != null) {
         await NotificacaoController.criar(
-          conn:      conn,
-          idUsuario: idUsuario,
-          titulo:    'Pedido saiu para entrega! 🏍️',
-          corpo:     'Seu pedido #$idPedido está a caminho. Fique de olho!',
-          tipo:      'status_pedido',
-          idPedido:  idPedido,
+          conn:       conn,
+          idUsuario:  idUsuario,
+          titulo:     'Pedido saiu para entrega! 🏍️',
+          corpo:      'Seu pedido #$idPedido está a caminho. Fique de olho!',
+          tipo:       'status_pedido',
+          idPedido:   idPedido,
+          fcmService: fcmService,
         );
       }
 

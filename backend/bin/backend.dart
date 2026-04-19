@@ -21,6 +21,8 @@ import 'package:backend/controllers/empresa_motoboy_controller.dart';
 import 'package:backend/controllers/avaliacao_controller.dart';
 import 'package:backend/controllers/notificacao_controller.dart';
 import 'package:backend/controllers/pizza_controller.dart';
+import 'package:backend/controllers/dispositivo_controller.dart';
+import 'package:backend/services/fcm_service.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
@@ -34,6 +36,12 @@ void main() async {
   final gmailPass    = env['GMAIL_APP_PASSWORD'] ?? '';
   final jwtService   = JwtService(jwtSecret);
   final emailService = EmailService(gmailUser, gmailPass);
+
+  final fcmService = FcmService(
+    projectId:           env['FCM_PROJECT_ID']            ?? '',
+    serviceAccountEmail: env['FCM_SERVICE_ACCOUNT_EMAIL'] ?? '',
+    privateKey:          (env['FCM_PRIVATE_KEY']          ?? '').replaceAll(r'\n', '\n'),
+  );
 
   final db = DbConnection(env);
   try {
@@ -239,6 +247,18 @@ void main() async {
     // Migração: mover pizza_sabores de id_empresa para id_produto (se tabela já existia)
     "ALTER TABLE pizza_sabores DROP COLUMN IF EXISTS id_empresa",
     "ALTER TABLE pizza_sabores ADD COLUMN IF NOT EXISTS id_produto INT REFERENCES produtos(id_produto) ON DELETE CASCADE",
+    // FCM tokens por dispositivo
+    '''
+      CREATE TABLE IF NOT EXISTS dispositivos_fcm (
+        id            SERIAL PRIMARY KEY,
+        id_usuario    INT NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+        fcm_token     TEXT NOT NULL,
+        plataforma    VARCHAR(10) NOT NULL DEFAULT 'android',
+        atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_fcm_token UNIQUE (fcm_token)
+      )
+    ''',
+    "CREATE INDEX IF NOT EXISTS idx_fcm_usuario ON dispositivos_fcm (id_usuario)",
   ];
 
   for (final sql in migrations) {
@@ -252,7 +272,7 @@ void main() async {
 
   final auth           = AuthController(db.connection, jwtService, emailService);
   final produto        = ProdutoController(db.connection);
-  final pedido         = PedidoController(db.connection);
+  final pedido         = PedidoController(db.connection, fcmService: fcmService);
   final criarPedido    = CriarPedidoController(db.connection);
   final adicional      = AdicionalController(db.connection);
   final empresa        = EmpresaController(db.connection);
@@ -262,6 +282,7 @@ void main() async {
   final avaliacao        = AvaliacaoController(db.connection);
   final notificacao      = NotificacaoController(db.connection);
   final pizza            = PizzaController(db.connection);
+  final dispositivo      = DispositivoController(db.connection);
 
   final app = Router();
 
@@ -284,6 +305,9 @@ void main() async {
   app.get('/notificacoes/nao-lidas',        notificacao.contarNaoLidas);
   app.patch('/notificacoes/<id>/lida',      notificacao.marcarLida);
   app.patch('/notificacoes/todas-lidas',    notificacao.marcarTodasLidas);
+
+  // ── DISPOSITIVOS / FCM ───────────────────────────────────────
+  app.post('/dispositivos/fcm-token',       dispositivo.registrarFcmToken);
 
   app.post('/auth/esqueci-senha',      auth.esqueciSenha);
   app.post('/auth/verificar-codigo',   auth.verificarCodigo);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/auth_storage.dart';
 import '../../../data/session_store.dart';
+import '../../../services/push_notification_service.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -52,6 +53,7 @@ class _SplashPageState extends State<SplashPage>
         token:       saved['token']      as String,
       );
 
+      PushNotificationService.registrarAposLogin();
       final tipo = saved['tipoUsuario'] as String;
       if (tipo == 'empresa') {
         Navigator.of(context).pushReplacementNamed('/empresa');

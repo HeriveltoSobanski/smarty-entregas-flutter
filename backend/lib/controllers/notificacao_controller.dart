@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/fcm_service.dart';
 
 class NotificacaoController {
   final Connection conn;
@@ -126,6 +127,7 @@ class NotificacaoController {
     required String corpo,
     String          tipo     = 'status_pedido',
     int?            idPedido,
+    FcmService?     fcmService,
   }) async {
     try {
       await conn.execute(
@@ -144,6 +146,15 @@ class NotificacaoController {
     } catch (_) {
       // Notificação não pode derrubar a operação principal
     }
+
+    // Envia push independentemente do resultado do INSERT
+    await fcmService?.enviarParaUsuario(
+      conn:      conn,
+      idUsuario: idUsuario,
+      titulo:    titulo,
+      corpo:     corpo,
+      data:      idPedido != null ? {'id_pedido': idPedido.toString()} : null,
+    );
   }
 
   Response _json(int status, Map<String, dynamic> body) => Response(

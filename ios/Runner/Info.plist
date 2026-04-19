@@ -45,6 +45,12 @@
 	<string>Precisamos da sua localização para exibir sua posição no mapa durante a entrega.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Precisamos da sua localização para rastrear entregas em segundo plano.</string>
+	<!-- Notificações push em background -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

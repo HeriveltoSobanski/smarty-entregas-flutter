@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../avaliacao/avaliacao_page.dart';
 import '../suporte/suporte_page.dart';
+import '../cancelar_pedido/cancelar_pedido_page.dart';
 
 const Color _laranja = Color(0xFFF5841F);
 
@@ -378,6 +379,48 @@ class _AcompanhamentoPedidoPageState
                       fontSize: 12, color: Colors.grey.shade500)),
             ]),
           ),
+
+        // ── Botão cancelar (apenas aguardando) ────────────────────
+        if (idStatus == 1) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final total = (_pedido!['total'] is num)
+                      ? (_pedido!['total'] as num).toDouble()
+                      : double.tryParse(
+                              _pedido!['total']?.toString() ?? '') ??
+                          0.0;
+                  final cancelado = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CancelarPedidoPage(
+                        idPedido: widget.idPedido,
+                        nomeEmpresa: widget.nomeEmpresa,
+                        total: total,
+                      ),
+                    ),
+                  );
+                  if (cancelado == true && mounted) {
+                    setState(() => _carregando = true);
+                    _carregar();
+                  }
+                },
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Cancelar pedido'),
+              ),
+            ),
+          ),
+        ],
 
         // ── Botão suporte (cancelado ou aguardando há muito tempo) ─
         if (idStatus == 5 || idStatus == 1)
