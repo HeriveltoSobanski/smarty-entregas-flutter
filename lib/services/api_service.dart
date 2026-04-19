@@ -433,17 +433,22 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getPedidosByCliente(
-      int idUsuario) async {
+  static Future<({List<Map<String, dynamic>> pedidos, bool temMais})>
+      getPedidosByCliente(int idUsuario,
+          {int pagina = 1, int limite = 20}) async {
     try {
-      final resp = await _get(Uri.parse('$baseUrl/pedidos/cliente?id_usuario=$idUsuario'));
+      final resp = await _get(Uri.parse(
+          '$baseUrl/pedidos/cliente?id_usuario=$idUsuario&pagina=$pagina&limite=$limite'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
+        return (
+          pedidos: List<Map<String, dynamic>>.from(data['pedidos'] ?? []),
+          temMais: data['tem_mais'] as bool? ?? false,
+        );
       }
-      return [];
+      return (pedidos: <Map<String, dynamic>>[], temMais: false);
     } catch (_) {
-      return [];
+      return (pedidos: <Map<String, dynamic>>[], temMais: false);
     }
   }
 

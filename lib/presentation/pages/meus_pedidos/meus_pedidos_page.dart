@@ -16,23 +16,65 @@ class MeusPedidosPage extends StatefulWidget {
 class _MeusPedidosPageState extends State<MeusPedidosPage> {
   List<Map<String, dynamic>> _pedidos = [];
   bool _loading = true;
+  bool _carregandoMais = false;
+  bool _temMais = false;
+  int _pagina = 1;
   String? _erro;
+  final ScrollController _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _carregar();
   }
 
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200 &&
+        !_carregandoMais &&
+        _temMais) {
+      _carregarMais();
+    }
+  }
+
   Future<void> _carregar() async {
-    setState(() { _loading = true; _erro = null; });
+    setState(() { _loading = true; _erro = null; _pagina = 1; });
     final idUsuario = SessionStore.idUsuario;
     if (idUsuario == null) {
       setState(() { _loading = false; _erro = 'Usuário não autenticado.'; });
       return;
     }
-    final lista = await ApiService.getPedidosByCliente(idUsuario);
-    if (mounted) setState(() { _pedidos = lista; _loading = false; });
+    final res = await ApiService.getPedidosByCliente(idUsuario, pagina: 1);
+    if (mounted) {
+      setState(() {
+        _pedidos = res.pedidos;
+        _temMais = res.temMais;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _carregarMais() async {
+    if (_carregandoMais) return;
+    setState(() { _carregandoMais = true; });
+    final idUsuario = SessionStore.idUsuario;
+    if (idUsuario == null) { setState(() { _carregandoMais = false; }); return; }
+    final proxPagina = _pagina + 1;
+    final res = await ApiService.getPedidosByCliente(idUsuario, pagina: proxPagina);
+    if (mounted) {
+      setState(() {
+        _pedidos.addAll(res.pedidos);
+        _temMais = res.temMais;
+        _pagina = proxPagina;
+        _carregandoMais = false;
+      });
+    }
   }
 
   Color _corStatus(int id) {
@@ -94,9 +136,16 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                       onRefresh: _carregar,
                       color: _laranja,
                       child: ListView.builder(
+                        controller: _scroll,
                         padding: const EdgeInsets.all(16),
-                        itemCount: _pedidos.length,
+                        itemCount: _pedidos.length + (_carregandoMais ? 1 : 0),
                         itemBuilder: (_, i) {
+                          if (i == _pedidos.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(child: CircularProgressIndicator(color: _laranja)),
+                            );
+                          }
                           final p = _pedidos[i];
                           final idStatus = p['id_status'] is int
                               ? p['id_status'] as int

@@ -179,6 +179,12 @@ class PedidoController {
         return _json(400, {'error': 'id_usuario obrigatório'});
       }
 
+      final limite =
+          int.tryParse(request.url.queryParameters['limite'] ?? '20') ?? 20;
+      final pagina =
+          int.tryParse(request.url.queryParameters['pagina'] ?? '1') ?? 1;
+      final offset = (pagina - 1) * limite;
+
       final result = await conn.execute(
         Sql.named('''
           SELECT p.id_pedido,
@@ -198,8 +204,9 @@ class PedidoController {
           GROUP BY p.id_pedido, e.nome, sp.nome, p.valor_total, p.criado_em,
                    p.id_status, p.quase_pronto
           ORDER BY p.criado_em DESC
+          LIMIT @limite OFFSET @offset
         '''),
-        parameters: {'id_usuario': idUsuario},
+        parameters: {'id_usuario': idUsuario, 'limite': limite, 'offset': offset},
       );
 
       final list = result.map((r) => {
@@ -213,7 +220,7 @@ class PedidoController {
         'quase_pronto': r[7] as bool? ?? false,
       }).toList();
 
-      return _json(200, {'pedidos': list});
+      return _json(200, {'pedidos': list, 'tem_mais': list.length == limite});
     } catch (e) {
       return _json(500, {'error': e.toString()});
     }
