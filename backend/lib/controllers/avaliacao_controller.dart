@@ -14,13 +14,14 @@ class AvaliacaoController {
       final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
 
       final idPedido    = _int(body['id_pedido']);
-      final idUsuario   = _int(body['id_usuario']);
+      // id_usuario sempre vem do JWT — ignora o body para evitar spoofing
+      final idUsuario   = int.tryParse(request.context['userId']?.toString() ?? '');
       final idEmpresa   = _int(body['id_empresa']);
       final notaEmpresa = _int(body['nota_empresa']);
 
       if (idPedido == null || idUsuario == null ||
           idEmpresa == null || notaEmpresa == null) {
-        return _json(400, {'error': 'id_pedido, id_usuario, id_empresa e nota_empresa são obrigatórios'});
+        return _json(400, {'error': 'id_pedido, id_empresa e nota_empresa são obrigatórios'});
       }
       if (notaEmpresa < 1 || notaEmpresa > 5) {
         return _json(400, {'error': 'nota_empresa deve ser entre 1 e 5'});
@@ -99,11 +100,10 @@ class AvaliacaoController {
   Future<Response> verificar(Request request, String id) async {
     try {
       final idPedido  = int.tryParse(id);
-      final idUsuario = int.tryParse(
-          request.url.queryParameters['id_usuario'] ?? '');
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
 
       if (idPedido == null || idUsuario == null) {
-        return _json(400, {'error': 'Parâmetros inválidos'});
+        return _json(403, {'error': 'Acesso negado'});
       }
 
       final result = await conn.execute(

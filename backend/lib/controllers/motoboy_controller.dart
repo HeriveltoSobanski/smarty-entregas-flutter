@@ -91,11 +91,8 @@ class MotoboyController {
   // ----------------------------------------------------------------
   Future<Response> getEmRota(Request request) async {
     try {
-      final idMotoboy =
-          int.tryParse(request.url.queryParameters['id_motoboy'] ?? '');
-      if (idMotoboy == null) {
-        return _json(400, {'error': 'id_motoboy obrigatório'});
-      }
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idMotoboy == null) return _json(403, {'error': 'Acesso negado'});
       final result = await conn.execute(
         Sql.named('''
           SELECT p.id_pedido,
@@ -144,12 +141,13 @@ class MotoboyController {
   // ----------------------------------------------------------------
   Future<Response> atualizarMeuStatus(Request request) async {
     try {
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idMotoboy == null) return _json(403, {'error': 'Acesso negado'});
       final bodyStr = await request.readAsString();
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final idMotoboy = _parseInt(body['id_motoboy']);
-      final status    = body['status']?.toString();
-      if (idMotoboy == null || status == null) {
-        return _json(400, {'error': 'id_motoboy e status obrigatórios'});
+      final status = body['status']?.toString();
+      if (status == null) {
+        return _json(400, {'error': 'status obrigatório'});
       }
       await conn.execute(
         Sql.named('UPDATE usuarios SET status_motoboy = @novo_status WHERE id_usuario = @usuario_id'),
@@ -167,11 +165,8 @@ class MotoboyController {
   // ----------------------------------------------------------------
   Future<Response> getMinhas(Request request) async {
     try {
-      final idMotoboy =
-          int.tryParse(request.url.queryParameters['id_motoboy'] ?? '');
-      if (idMotoboy == null) {
-        return _json(400, {'error': 'id_motoboy obrigatório'});
-      }
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idMotoboy == null) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('''
@@ -227,10 +222,10 @@ class MotoboyController {
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
 
       final idPedido  = _parseInt(body['id_pedido']);
-      final idMotoboy = _parseInt(body['id_motoboy']);
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
 
       if (idPedido == null || idMotoboy == null) {
-        return _json(400, {'error': 'id_pedido e id_motoboy obrigatórios'});
+        return _json(400, {'error': 'id_pedido obrigatório'});
       }
 
       await conn.execute(
@@ -282,6 +277,9 @@ class MotoboyController {
   // ----------------------------------------------------------------
   Future<Response> atualizarStatus(Request request) async {
     try {
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idMotoboy == null) return _json(403, {'error': 'Acesso negado'});
+
       final bodyStr = await request.readAsString();
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
 
@@ -292,10 +290,10 @@ class MotoboyController {
         return _json(400, {'error': 'id_pedido e id_status obrigatórios'});
       }
 
+      // Só atualiza se este motoboy é o responsável pelo pedido
       await conn.execute(
-        Sql.named(
-            'UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id'),
-        parameters: {'novo_status': idStatus, 'pedido_id': idPedido},
+        Sql.named('UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id AND id_motoboy = @id_motoboy'),
+        parameters: {'novo_status': idStatus, 'pedido_id': idPedido, 'id_motoboy': idMotoboy},
       );
 
       return _json(200, {'ok': true});
@@ -310,11 +308,8 @@ class MotoboyController {
   // ----------------------------------------------------------------
   Future<Response> getHistorico(Request request) async {
     try {
-      final idMotoboy =
-          int.tryParse(request.url.queryParameters['id_motoboy'] ?? '');
-      if (idMotoboy == null) {
-        return _json(400, {'error': 'id_motoboy obrigatório'});
-      }
+      final idMotoboy = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idMotoboy == null) return _json(403, {'error': 'Acesso negado'});
 
       final inicio = request.url.queryParameters['inicio'];
       final fim    = request.url.queryParameters['fim'];

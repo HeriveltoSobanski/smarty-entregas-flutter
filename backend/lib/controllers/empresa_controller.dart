@@ -14,6 +14,8 @@ class EmpresaController {
     try {
       final idEmpresa = int.tryParse(id);
       if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (jwtEmpresa != idEmpresa) return _json(403, {'error': 'Acesso negado'});
 
       final body = await request.readAsString();
       final data = body.isEmpty
@@ -115,6 +117,8 @@ class EmpresaController {
     try {
       final idEmpresa = int.tryParse(id);
       if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (jwtEmpresa != idEmpresa) return _json(403, {'error': 'Acesso negado'});
 
       final body = await request.readAsString();
       final data = body.isEmpty
@@ -184,6 +188,8 @@ class EmpresaController {
     try {
       final idEmpresa = int.tryParse(id);
       if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (jwtEmpresa != idEmpresa) return _json(403, {'error': 'Acesso negado'});
 
       final body = await request.readAsString();
       final data = body.isEmpty

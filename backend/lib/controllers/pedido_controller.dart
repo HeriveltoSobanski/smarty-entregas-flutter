@@ -12,14 +12,14 @@ class PedidoController {
   PedidoController(this.conn, {this.fcmService});
 
   // ----------------------------------------------------------------
-  // GET /pedidos/empresa?id_empresa=X&inicio=YYYY-MM-DD&fim=YYYY-MM-DD
+  // GET /pedidos/empresa?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
   // ----------------------------------------------------------------
   Future<Response> getPedidosByEmpresa(Request request) async {
     try {
-      final idEmpresa =
-          int.tryParse(request.url.queryParameters['id_empresa'] ?? '');
+      // Usa id_empresa do JWT — nunca da URL
+      final idEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
       if (idEmpresa == null) {
-        return _json(400, {'error': 'id_empresa obrigatório'});
+        return _json(403, {'error': 'Acesso negado'});
       }
 
       final inicio = request.url.queryParameters['inicio'];
@@ -88,6 +88,9 @@ class PedidoController {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
 
+      final jwtUserId  = int.tryParse(request.context['userId']?.toString() ?? '');
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+
       // Pedido base
       final pedResult = await conn.execute(
         Sql.named('''
@@ -105,7 +108,8 @@ class PedidoController {
                  p.motoboy_empresa_nome,
                  p.motoboy_empresa_telefone,
                  p.id_empresa,
-                 p.id_motoboy
+                 p.id_motoboy,
+                 p.id_usuario
           FROM pedidos p
           JOIN usuarios u        ON u.id_usuario  = p.id_usuario
           JOIN status_pedidos sp ON sp.id_status  = p.id_status
@@ -119,6 +123,16 @@ class PedidoController {
 
       if (pedResult.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
       final r = pedResult.first;
+
+      // Verifica se o solicitante é o cliente, a empresa ou o motoboy do pedido
+      // r[18]=id_empresa, r[19]=id_motoboy, r[20]=id_usuario
+      final pedidoIdEmpresa = r[18] is int ? r[18] as int : int.tryParse(r[18]?.toString() ?? '');
+      final pedidoIdMotoboy = r[19] is int ? r[19] as int : int.tryParse(r[19]?.toString() ?? '');
+      final pedidoIdUsuario = r[20] is int ? r[20] as int : int.tryParse(r[20]?.toString() ?? '');
+      final temAcesso = jwtUserId == pedidoIdUsuario ||
+          jwtEmpresa == pedidoIdEmpresa ||
+          jwtUserId  == pedidoIdMotoboy;
+      if (!temAcesso) return _json(403, {'error': 'Acesso negado'});
 
       // Itens
       final itensResult = await conn.execute(
@@ -169,14 +183,14 @@ class PedidoController {
   }
 
   // ----------------------------------------------------------------
-  // GET /pedidos/cliente?id_usuario=X
+  // GET /pedidos/cliente
   // ----------------------------------------------------------------
   Future<Response> getPedidosByCliente(Request request) async {
     try {
-      final idUsuario =
-          int.tryParse(request.url.queryParameters['id_usuario'] ?? '');
+      // Usa userId do JWT — nunca da URL
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
       if (idUsuario == null) {
-        return _json(400, {'error': 'id_usuario obrigatório'});
+        return _json(403, {'error': 'Acesso negado'});
       }
 
       final limite =
@@ -234,6 +248,12 @@ class PedidoController {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
 
+      // Verifica que a empresa do JWT é dona deste pedido
+      final idEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresa == null) return _json(403, {'error': 'Acesso negado'});
+      final owns = await _empresaOwnsPedido(idEmpresa, idPedido);
+      if (!owns) return _json(403, {'error': 'Acesso negado'});
+
       final bodyStr = await request.readAsString();
       final body    = jsonDecode(bodyStr) as Map<String, dynamic>;
       final idStatus = body['id_status'];
@@ -278,6 +298,10 @@ class PedidoController {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
 
+      final idEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresa == null) return _json(403, {'error': 'Acesso negado'});
+      if (!await _empresaOwnsPedido(idEmpresa, idPedido)) return _json(403, {'error': 'Acesso negado'});
+
       await conn.execute(
         Sql.named('UPDATE pedidos SET quase_pronto = true WHERE id_pedido = @pedido_id'),
         parameters: {'pedido_id': idPedido},
@@ -309,6 +333,10 @@ class PedidoController {
     try {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
+      final idEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresa == null) return _json(403, {'error': 'Acesso negado'});
+      if (!await _empresaOwnsPedido(idEmpresa, idPedido)) return _json(403, {'error': 'Acesso negado'});
 
       await conn.execute(
         Sql.named('''
@@ -346,6 +374,10 @@ class PedidoController {
       final idPedido = int.tryParse(id);
       if (idPedido == null) return _json(400, {'error': 'id inválido'});
 
+      final idEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresa == null) return _json(403, {'error': 'Acesso negado'});
+      if (!await _empresaOwnsPedido(idEmpresa, idPedido)) return _json(403, {'error': 'Acesso negado'});
+
       await conn.execute(
         Sql.named('''
           UPDATE pedidos
@@ -375,6 +407,18 @@ class PedidoController {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
+
+  Future<bool> _empresaOwnsPedido(int idEmpresa, int idPedido) async {
+    try {
+      final r = await conn.execute(
+        Sql.named('SELECT 1 FROM pedidos WHERE id_pedido = @id AND id_empresa = @empresa LIMIT 1'),
+        parameters: {'id': idPedido, 'empresa': idEmpresa},
+      );
+      return r.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<int?> _idUsuarioDoPedido(int idPedido) async {
     try {

@@ -148,9 +148,8 @@ class ProdutoController {
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
 
-      final idEmpresa   = data['id_empresa'] is int
-          ? data['id_empresa'] as int
-          : int.tryParse(data['id_empresa']?.toString() ?? '');
+      // id_empresa sempre vem do JWT — ignora o body para evitar spoofing
+      final idEmpresa   = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
       final idCategoria = data['id_categoria'] is int
           ? data['id_categoria'] as int
           : int.tryParse(data['id_categoria']?.toString() ?? '');
@@ -215,6 +214,8 @@ class ProdutoController {
     try {
       final idProduto = int.tryParse(id);
       if (idProduto == null) return _json(400, {'error': 'id inválido'});
+      final idEmpresaJwt = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresaJwt == null) return _json(403, {'error': 'Acesso negado'});
 
       final body = await request.readAsString();
       final data = jsonDecode(body) as Map<String, dynamic>;
@@ -256,8 +257,9 @@ class ProdutoController {
         if (imagem != null) 'imagem': imagem,
       };
 
+      params['idEmpresa'] = idEmpresaJwt;
       await conn.execute(
-        Sql.named('UPDATE produtos SET ${sets.join(', ')} WHERE id_produto = @id'),
+        Sql.named('UPDATE produtos SET ${sets.join(', ')} WHERE id_produto = @id AND id_empresa = @idEmpresa'),
         parameters: params,
       );
 
@@ -274,10 +276,12 @@ class ProdutoController {
     try {
       final idProduto = int.tryParse(id);
       if (idProduto == null) return _json(400, {'error': 'id inválido'});
+      final idEmpresaJwt = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresaJwt == null) return _json(403, {'error': 'Acesso negado'});
 
       await conn.execute(
-        Sql.named('DELETE FROM produtos WHERE id_produto = @id'),
-        parameters: {'id': idProduto},
+        Sql.named('DELETE FROM produtos WHERE id_produto = @id AND id_empresa = @idEmpresa'),
+        parameters: {'id': idProduto, 'idEmpresa': idEmpresaJwt},
       );
 
       return _json(200, {'ok': true});
@@ -293,14 +297,16 @@ class ProdutoController {
     try {
       final idProduto = int.tryParse(id);
       if (idProduto == null) return _json(400, {'error': 'id inválido'});
+      final idEmpresaJwt = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (idEmpresaJwt == null) return _json(403, {'error': 'Acesso negado'});
 
       await conn.execute(
         Sql.named('''
           UPDATE produtos
           SET ativo = NOT ativo, atualizado_em = now()
-          WHERE id_produto = @id
+          WHERE id_produto = @id AND id_empresa = @idEmpresa
         '''),
-        parameters: {'id': idProduto},
+        parameters: {'id': idProduto, 'idEmpresa': idEmpresaJwt},
       );
 
       return _json(200, {'ok': true});

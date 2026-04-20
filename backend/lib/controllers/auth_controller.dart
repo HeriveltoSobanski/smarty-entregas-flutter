@@ -16,6 +16,28 @@ class AuthController {
 
   AuthController(this.conn, this._jwt, this._email);
 
+  // Rate limiting em memória: chave → {tentativas, bloqueado até}
+  static final _attempts = <String, ({int count, DateTime until})>{};
+
+  static bool _isRateLimited(String key) {
+    final e = _attempts[key];
+    if (e == null) return false;
+    if (DateTime.now().isAfter(e.until)) { _attempts.remove(key); return false; }
+    return e.count >= 5;
+  }
+
+  static void _recordFail(String key) {
+    final e = _attempts[key];
+    final now = DateTime.now();
+    if (e == null || now.isAfter(e.until)) {
+      _attempts[key] = (count: 1, until: now.add(const Duration(minutes: 15)));
+    } else {
+      _attempts[key] = (count: e.count + 1, until: e.until);
+    }
+  }
+
+  static void _clearAttempts(String key) => _attempts.remove(key);
+
   // ----------------------------------------------------------------
   // LOGIN
   // ----------------------------------------------------------------
@@ -33,6 +55,10 @@ class AuthController {
         return _json(400, {'error': 'Email e senha são obrigatórios'});
       }
 
+      if (_isRateLimited('login:$email')) {
+        return _json(429, {'error': 'Muitas tentativas. Aguarde 15 minutos.'});
+      }
+
       final result = await conn.execute(
         Sql.named('''
           SELECT u.id_usuario, u.email, u.senha, u.ativo,
@@ -47,6 +73,7 @@ class AuthController {
       );
 
       if (result.isEmpty) {
+        _recordFail('login:$email');
         return _json(401, {'error': 'Credenciais inválidas'});
       }
 
@@ -64,8 +91,11 @@ class AuthController {
       }
 
       if (!PasswordService.verify(senha, dbSenha)) {
+        _recordFail('login:$email');
         return _json(401, {'error': 'Credenciais inválidas'});
       }
+
+      _clearAttempts('login:$email');
 
       // Migração automática: se a senha estava em texto plano, re-hasheia
       if (PasswordService.needsUpgrade(dbSenha)) {
@@ -318,6 +348,8 @@ class AuthController {
     try {
       final idUsuario = int.tryParse(id);
       if (idUsuario == null) return _json(400, {'error': 'ID inválido'});
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('''
@@ -348,6 +380,8 @@ class AuthController {
     try {
       final idUsuario = int.tryParse(id);
       if (idUsuario == null) return _json(400, {'error': 'ID inválido'});
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       final body = await request.readAsString();
       final data = body.isEmpty ? <String, dynamic>{} : jsonDecode(body) as Map<String, dynamic>;
@@ -439,6 +473,9 @@ class AuthController {
       final email = (data['email'] ?? '').toString().trim();
 
       if (email.isEmpty) return _json(400, {'error': 'E-mail obrigatório'});
+      if (_isRateLimited('reset:$email')) {
+        return _json(429, {'error': 'Muitas tentativas. Aguarde 15 minutos.'});
+      }
 
       final result = await conn.execute(
         Sql.named('SELECT id_usuario FROM usuarios WHERE email = @email LIMIT 1'),
@@ -488,7 +525,11 @@ class AuthController {
         parameters: {'email': email, 'codigo': codigo},
       );
 
-      if (result.isEmpty) return _json(400, {'error': 'Código inválido ou expirado'});
+      if (result.isEmpty) {
+        _recordFail('reset:$email');
+        return _json(400, {'error': 'Código inválido ou expirado'});
+      }
+      _clearAttempts('reset:$email');
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': 'Erro ao verificar código'});

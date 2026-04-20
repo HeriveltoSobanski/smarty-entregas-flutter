@@ -12,11 +12,8 @@ class NotificacaoController {
   // ----------------------------------------------------------------
   Future<Response> listar(Request request) async {
     try {
-      final idUsuario =
-          int.tryParse(request.url.queryParameters['id_usuario'] ?? '');
-      if (idUsuario == null) {
-        return _json(400, {'error': 'id_usuario obrigatório'});
-      }
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idUsuario == null) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('''
@@ -51,11 +48,8 @@ class NotificacaoController {
   // ----------------------------------------------------------------
   Future<Response> contarNaoLidas(Request request) async {
     try {
-      final idUsuario =
-          int.tryParse(request.url.queryParameters['id_usuario'] ?? '');
-      if (idUsuario == null) {
-        return _json(400, {'error': 'id_usuario obrigatório'});
-      }
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idUsuario == null) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('''
@@ -98,11 +92,8 @@ class NotificacaoController {
   // ----------------------------------------------------------------
   Future<Response> marcarTodasLidas(Request request) async {
     try {
-      final idUsuario =
-          int.tryParse(request.url.queryParameters['id_usuario'] ?? '');
-      if (idUsuario == null) {
-        return _json(400, {'error': 'id_usuario obrigatório'});
-      }
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idUsuario == null) return _json(403, {'error': 'Acesso negado'});
 
       await conn.execute(
         Sql.named('''

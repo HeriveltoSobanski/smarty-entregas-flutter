@@ -23,9 +23,10 @@ class CriarPedidoController {
       }
 
       // ---- Validação de campos obrigatórios ----
-      final idUsuario = _parseInt(body['id_usuario']);
+      // id_usuario sempre vem do JWT — ignora o body para evitar spoofing
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
       if (idUsuario == null) {
-        return _json(400, {'error': 'id_usuario obrigatório e deve ser inteiro'});
+        return _json(403, {'error': 'Acesso negado'});
       }
 
       final idEmpresa = _parseInt(body['id_empresa']);

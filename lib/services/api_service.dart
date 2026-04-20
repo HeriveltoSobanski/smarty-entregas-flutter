@@ -440,7 +440,7 @@ class ApiService {
     const cacheKey = 'pedidos_cliente_p1';
     try {
       final resp = await _get(Uri.parse(
-          '$baseUrl/pedidos/cliente?id_usuario=$idUsuario&pagina=$pagina&limite=$limite'));
+          '$baseUrl/pedidos/cliente?pagina=$pagina&limite=$limite'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final lista = List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
@@ -836,8 +836,8 @@ class ApiService {
     String? fim,
   }) async {
     try {
-      String url = '$baseUrl/pedidos/empresa?id_empresa=$idEmpresa';
-      if (inicio != null && fim != null) url += '&inicio=$inicio&fim=$fim';
+      String url = '$baseUrl/pedidos/empresa';
+      if (inicio != null && fim != null) url += '?inicio=$inicio&fim=$fim';
       final resp = await _get(Uri.parse(url));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;

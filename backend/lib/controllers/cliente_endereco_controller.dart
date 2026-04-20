@@ -14,6 +14,8 @@ class ClienteEnderecoController {
     try {
       final idUsuario = int.tryParse(id);
       if (idUsuario == null) return _json(400, {'error': 'id inválido'});
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('''
@@ -48,6 +50,8 @@ class ClienteEnderecoController {
     try {
       final idUsuario = int.tryParse(id);
       if (idUsuario == null) return _json(400, {'error': 'id inválido'});
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       final bodyStr = await request.readAsString();
       final data = bodyStr.isEmpty
@@ -109,6 +113,8 @@ class ClienteEnderecoController {
 
       final idUsuario  = check.first[0] as int;
       final eraPrincipal = check.first[1] as bool? ?? false;
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       await conn.execute(
         Sql.named('DELETE FROM usuario_enderecos WHERE id_endereco = @id'),
@@ -152,6 +158,8 @@ class ClienteEnderecoController {
       if (check.isEmpty) return _json(404, {'error': 'Endereço não encontrado'});
 
       final idUsuario = check.first[0] as int;
+      final jwtId = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (jwtId != idUsuario) return _json(403, {'error': 'Acesso negado'});
 
       // Desmarca todos
       await conn.execute(
