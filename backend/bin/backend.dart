@@ -420,6 +420,9 @@ void main() async {
 
   // ── MANUTENÇÃO ───────────────────────────────────────────────
   app.get('/admin/fix-triggers', (Request req) async {
+    if (req.context['tipoUsuario'] != 'admin') {
+      return _json(403, {'error': 'Acesso negado'});
+    }
     try {
       final triggers = await db.connection.execute(
         Sql.named('''
