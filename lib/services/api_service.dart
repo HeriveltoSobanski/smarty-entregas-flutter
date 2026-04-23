@@ -100,12 +100,25 @@ class ApiService {
   }
 
 
-  // URL configurada via --dart-define=API_URL=http://...
-  // Padrão: IP local de desenvolvimento
+  // Configure via: --dart-define=API_URL=https://api.example.com
+  // Dev local: http://localhost:8081 (padrão, somente para debug)
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: 'http://localhost:8081',
   );
+
+  // Lançado na primeira chamada em builds de produção com URL insegura.
+  // ignore: unused_field
+  static final _securityCheck = () {
+    if (kReleaseMode && !baseUrl.startsWith('https://')) {
+      throw StateError(
+        'API_URL deve usar HTTPS em produção. '
+        'Passe --dart-define=API_URL=https://... no build. '
+        'Recebido: $baseUrl',
+      );
+    }
+    return true;
+  }();
 
   static Map<String, dynamic> _safeJson(http.Response resp, String fallback) {
     try {

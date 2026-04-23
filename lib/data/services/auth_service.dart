@@ -1,11 +1,26 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // Para Flutter Web, localhost funciona.
-  // Se for Android Emulator: use http://10.0.2.2:8080
-  // Se for dispositivo físico: use o IP da sua máquina (ex: http://192.168.x.x:8080)
-  final String baseUrl = 'http://localhost:8080';
+  // Configure via: --dart-define=AUTH_URL=https://api.example.com
+  // Dev local (Flutter Web): http://localhost:8080
+  // Android Emulator:        http://10.0.2.2:8080
+  // Dispositivo físico:      http://<IP-da-máquina>:8080
+  static const String baseUrl = String.fromEnvironment(
+    'AUTH_URL',
+    defaultValue: 'http://localhost:8080',
+  );
+
+  AuthService() {
+    if (kReleaseMode && !baseUrl.startsWith('https://')) {
+      throw StateError(
+        'AUTH_URL deve usar HTTPS em produção. '
+        'Passe --dart-define=AUTH_URL=https://... no build. '
+        'Recebido: $baseUrl',
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> login({
     required String email,
