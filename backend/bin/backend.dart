@@ -458,7 +458,8 @@ void main() async {
       .addMiddleware(jwtMiddleware(jwtService))
       .addHandler(app.call);
 
-  final server = await serve(handler, InternetAddress.anyIPv4, 8080);
+  final port = int.tryParse(env['PORT'] ?? '') ?? 8081;
+  final server = await serve(handler, InternetAddress.anyIPv4, port);
   print('Servidor online em http://${server.address.host}:${server.port}');
 }
 

@@ -41,6 +41,14 @@ class _ItemCarrinho {
 
   String get resumoAdicionais =>
       adicionais.map((a) => a['nome']?.toString() ?? '').join(', ');
+
+  List<int> get adicionaisIds => adicionais
+      .map((a) {
+        final v = a['id_adicional'];
+        return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+      })
+      .where((id) => id > 0)
+      .toList();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -127,6 +135,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
       'preco': item.precoBase + item.precoAdicionais,
       'quantidade': item.quantidade,
       'adicionais': item.resumoAdicionais,
+      'adicionais_ids': item.adicionaisIds,
       'observacao': item.observacao,
     }).toList();
 

@@ -104,8 +104,16 @@ class ApiService {
   // Padrão: IP local de desenvolvimento
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: 'http://localhost:8081',
   );
+
+  static Map<String, dynamic> _safeJson(http.Response resp, String fallback) {
+    try {
+      return jsonDecode(resp.body) as Map<String, dynamic>;
+    } catch (_) {
+      return {'error': '$fallback (${resp.statusCode})'};
+    }
+  }
 
   // ----------------------------------------------------------------
   // HEADERS
@@ -139,7 +147,7 @@ class ApiService {
       body: jsonEncode({'email': email, 'senha': senha}),
     );
 
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao fazer login');
     if (resp.statusCode == 200) return data;
     throw Exception((data['error'] ?? 'Erro ao fazer login').toString());
   }
@@ -150,7 +158,7 @@ class ApiService {
       headers: _publicHeaders,
       body: jsonEncode({'id_token': idToken}),
     );
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao fazer login com Google');
     if (resp.statusCode == 200) return data;
     throw Exception((data['error'] ?? 'Erro ao fazer login com Google').toString());
   }
@@ -161,7 +169,7 @@ class ApiService {
       headers: _publicHeaders,
       body: jsonEncode({'access_token': accessToken}),
     );
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao fazer login com Facebook');
     if (resp.statusCode == 200) return data;
     throw Exception((data['error'] ?? 'Erro ao fazer login com Facebook').toString());
   }
@@ -183,7 +191,7 @@ class ApiService {
       body: jsonEncode(body),
     );
 
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao registrar');
     if (resp.statusCode == 201) return data;
     throw Exception((data['error'] ?? 'Erro ao registrar').toString());
   }
@@ -205,7 +213,7 @@ class ApiService {
       body: jsonEncode(body),
     );
 
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao registrar');
     if (resp.statusCode == 201) return data;
     throw Exception((data['error'] ?? 'Erro ao registrar').toString());
   }
@@ -226,7 +234,7 @@ class ApiService {
       }),
     );
 
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final data = _safeJson(resp, 'Erro ao registrar empresa');
     if (resp.statusCode == 201) return data;
     throw Exception((data['error'] ?? 'Erro ao registrar empresa').toString());
   }

@@ -192,11 +192,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final descricao  = [adicionais, obs]
           .where((s) => s.isNotEmpty)
           .join(' | ');
+      final ids = (item['adicionais_ids'] as List? ?? [])
+          .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+          .where((id) => id > 0)
+          .toList();
       return {
         'id_produto': item['id_produto'],
         'quantidade': item['quantidade'],
         'preco_unit': _precoItem(item['preco']),
         if (descricao.isNotEmpty) 'observacao': descricao,
+        if (ids.isNotEmpty) 'adicionais': ids,
       };
     }).toList();
 

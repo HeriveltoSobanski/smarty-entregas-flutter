@@ -10,7 +10,7 @@ class CriarPedidoController {
 
   // ----------------------------------------------------------------
   // POST /pedidos
-  // Body: { id_usuario, id_empresa, itens: [{id_produto, quantidade, preco_unit}] }
+  // Body: { id_usuario, id_empresa, itens: [{id_produto, quantidade, preco_unit, adicionais?: [int]}] }
   // ----------------------------------------------------------------
   Future<Response> criarPedido(Request request) async {
     try {
@@ -63,12 +63,51 @@ class CriarPedidoController {
           return _json(400, {'error': 'quantidade deve ser maior que zero'});
         }
 
+        final adicionaisIds = (item['adicionais'] as List?)
+            ?.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+            .where((id) => id > 0)
+            .toList() ?? <int>[];
+
         itens.add({
           'id_produto': idProduto,
           'quantidade': quantidade,
           'preco_unit': precoUnit,
           'observacao': item['observacao']?.toString() ?? '',
+          'adicionais_ids': adicionaisIds,
         });
+      }
+
+      // ---- Validar adicionais obrigatórios ----
+      for (final item in itens) {
+        final idProduto    = item['id_produto'] as int;
+        final selectedIds  = ((item['adicionais_ids'] as List<int>)).toSet();
+
+        final gruposResult = await conn.execute(
+          Sql.named('''
+            SELECT DISTINCT grupo
+            FROM produto_adicionais
+            WHERE id_produto = @id AND obrigatorio = true AND ativo = true
+          '''),
+          parameters: {'id': idProduto},
+        );
+
+        for (final grupoRow in gruposResult) {
+          final grupo = grupoRow[0]?.toString() ?? '';
+          final itensGrupo = await conn.execute(
+            Sql.named('''
+              SELECT id_adicional
+              FROM produto_adicionais
+              WHERE id_produto = @id AND grupo = @grupo AND ativo = true
+            '''),
+            parameters: {'id': idProduto, 'grupo': grupo},
+          );
+          final grupoIds = itensGrupo.map((r) => r[0] as int).toSet();
+          if (!selectedIds.any(grupoIds.contains)) {
+            return _json(422, {
+              'error': 'Selecione uma opção do grupo obrigatório: $grupo',
+            });
+          }
+        }
       }
 
       // ---- Calcular valor total ----
