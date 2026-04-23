@@ -16,7 +16,9 @@ import 'services/connectivity_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await PushNotificationService.init();
+  try {
+    await PushNotificationService.init();
+  } catch (_) {}
   await ConnectivityService.instance.init();
   runApp(const MyApp());
 }
