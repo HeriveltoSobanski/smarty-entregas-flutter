@@ -22,6 +22,7 @@ import 'package:backend/controllers/avaliacao_controller.dart';
 import 'package:backend/controllers/notificacao_controller.dart';
 import 'package:backend/controllers/pizza_controller.dart';
 import 'package:backend/controllers/dispositivo_controller.dart';
+import 'package:backend/controllers/relatorio_controller.dart';
 import 'package:backend/services/fcm_service.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
@@ -283,6 +284,7 @@ void main() async {
   final notificacao      = NotificacaoController(db.connection);
   final pizza            = PizzaController(db.connection);
   final dispositivo      = DispositivoController(db.connection);
+  final relatorio        = RelatorioController(db.connection);
 
   final app = Router();
 
@@ -342,6 +344,7 @@ void main() async {
   app.patch('/empresas/<id>/endereco',       empresa.atualizarEndereco);
   app.get('/empresas/<id>/configuracoes',    empresa.getConfiguracoes);
   app.patch('/empresas/<id>/configuracoes',  empresa.atualizarConfiguracoes);
+  app.get('/empresas/relatorio',             relatorio.getRelatorio);
 
   // ── ENDEREÇOS DO CLIENTE ─────────────────────────────────────
   app.get('/clientes/<id>/enderecos',              clienteEndereco.listar);

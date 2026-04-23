@@ -871,6 +871,27 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
+  // RELATÓRIO FINANCEIRO — empresa
+  // ----------------------------------------------------------------
+
+  static Future<Map<String, dynamic>?> getRelatorioFinanceiro({
+    String? inicio,
+    String? fim,
+  }) async {
+    try {
+      String url = '$baseUrl/empresas/relatorio';
+      if (inicio != null && fim != null) url += '?inicio=$inicio&fim=$fim';
+      final resp = await _get(Uri.parse(url));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ----------------------------------------------------------------
   // MAPA — rota via proxy do backend (ORS key fica no servidor)
   // ----------------------------------------------------------------
 
