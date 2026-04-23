@@ -1229,11 +1229,8 @@ class ApiService {
     required String token,
     required String plataforma,
   }) async {
-    final idUsuario = SessionStore.idUsuario;
-    if (idUsuario == null) return;
     try {
       await _post(Uri.parse('$baseUrl/dispositivos/fcm-token'), body: jsonEncode({
-          'id_usuario': idUsuario,
           'fcm_token':  token,
           'plataforma': plataforma,
         }));

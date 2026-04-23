@@ -7,18 +7,21 @@ class DispositivoController {
   DispositivoController(this.conn);
 
   // POST /dispositivos/fcm-token
-  // Body: { id_usuario, fcm_token, plataforma }
+  // Body: { fcm_token, plataforma }
   Future<Response> registrarFcmToken(Request request) async {
     try {
-      final body      = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final idUsuario = body['id_usuario'] is int
-          ? body['id_usuario'] as int
-          : int.tryParse(body['id_usuario']?.toString() ?? '');
-      final token     = body['fcm_token']?.toString() ?? '';
+      final ctxId     = request.context['userId'];
+      final idUsuario = ctxId is int ? ctxId : int.tryParse(ctxId?.toString() ?? '');
+      if (idUsuario == null) {
+        return _json(401, {'error': 'Não autenticado'});
+      }
+
+      final body       = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final token      = body['fcm_token']?.toString() ?? '';
       final plataforma = body['plataforma']?.toString() ?? 'android';
 
-      if (idUsuario == null || token.isEmpty) {
-        return _json(400, {'error': 'id_usuario e fcm_token são obrigatórios'});
+      if (token.isEmpty) {
+        return _json(400, {'error': 'fcm_token é obrigatório'});
       }
 
       // Upsert: mesmo token → atualiza usuário e timestamp
