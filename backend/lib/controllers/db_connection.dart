@@ -18,6 +18,8 @@ class DbConnection {
       throw Exception("Variavel DB_PASS nao encontrada no .env");
     }
 
+    final sslMode = env['DB_SSL'] == 'disable' ? SslMode.disable : SslMode.require;
+
     connection = await Connection.open(
       Endpoint(
         host: host,
@@ -27,7 +29,7 @@ class DbConnection {
         password: password,
       ),
       settings: ConnectionSettings(
-        sslMode: SslMode.disable,
+        sslMode: sslMode,
       ),
     );
   }
