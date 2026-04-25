@@ -289,6 +289,7 @@ void main() async {
   final app = Router();
 
   app.get('/', (Request req) => Response.ok('Smarty Entregas API'));
+  app.get('/health', (Request req) => Response.ok('ok'));
 
   // OPTIONS preflight
   app.options('/<ignored|.*>', (Request req) => Response.ok(''));
