@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1088560191949",
+    "project_id": "smarty-entregas-c3415",
+    "storage_bucket": "smarty-entregas-c3415.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1088560191949:android:7cfe0149079f8808778c84",
+        "android_client_info": {
+          "package_name": "com.example.smarty_entregas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwC0xh2ab1hj8MWW_NCxPW-nnptOerVqc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
