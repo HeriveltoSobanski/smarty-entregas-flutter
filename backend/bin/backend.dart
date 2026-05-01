@@ -23,6 +23,7 @@ import 'package:backend/controllers/notificacao_controller.dart';
 import 'package:backend/controllers/pizza_controller.dart';
 import 'package:backend/controllers/dispositivo_controller.dart';
 import 'package:backend/controllers/relatorio_controller.dart';
+import 'package:backend/controllers/cupom_controller.dart';
 import 'package:backend/services/fcm_service.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
@@ -260,6 +261,24 @@ void main() async {
       )
     ''',
     "CREATE INDEX IF NOT EXISTS idx_fcm_usuario ON dispositivos_fcm (id_usuario)",
+    // Sistema de cupons globais
+    '''
+      CREATE TABLE IF NOT EXISTS cupons (
+        id_cupom      SERIAL PRIMARY KEY,
+        codigo        VARCHAR(30) NOT NULL UNIQUE,
+        tipo          VARCHAR(10) NOT NULL DEFAULT 'percentual',
+        valor         NUMERIC(10,2) NOT NULL,
+        valor_minimo  NUMERIC(10,2) NOT NULL DEFAULT 0,
+        usos_maximos  INT,
+        usos_atuais   INT NOT NULL DEFAULT 0,
+        ativo         BOOLEAN NOT NULL DEFAULT true,
+        valido_ate    TIMESTAMP,
+        criado_em     TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    ''',
+    // Cupom aplicado ao pedido
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_cupom VARCHAR(30)",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS desconto NUMERIC(10,2) NOT NULL DEFAULT 0",
   ];
 
   for (final sql in migrations) {
@@ -285,6 +304,7 @@ void main() async {
   final pizza            = PizzaController(db.connection);
   final dispositivo      = DispositivoController(db.connection);
   final relatorio        = RelatorioController(db.connection);
+  final cupom            = CupomController(db.connection);
 
   final app = Router();
 
@@ -363,6 +383,12 @@ void main() async {
   app.patch('/pedidos/<id>/chamar-motoboy',  pedido.chamarMotoboy);
   app.patch('/pedidos/<id>/entrega-propria', pedido.entregaPropria);
   app.patch('/pedidos/<id>/entrega-propria-motoboy', empresaMotoboy.atribuirMotoboy);
+
+  // ── CUPONS ───────────────────────────────────────────────────
+  app.post('/cupons/validar',            cupom.validar);
+  app.post('/cupons',                    cupom.criar);
+  app.get('/cupons',                     cupom.listar);
+  app.patch('/cupons/<codigo>/ativo',    cupom.toggleAtivo);
 
   // ── AVALIAÇÕES ───────────────────────────────────────────────
   app.post('/avaliacoes',                    avaliacao.criar);

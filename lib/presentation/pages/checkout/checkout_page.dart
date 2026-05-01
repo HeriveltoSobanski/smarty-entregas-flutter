@@ -74,10 +74,17 @@ extension _PagamentoExt on _Pagamento {
 class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _observacaoCtrl = TextEditingController();
   final TextEditingController _trocoCtrl      = TextEditingController();
-  bool _carregando = false;
+  final TextEditingController _cupomCtrl      = TextEditingController();
+  bool _carregando      = false;
+  bool _validandoCupom  = false;
 
   Map<String, dynamic>? _enderecoSel;
   _Pagamento? _pagamento;
+
+  // Cupom
+  String? _cupomAplicado;
+  double  _desconto = 0.0;
+  String? _cupomErro;
 
   // Taxa e tempo calculados a partir da distância
   double _taxaEntrega  = 7.0;
@@ -154,10 +161,48 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
+  Future<void> _aplicarCupom() async {
+    final codigo = _cupomCtrl.text.trim();
+    if (codigo.isEmpty) return;
+    setState(() { _validandoCupom = true; _cupomErro = null; });
+
+    final result = await ApiService.validarCupom(
+      codigo:      codigo,
+      valorPedido: widget.total,
+    );
+
+    if (!mounted) return;
+    if (result.containsKey('erro')) {
+      setState(() {
+        _cupomErro     = result['erro'] as String;
+        _cupomAplicado = null;
+        _desconto      = 0.0;
+        _validandoCupom = false;
+      });
+    } else {
+      setState(() {
+        _cupomAplicado  = result['codigo'] as String?;
+        _desconto       = (result['desconto'] as num?)?.toDouble() ?? 0.0;
+        _cupomErro      = null;
+        _validandoCupom = false;
+      });
+    }
+  }
+
+  void _removerCupom() {
+    setState(() {
+      _cupomAplicado = null;
+      _desconto      = 0.0;
+      _cupomErro     = null;
+      _cupomCtrl.clear();
+    });
+  }
+
   @override
   void dispose() {
     _observacaoCtrl.dispose();
     _trocoCtrl.dispose();
+    _cupomCtrl.dispose();
     super.dispose();
   }
 
@@ -245,6 +290,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       formaPagamento:  _pagamento!.slug,
       trocoPara:       troco,
       taxaEntrega:     _taxaEntrega,
+      codigoCupom:     _cupomAplicado,
     );
 
     setState(() => _carregando = false);
@@ -277,6 +323,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           itens:           widget.itens,
           subtotal:        widget.total,
           taxaEntrega:     _taxaEntrega,
+          desconto:        _desconto,
           tempoMinutos:    _tempoMinutos,
           pagamento:       _pagamento!,
         ),
@@ -628,6 +675,117 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
             const SizedBox(height: 16),
 
+            // ---- Cupom de desconto ----
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(children: [
+                      Icon(Icons.local_offer_outlined, color: _cor, size: 20),
+                      SizedBox(width: 8),
+                      Text('Cupom de desconto',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 10),
+                    if (_cupomAplicado != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.green.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _cupomAplicado!,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.green),
+                                  ),
+                                  Text(
+                                    'Desconto de R\$ ${_desconto.toStringAsFixed(2)}',
+                                    style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _removerCupom,
+                              icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _cupomCtrl,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: InputDecoration(
+                                hintText: 'Digite o código do cupom',
+                                errorText: _cupomErro,
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: _cor, width: 2),
+                                ),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _cor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              onPressed: _validandoCupom ? null : _aplicarCupom,
+                              child: _validandoCupom
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white, strokeWidth: 2),
+                                    )
+                                  : const Text('Aplicar',
+                                      style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // ---- Observação ----
             Card(
               shape: RoundedRectangleBorder(
@@ -713,6 +871,7 @@ class _PedidoConfirmadoPage extends StatelessWidget {
   final List<Map<String, dynamic>> itens;
   final double subtotal;
   final double taxaEntrega;
+  final double desconto;
   final int    tempoMinutos;
   final _Pagamento pagamento;
 
@@ -724,6 +883,7 @@ class _PedidoConfirmadoPage extends StatelessWidget {
     required this.itens,
     required this.subtotal,
     required this.taxaEntrega,
+    required this.desconto,
     required this.tempoMinutos,
     required this.pagamento,
   });
@@ -824,13 +984,25 @@ class _PedidoConfirmadoPage extends StatelessWidget {
                             style: const TextStyle(fontSize: 13, color: Colors.black54)),
                       ],
                     ),
+                    if (desconto > 0) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Desconto (cupom)',
+                              style: TextStyle(fontSize: 13, color: Colors.green)),
+                          Text('- R\$ ${desconto.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
                     const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Total',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text('R\$ ${(subtotal + taxaEntrega).toStringAsFixed(2)}',
+                        Text('R\$ ${(subtotal + taxaEntrega - desconto).toStringAsFixed(2)}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 17,

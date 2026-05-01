@@ -39,6 +39,7 @@ class CriarPedidoController {
       final formaPagamento  = body['forma_pagamento']?.toString() ?? '';
       final trocoPara       = _parseDouble(body['troco_para']);
       final taxaEntrega     = _parseDouble(body['taxa_entrega']) ?? 0.0;
+      final codigoCupom     = body['codigo_cupom']?.toString().trim().toUpperCase();
 
       final rawItens = body['itens'];
       if (rawItens == null || rawItens is! List || rawItens.isEmpty) {
@@ -111,31 +112,97 @@ class CriarPedidoController {
       }
 
       // ---- Calcular valor total ----
-      final valorTotal = itens.fold<double>(
+      final subtotal = itens.fold<double>(
         0.0,
         (acc, item) => acc + (item['preco_unit'] as double) * (item['quantidade'] as int),
       );
 
-      // ---- Inserir pedido (id_status = 1 → 'Criado') ----
+      // ---- Validar e aplicar cupom (se informado) ----
+      double desconto = 0.0;
+      String? cupomAplicado;
+
+      if (codigoCupom != null && codigoCupom.isNotEmpty) {
+        final cupomResult = await conn.execute(
+          Sql.named('''
+            SELECT id_cupom, tipo, valor, valor_minimo, usos_maximos, usos_atuais, ativo, valido_ate
+            FROM cupons WHERE codigo = @codigo
+          '''),
+          parameters: {'codigo': codigoCupom},
+        );
+
+        if (cupomResult.isEmpty) {
+          return _json(422, {'error': 'Cupom inválido'});
+        }
+
+        final row          = cupomResult.first;
+        final idCupom      = row[0] as int;
+        final tipo         = row[1]?.toString() ?? 'percentual';
+        final valor        = _parseDouble(row[2]) ?? 0.0;
+        final valorMinimo  = _parseDouble(row[3]) ?? 0.0;
+        final usosMaximos  = row[4] as int?;
+        final usosAtuais   = row[5] as int? ?? 0;
+        final ativo        = row[6] as bool? ?? false;
+        final validoAte    = row[7];
+
+        if (!ativo) return _json(422, {'error': 'Cupom inativo'});
+
+        if (validoAte != null) {
+          final expira = validoAte is DateTime
+              ? validoAte
+              : DateTime.tryParse(validoAte.toString());
+          if (expira != null && expira.isBefore(DateTime.now())) {
+            return _json(422, {'error': 'Cupom expirado'});
+          }
+        }
+
+        if (usosMaximos != null && usosAtuais >= usosMaximos) {
+          return _json(422, {'error': 'Cupom esgotado'});
+        }
+
+        if (subtotal < valorMinimo) {
+          return _json(422, {
+            'error': 'Pedido mínimo de R\$ ${valorMinimo.toStringAsFixed(2)} para usar este cupom',
+          });
+        }
+
+        desconto = tipo == 'percentual'
+            ? subtotal * (valor / 100)
+            : (valor > subtotal ? subtotal : valor);
+        desconto = double.parse(desconto.toStringAsFixed(2));
+        cupomAplicado = codigoCupom;
+
+        await conn.execute(
+          Sql.named('UPDATE cupons SET usos_atuais = usos_atuais + 1 WHERE id_cupom = @id'),
+          parameters: {'id': idCupom},
+        );
+      }
+
+      final valorTotal = subtotal - desconto;
+
+      // ---- Inserir pedido (id_status = 1 → 'Aguardando') ----
       final pedidoResult = await conn.execute(
         Sql.named('''
           INSERT INTO pedidos
-            (id_usuario, id_empresa, id_status, valor_total,
-             endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega)
+            (id_usuario, id_empresa, id_status, total,
+             endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega,
+             codigo_cupom, desconto)
           VALUES
-            (@id_usuario, @id_empresa, 1, @valor_total,
-             @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega)
+            (@id_usuario, @id_empresa, 1, @total,
+             @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega,
+             @codigo_cupom, @desconto)
           RETURNING id_pedido
         '''),
         parameters: {
           'id_usuario':       idUsuario,
           'id_empresa':       idEmpresa,
-          'valor_total':      valorTotal,
+          'total':            valorTotal,
           'endereco_entrega': enderecoEntrega,
           'observacao':       observacao,
           'forma_pagamento':  formaPagamento.isNotEmpty ? formaPagamento : null,
           'troco_para':       trocoPara,
           'taxa_entrega':     taxaEntrega,
+          'codigo_cupom':     cupomAplicado,
+          'desconto':         desconto,
         },
       );
 

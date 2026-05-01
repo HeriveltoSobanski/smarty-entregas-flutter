@@ -422,6 +422,24 @@ class ApiService {
     }
   }
 
+  /// Valida um cupom. Retorna `{'ok': true, 'desconto': double, ...}` ou `{'erro': String}`.
+  static Future<Map<String, dynamic>> validarCupom({
+    required String codigo,
+    required double valorPedido,
+  }) async {
+    try {
+      final resp = await _post(
+        Uri.parse('$baseUrl/cupons/validar'),
+        body: jsonEncode({'codigo': codigo, 'valor_pedido': valorPedido}),
+      );
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode == 200) return data;
+      return {'erro': data['error']?.toString() ?? 'Cupom inválido'};
+    } catch (_) {
+      return {'erro': 'Servidor indisponível.'};
+    }
+  }
+
   /// Retorna `{'id_pedido': int}` em caso de sucesso,
   /// ou `{'erro': String}` em caso de falha.
   static Future<Map<String, dynamic>> criarPedido({
@@ -433,6 +451,7 @@ class ApiService {
     String formaPagamento = '',
     double? trocoPara,
     double taxaEntrega = 0.0,
+    String? codigoCupom,
   }) async {
     try {
       final resp = await _post(Uri.parse('$baseUrl/pedidos'), body: jsonEncode({
@@ -444,6 +463,7 @@ class ApiService {
           'taxa_entrega':     taxaEntrega,
           if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
           if (trocoPara != null) 'troco_para': trocoPara,
+          if (codigoCupom != null && codigoCupom.isNotEmpty) 'codigo_cupom': codigoCupom,
         }));
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode == 201) {
