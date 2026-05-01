@@ -24,6 +24,9 @@ migrate_working_dir/
 
 # Environment files
 .env
+.env.local
+**/.env.local
+.claude/settings.local.json
 
 # Flutter repo-specific
 /bin/cache/
