@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import '../../../core/utils/image_cache.dart';
 import '../../../core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
@@ -211,7 +211,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                 children: [
                   if (fotoCapa != null && fotoCapa.contains(','))
                     Image.memory(
-                      base64Decode(fotoCapa.split(',').last),
+                      Base64Cache.decode(fotoCapa),
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     )
@@ -385,7 +385,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
   Widget _buildLogo(String nome, String? fotoPerfil) {
     if (fotoPerfil != null && fotoPerfil.contains(',')) {
       try {
-        final bytes = base64Decode(fotoPerfil.split(',').last);
+        final bytes = Base64Cache.decode(fotoPerfil);
         return ClipOval(
           child: Image.memory(bytes, width: 80, height: 80, fit: BoxFit.cover),
         );
@@ -530,7 +530,7 @@ class _ImagemProduto extends StatelessWidget {
   Widget build(BuildContext context) {
     if (imagem != null && imagem!.contains(',')) {
       try {
-        final bytes = base64Decode(imagem!.split(',').last);
+        final bytes = Base64Cache.decode(imagem!);
         return ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: Image.memory(bytes, width: 88, height: 88, fit: BoxFit.cover),
@@ -756,7 +756,7 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: const [
+                      const Row(children: [
                         Icon(Icons.chat_bubble_outline,
                             size: 16, color: Colors.grey),
                         SizedBox(width: 6),
@@ -862,7 +862,7 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
 
   Widget _buildImagemHero(String imagem) {
     try {
-      final bytes = base64Decode(imagem.split(',').last);
+      final bytes = Base64Cache.decode(imagem);
       return Image.memory(bytes,
           width: double.infinity, height: 220, fit: BoxFit.cover);
     } catch (e, st) {
@@ -1004,7 +1004,7 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
 
   Widget _buildItemImagem(String imagem) {
     try {
-      final bytes = base64Decode(imagem.split(',').last);
+      final bytes = Base64Cache.decode(imagem);
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: Image.memory(bytes, width: 56, height: 56, fit: BoxFit.cover),
@@ -1150,7 +1150,7 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                 if (imagem != null && imagem.contains(','))
                   Builder(builder: (_) {
                     try {
-                      return Image.memory(base64Decode(imagem.split(',').last),
+                      return Image.memory(Base64Cache.decode(imagem),
                           width: double.infinity, height: 200, fit: BoxFit.cover);
                     } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); return const SizedBox.shrink(); }
                   })
@@ -1264,7 +1264,7 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: const [
+                      const Row(children: [
                         Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey),
                         SizedBox(width: 6),
                         Text('Alguma observação?',

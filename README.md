@@ -1,21 +1,45 @@
-<<<<<<< HEAD
-# smarty_entregas
+# Smarty Entregas — Flutter
 
-A new Flutter project.
+App mobile de delivery com três perfis: cliente, empresa e motoboy.
 
-## Getting Started
+## Requisitos
 
-This project is a starting point for a Flutter application.
+- Flutter 3.6.1+
+- Dart 3.6.1+
+- Android SDK (API 21+)
 
-A few resources to get you started if this is your first Flutter project:
+## Configuração
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+1. Clone o repositório
+2. Copie `.env.example` para `.env` e preencha as variáveis
+3. Execute `flutter pub get`
+4. Configure o `google-services.json` (Firebase)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# smarty-entregas-flutter
-Projeto comercial de delivery — Smarty Entregas
->>>>>>> 12fb045bef408cf4acb10680e82343f749839ccd
+## Build
+
+```bash
+# Debug
+flutter run
+
+# Release Android
+flutter build apk --dart-define=API_URL=https://sua-api.com
+```
+
+## Variáveis de ambiente (`.env` — nunca commitar)
+
+| Variável | Descrição |
+|----------|-----------|
+| `API_URL` | URL base do backend |
+| `JWT_SECRET` | Segredo JWT (backend) |
+| `GMAIL_USER` | Email para SMTP |
+| `GMAIL_APP_PASSWORD` | Senha de app Gmail |
+| `ORS_API_KEY` | OpenRouteService (rotas no mapa) |
+| `FCM_PROJECT_ID` | Firebase Cloud Messaging |
+
+## Arquitetura
+
+- **lib/core/** — utilitários, tema, carrinho, validadores
+- **lib/data/** — sessão, cache, armazenamento local
+- **lib/models/** — modelos de dados
+- **lib/services/** — API, notificações, conectividade
+- **lib/presentation/** — páginas e widgets

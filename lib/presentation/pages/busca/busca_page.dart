@@ -1,6 +1,6 @@
-﻿import 'dart:async';
+import 'dart:async';
+import '../../../core/utils/image_cache.dart';
 import '../../../core/utils/app_logger.dart';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
@@ -203,9 +203,9 @@ class _BuscaPageState extends State<BuscaPage> {
               // Header do restaurante
               Container(
                 height: 52,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [_laranja, _amarelo]),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [_laranja, _amarelo]),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(children: [
@@ -252,8 +252,8 @@ class _BuscaPageState extends State<BuscaPage> {
                   }).toList(),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text('Ver cardápio →',
@@ -339,7 +339,7 @@ class _MiniImagem extends StatelessWidget {
   Widget build(BuildContext context) {
     if (imagem != null && imagem!.contains(',')) {
       try {
-        final bytes = base64Decode(imagem!.split(',').last);
+        final bytes = Base64Cache.decode(imagem!);
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.memory(bytes, width: size, height: size, fit: BoxFit.cover),

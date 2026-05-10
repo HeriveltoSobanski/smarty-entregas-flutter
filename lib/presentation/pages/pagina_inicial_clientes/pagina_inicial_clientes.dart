@@ -108,7 +108,7 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      body: IndexedStack(index: _tabIndex, children: _paginas),
+      body: _LazyIndexedStack(index: _tabIndex, children: _paginas),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
@@ -145,6 +145,45 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
   }
 }
 
+// Cria cada tab só na primeira visita, depois mantém viva em memória.
+class _LazyIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+  const _LazyIndexedStack({required this.index, required this.children});
+
+  @override
+  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<_LazyIndexedStack> {
+  late final List<bool> _activated;
+
+  @override
+  void initState() {
+    super.initState();
+    _activated = List.generate(
+      widget.children.length,
+      (i) => i == widget.index,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_LazyIndexedStack old) {
+    super.didUpdateWidget(old);
+    _activated[widget.index] = true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.index,
+      children: List.generate(widget.children.length, (i) {
+        return _activated[i] ? widget.children[i] : const SizedBox.shrink();
+      }),
+    );
+  }
+}
+
 // ════════════════════════════════════════════════════════════════
 // CONTEÚDO DA TAB HOME
 // ════════════════════════════════════════════════════════════════
@@ -155,7 +194,7 @@ class _HomeContent extends StatefulWidget {
   State<_HomeContent> createState() => _HomeContentState();
 }
 
-class _HomeContentState extends State<_HomeContent> {
+class _HomeContentState extends State<_HomeContent> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _empresas = [];
   bool _loading = true;
   bool _fromCache = false;
@@ -176,16 +215,34 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _carregar();
     _carregarFavoritos();
     _atualizarNaoLidas();
-    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
+    _iniciarTimerNotif();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _notifTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _atualizarNaoLidas();
+      _iniciarTimerNotif();
+    } else if (state == AppLifecycleState.paused) {
+      _notifTimer?.cancel();
+      _notifTimer = null;
+    }
+  }
+
+  void _iniciarTimerNotif() {
+    _notifTimer?.cancel();
+    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
   }
 
   Future<void> _carregarFavoritos() async {
@@ -213,7 +270,7 @@ class _HomeContentState extends State<_HomeContent> {
       categoria: _categoriaFiltro.isEmpty ? null : _categoriaFiltro,
     );
     final enderecosFuture =
-        id != null ? ApiService.getEnderecosCliente(id) : Future.value(<Map<String, dynamic>>[]);
+        id != null ? ApiService.getEnderecosCliente(id) : Future.value(null);
 
     final results = await Future.wait([empresasFuture, enderecosFuture]);
     if (!mounted) return;
@@ -221,9 +278,9 @@ class _HomeContentState extends State<_HomeContent> {
     final empresasResult =
         results[0] as ({List<Map<String, dynamic>> empresas, bool fromCache});
     final enderecos =
-        results[1] as List<Map<String, dynamic>>;
+        results[1] as List<Map<String, dynamic>>?;
 
-    if (enderecos.isNotEmpty) {
+    if (enderecos != null && enderecos.isNotEmpty) {
       final principal = enderecos.firstWhere(
         (e) => e['principal'] == true,
         orElse: () => enderecos.first,

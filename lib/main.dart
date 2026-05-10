@@ -17,6 +17,7 @@ void main() async {
     await PushNotificationService.init();
   } catch (e, st) { AppLogger.e('main', e, st); }
   await ConnectivityService.instance.init();
+  await Cart.instance.carregar();
   runApp(const MyApp());
 }
 

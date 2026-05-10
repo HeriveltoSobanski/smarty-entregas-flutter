@@ -1,6 +1,7 @@
-﻿import 'dart:async';
-import '../../../core/utils/app_logger.dart';
+import 'dart:async';
 import 'dart:convert';
+import '../../../core/utils/image_cache.dart';
+import '../../../core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -57,10 +58,10 @@ class _PaginaEmpresaState extends State<PaginaEmpresa> {
         canPop: false,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(children: [
-            const Icon(Icons.location_on, color: _cor),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Endereço obrigatório', style: TextStyle(fontSize: 17))),
+          title: const Row(children: [
+            Icon(Icons.location_on, color: _cor),
+            SizedBox(width: 8),
+            Expanded(child: Text('Endereço obrigatório', style: TextStyle(fontSize: 17))),
           ]),
           content: const Text(
             'Para que os motoboys consigam encontrar sua empresa, '
@@ -484,7 +485,7 @@ class _CardProduto extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             child: temImg
                 ? Image.memory(
-                    base64Decode(img.split(',').last),
+                    Base64Cache.decode(img),
                     width: double.infinity,
                     height: 160,
                     fit: BoxFit.cover,
@@ -886,7 +887,7 @@ class _FormProdutoState extends State<_FormProduto> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Image.memory(
-                              base64Decode(_imagemBase64!.split(',').last),
+                              Base64Cache.decode(_imagemBase64!),
                               width: double.infinity, height: 110, fit: BoxFit.cover,
                             ),
                           ),
@@ -1195,7 +1196,7 @@ class _AdicionaisSheetState extends State<_AdicionaisSheet> {
               }),
 
             const SizedBox(height: 8),
-            _SecaoLabel('Adicionar novo item'),
+            const _SecaoLabel('Adicionar novo item'),
             const SizedBox(height: 12),
 
             Row(children: [
@@ -2451,7 +2452,7 @@ class _TabFinanceiroState extends State<_TabFinanceiro> {
 
                   // Formas de pagamento
                   if (porPagamento.isNotEmpty) ...[
-                    _SecaoLabel('Formas de pagamento'),
+                    const _SecaoLabel('Formas de pagamento'),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2500,7 +2501,7 @@ class _TabFinanceiroState extends State<_TabFinanceiro> {
 
                   // Top produtos
                   if (topProdutos.isNotEmpty) ...[
-                    _SecaoLabel('Produtos mais vendidos'),
+                    const _SecaoLabel('Produtos mais vendidos'),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2565,7 +2566,7 @@ class _TabFinanceiroState extends State<_TabFinanceiro> {
 
                   // Faturamento por dia
                   if (porDia.isNotEmpty) ...[
-                    _SecaoLabel('Por dia'),
+                    const _SecaoLabel('Por dia'),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2852,7 +2853,7 @@ class _TabContaState extends State<_TabConta> {
           children: [
 
             // �� SE��O: PERFIL ����������������������������������
-            _SecaoLabel('Perfil'),
+            const _SecaoLabel('Perfil'),
             const SizedBox(height: 10),
 
             Container(
@@ -2870,7 +2871,7 @@ class _TabContaState extends State<_TabConta> {
                       radius: 38,
                       backgroundColor: _cor.withValues(alpha: 0.12),
                       backgroundImage: _fotoPerfil != null && _fotoPerfil!.contains(',')
-                          ? MemoryImage(base64Decode(_fotoPerfil!.split(',').last))
+                          ? MemoryImage(Base64Cache.decode(_fotoPerfil!))
                           : null,
                       child: _fotoPerfil == null
                           ? Text(
@@ -2941,7 +2942,7 @@ class _TabContaState extends State<_TabConta> {
                       height: 124,
                       child: _fotoCapa != null && _fotoCapa!.contains(',')
                           ? Image.memory(
-                              base64Decode(_fotoCapa!.split(',').last),
+                              Base64Cache.decode(_fotoCapa!),
                               fit: BoxFit.cover,
                             )
                           : Container(
@@ -2991,7 +2992,7 @@ class _TabContaState extends State<_TabConta> {
             ),
 
             // �� SE��O: OPERA��O ��������������������������������
-            _SecaoLabel('Operação'),
+            const _SecaoLabel('Operação'),
             const SizedBox(height: 10),
 
             // Grupo de configurações (iOS-style)

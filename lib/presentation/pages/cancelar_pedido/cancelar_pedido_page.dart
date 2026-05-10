@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 
@@ -247,7 +247,7 @@ class _CancelarPedidoPageState extends State<CancelarPedidoPage> {
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                 foregroundColor: _laranja,
-                side: BorderSide(color: _laranja),
+                side: const BorderSide(color: _laranja),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),

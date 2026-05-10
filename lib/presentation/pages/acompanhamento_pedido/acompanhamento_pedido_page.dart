@@ -193,19 +193,19 @@ class _AcompanhamentoPedidoPageState
           _card(
             cor: Colors.red.shade50,
             borda: Colors.red.shade300,
-            child: Row(children: [
-              const Icon(Icons.cancel, color: Colors.red, size: 28),
-              const SizedBox(width: 12),
+            child: const Row(children: [
+              Icon(Icons.cancel, color: Colors.red, size: 28),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  const Text('Pedido cancelado',
+                  Text('Pedido cancelado',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: Colors.red)),
-                  const Text('Entre em contato com o restaurante.',
+                  Text('Entre em contato com o restaurante.',
                       style: TextStyle(fontSize: 13, color: Colors.red)),
                 ]),
               ),
@@ -217,11 +217,11 @@ class _AcompanhamentoPedidoPageState
           _card(
             cor: Colors.deepOrange.shade50,
             borda: Colors.deepOrange.shade200,
-            child: Row(children: [
-              const Icon(Icons.notifications_active,
+            child: const Row(children: [
+              Icon(Icons.notifications_active,
                   color: Colors.deepOrange, size: 26),
-              const SizedBox(width: 12),
-              const Expanded(
+              SizedBox(width: 12),
+              Expanded(
                 child: Text('Seu pedido está quase pronto!\nO motoboy será chamado em breve.',
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
