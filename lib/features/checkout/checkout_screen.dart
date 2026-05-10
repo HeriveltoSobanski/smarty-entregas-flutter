@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/cart/cart.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -49,27 +50,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
-  // Calcula o subtotal dos itens no carrinho
-  double get _subtotal => Cart.instance.total;
-
-  // Calcula o desconto (somente se cupom ativo)
+  double _subtotal(Cart cart) => cart.total;
   double get _desconto => _cupomAplicado ? _descontoCupom : 0.0;
-
-  // Calcula o total final
-  double get _total => (_subtotal + _taxaEntrega - _desconto).clamp(0, double.infinity);
-
-  // Formata valor double para "R$ X,XX"
+  double _total(Cart cart) => (_subtotal(cart) + _taxaEntrega - _desconto).clamp(0, double.infinity);
   String _fmt(double v) => 'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
-
-  // Verifica se o botão deve estar ativo
-  bool get _podeFinalizar => _temEndereco && !_carregando && Cart.instance.totalItens > 0;
+  bool _podeFinalizar(Cart cart) => _temEndereco && !_carregando && cart.totalItens > 0;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      // Escuta mudanças no carrinho para recalcular totais
-      animation: Cart.instance,
-      builder: (context, _) {
+    return Consumer<Cart>(
+      builder: (context, cart, _) {
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: _buildAppBar(),
@@ -80,7 +70,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               children: [
                 _secaoEndereco(),
                 const SizedBox(height: 16),
-                _secaoItens(context),
+                _secaoItens(context, cart),
                 const SizedBox(height: 16),
                 _secaoCupom(),
                 const SizedBox(height: 16),
@@ -88,15 +78,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 16),
                 _secaoObservacoes(),
                 const SizedBox(height: 16),
-                _secaoResumo(),
+                _secaoResumo(cart),
                 const SizedBox(height: 16),
                 _secaoTempo(),
                 const SizedBox(height: 24),
               ],
             ),
           ),
-          // Botão fixo no rodapé
-          bottomNavigationBar: _buildBotaoFinalizar(context),
+          bottomNavigationBar: _buildBotaoFinalizar(context, cart),
         );
       },
     );
@@ -221,8 +210,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ===================== SEÇÃO 2 — ITENS DO PEDIDO =====================
-  Widget _secaoItens(BuildContext context) {
-    final itens = Cart.instance.itens;
+  Widget _secaoItens(BuildContext context, Cart cart) {
+    final itens = cart.itens;
 
     return _card(
       child: Column(
@@ -286,9 +275,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
                   ),
                   onDismissed: (_) {
-                    // Remove todas as unidades do item
+                    final c = context.read<Cart>();
                     for (int q = item.quantidade; q > 0; q--) {
-                      Cart.instance.remover(item.nome);
+                      c.remover(item.nome);
                     }
                   },
                   child: _itemPedido(item),
@@ -354,7 +343,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             _botaoQtdCheckout(
               icone: Icons.remove,
               laranja: false,
-              onTap: () => Cart.instance.remover(item.nome),
+              onTap: () => context.read<Cart>().remover(item.nome),
             ),
             SizedBox(
               width: 32,
@@ -372,7 +361,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             _botaoQtdCheckout(
               icone: Icons.add,
               laranja: true,
-              onTap: () => Cart.instance.adicionar(item.nome, item.preco, item.imgPath),
+              onTap: () => context.read<Cart>().adicionar(item.nome, item.preco, item.imgPath),
             ),
           ],
         ),
@@ -689,7 +678,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ===================== SEÇÃO 6 — RESUMO =====================
-  Widget _secaoResumo() {
+  Widget _secaoResumo(Cart cart) {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,52 +691,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 color: AppColors.textPrimary),
           ),
           const Divider(color: AppColors.divider, height: 20),
-
-          // Subtotal
-          _linhaResumo('Subtotal', _fmt(_subtotal)),
+          _linhaResumo('Subtotal', _fmt(_subtotal(cart))),
           const SizedBox(height: 8),
-
-          // Taxa de entrega
           _linhaResumo(
             'Taxa de entrega',
             _taxaEntrega == 0 ? 'Grátis' : _fmt(_taxaEntrega),
-            corValor:
-                _taxaEntrega == 0 ? AppColors.success : AppColors.textPrimary,
+            corValor: _taxaEntrega == 0 ? AppColors.success : AppColors.textPrimary,
           ),
           const SizedBox(height: 8),
-
-          // Desconto (apenas se cupom aplicado)
           if (_cupomAplicado) ...[
-            _linhaResumo(
-              'Desconto',
-              '− ${_fmt(_desconto)}',
-              corValor: AppColors.success,
-            ),
+            _linhaResumo('Desconto', '− ${_fmt(_desconto)}', corValor: AppColors.success),
             const SizedBox(height: 8),
           ],
-
-          // Divider tracejado
           _dividerTracejado(),
           const SizedBox(height: 8),
-
-          // Total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Total',
-                style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary),
-              ),
-              Text(
-                _fmt(_total),
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary),
-              ),
+              Text('Total',
+                  style: GoogleFonts.poppins(
+                      fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Text(_fmt(_total(cart)),
+                  style: GoogleFonts.poppins(
+                      fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
         ],
@@ -828,7 +794,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ===================== BOTÃO FIXO NO RODAPÉ =====================
-  Widget _buildBotaoFinalizar(BuildContext context) {
+  Widget _buildBotaoFinalizar(BuildContext context, Cart cart) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -841,14 +807,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor:
-                _podeFinalizar ? AppColors.primary : AppColors.disabled,
+                _podeFinalizar(cart) ? AppColors.primary : AppColors.disabled,
             foregroundColor: Colors.white,
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          onPressed: _podeFinalizar ? () => _finalizarPedido(context) : null,
+          onPressed: _podeFinalizar(cart) ? () => _finalizarPedido(context) : null,
           // Ícone ou spinner de loading
           icon: _carregando
               ? const SizedBox(
@@ -863,7 +829,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           label: Text(
             _carregando
                 ? 'Processando...'
-                : 'Confirmar Pedido — ${_fmt(_total)}',
+                : 'Confirmar Pedido — ${_fmt(_total(cart))}',
             style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: FontWeight.w700,

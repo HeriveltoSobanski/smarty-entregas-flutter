@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
@@ -57,7 +58,8 @@ class _SplashPageState extends State<SplashPage>
       final exp = map['exp'] as int?;
       if (exp == null) return false;
       return DateTime.now().isAfter(DateTime.fromMillisecondsSinceEpoch(exp * 1000));
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('SplashPage', e, st);
       return true;
     }
   }

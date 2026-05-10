@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import '../../../core/utils/app_logger.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -121,7 +122,8 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
           setState(() => _erro = 'Endereço não encontrado. Tente ser mais específico.');
         }
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('SelecionarEndereco', e, st);
       setState(() => _erro = 'Erro ao buscar. Verifique a conexão.');
     }
 
@@ -153,7 +155,7 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
           _searchCtrl.text = _endereco;
         });
       }
-    } catch (_) {/* silencia — pin já está posicionado */}
+    } catch (e, st) { AppLogger.e('SelecionarEndereco', e, st); /* pin já está posicionado */ }
 
     setState(() => _buscando = false);
   }

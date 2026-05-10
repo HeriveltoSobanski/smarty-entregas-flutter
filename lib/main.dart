@@ -1,24 +1,21 @@
-import 'package:firebase_core/firebase_core.dart';
+﻿import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
-import 'presentation/pages/splash/splash_page.dart';
-import 'presentation/pages/login/login_page.dart';
-import 'presentation/pages/pagina_inicial_clientes/pagina_inicial_clientes.dart';
-import 'presentation/pages/pagina_empresa/pagina_empresa.dart';
-import 'presentation/pages/pagina_motoboy/pagina_motoboy.dart';
-import 'presentation/pages/register/register_page.dart';
-import 'presentation/pages/trabalhe_conosco/trabalhe_conosco_page.dart';
-import 'presentation/pages/pagina_esqueci_senha/pagina_esqueci_senha.dart';
 import 'core/theme/app_theme.dart';
 import 'services/push_notification_service.dart';
 import 'services/connectivity_service.dart';
+import 'package:provider/provider.dart';
+import 'core/cart/cart.dart';
+import 'presentation/navigation/app_routes.dart';
+import 'presentation/navigation/app_pages.dart';
+import 'core/utils/app_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   try {
     await PushNotificationService.init();
-  } catch (_) {}
+  } catch (e, st) { AppLogger.e('main', e, st); }
   await ConnectivityService.instance.init();
   runApp(const MyApp());
 }
@@ -42,22 +39,16 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Smarty Entregas',
-      theme: AppTheme.theme,
-      navigatorKey: PushNotificationService.navigatorKey,
-      initialRoute: '/splash',
-      routes: {
-        '/splash':        (_) => const SplashPage(),
-        '/login':         (_) => const PaginaLogin(),
-        '/home':          (_) => const PaginaInicialClientes(),
-        '/empresa':       (_) => const PaginaEmpresa(),
-        '/motoboy':       (_) => const PaginaMotoboy(),
-        '/register':      (_) => const PaginaRegistro(),
-        '/trabalhe':      (_) => const TrabalheConoscoPage(),
-        '/esqueci-senha': (_) => const PaginaEsqueciSenha(),
-      },
+    return ChangeNotifierProvider<Cart>.value(
+      value: Cart.instance,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Smarty Entregas',
+        theme: AppTheme.theme,
+        navigatorKey: PushNotificationService.navigatorKey,
+        initialRoute: AppRoutes.splash,
+        routes: AppPages.routes,
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -922,6 +923,7 @@ class _FormProdutoState extends State<_FormProduto> {
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: CircularProgressIndicator(color: _cor, strokeWidth: 2)))
                 : DropdownButtonFormField<Map<String, dynamic>>(
+                    // ignore: deprecated_member_use
                     value: _catSel,
                     decoration: _deco('Categoria *'),
                     items: _categorias
@@ -1296,7 +1298,7 @@ class _TabPedidosState extends State<_TabPedidos> {
       ),
     );
     if (picked != null) {
-      setState(() { if (isInicio) _dataInicio = picked; else _dataFim = picked; });
+      setState(() { if (isInicio) { _dataInicio = picked; } else { _dataFim = picked; } });
       _carregar();
     }
   }
@@ -1814,7 +1816,7 @@ class _PedidoDetalheSheetState extends State<_PedidoDetalheSheet> {
                               children: [
                                 Text(item['produto']?.toString() ?? '',
                                     style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
-                                Text('${qtd}�  R\$ ${preco.toStringAsFixed(2)}',
+                                Text('$qtd×  R\$ ${preco.toStringAsFixed(2)}',
                                     style: GoogleFonts.poppins(fontSize: 11, color: _muted)),
                                 if ((item['observacao']?.toString() ?? '').isNotEmpty)
                                   Text(item['observacao']!.toString(),
@@ -2584,7 +2586,7 @@ class _TabFinanceiroState extends State<_TabFinanceiro> {
                           try {
                             final partes = data.split('-');
                             if (partes.length == 3) dataFmt = '${partes[2]}/${partes[1]}';
-                          } catch (_) {}
+                          } catch (e, st) { AppLogger.e('PaginaEmpresa', e, st); }
                           return Column(
                             children: [
                               if (i > 0) Divider(height: 16, color: Colors.grey.shade100),
@@ -2825,9 +2827,11 @@ class _TabContaState extends State<_TabConta> {
               : int.tryParse(config['tempo_preparo']?.toString() ?? '') ?? _tempoPreparo;
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Configurações salvas!'), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Configurações salvas!'), backgroundColor: Colors.green),
+        );
+      }
     }
   }
 

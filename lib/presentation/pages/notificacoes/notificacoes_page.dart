@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/api_service.dart';
@@ -16,6 +17,7 @@ class NotificacoesPage extends StatefulWidget {
 class _NotificacoesPageState extends State<NotificacoesPage> {
   List<Map<String, dynamic>> _notificacoes = [];
   bool _carregando = true;
+  bool _erro = false;
 
   @override
   void initState() {
@@ -24,11 +26,16 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
   }
 
   Future<void> _carregar() async {
+    setState(() { _carregando = true; _erro = false; });
     final id = SessionStore.idUsuario;
     if (id == null) { setState(() => _carregando = false); return; }
     final lista = await ApiService.getNotificacoes(id);
     if (!mounted) return;
-    setState(() { _notificacoes = lista; _carregando = false; });
+    if (lista == null) {
+      setState(() { _erro = true; _carregando = false; });
+    } else {
+      setState(() { _notificacoes = lista; _carregando = false; });
+    }
   }
 
   Future<void> _marcarTodasLidas() async {
@@ -75,9 +82,11 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
       ),
       body: _carregando
           ? const Center(child: CircularProgressIndicator(color: _laranja))
-          : _notificacoes.isEmpty
-              ? _buildVazio()
-              : RefreshIndicator(
+          : _erro
+              ? _buildErro()
+              : _notificacoes.isEmpty
+                  ? _buildVazio()
+                  : RefreshIndicator(
                   color: _laranja,
                   onRefresh: _carregar,
                   child: ListView.builder(
@@ -93,6 +102,33 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
                 ),
     );
   }
+
+  Widget _buildErro() => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text('Não foi possível carregar',
+                style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500)),
+            const SizedBox(height: 6),
+            Text('Verifique sua conexão e tente novamente.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    fontSize: 13, color: Colors.grey.shade400)),
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: _carregar,
+              icon: const Icon(Icons.refresh, color: _laranja),
+              label: Text('Tentar novamente',
+                  style: GoogleFonts.poppins(color: _laranja, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      );
 
   Widget _buildVazio() => Center(
         child: Column(
@@ -236,7 +272,8 @@ class _NotifCard extends StatelessWidget {
       if (diff.inHours   < 24) return 'Há ${diff.inHours}h';
       if (diff.inDays    < 7)  return 'Há ${diff.inDays} dias';
       return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('NotificacoesPage', e, st);
       return '';
     }
   }

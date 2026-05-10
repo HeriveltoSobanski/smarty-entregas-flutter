@@ -221,6 +221,9 @@ class _PaginaLoginState extends State<PaginaLogin> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final logoHeight   = (screenHeight * 0.22).clamp(100.0, 200.0);
+
     return Container(
       decoration: const BoxDecoration(
         image: DecorationImage(
@@ -230,23 +233,31 @@ class _PaginaLoginState extends State<PaginaLogin> {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: true,
         body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Form(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom,
+                ),
+                child: IntrinsicHeight(
+                  child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 24),
+                    const Spacer(),
 
                     // Logo
                     Center(
                       child: Image.asset(
                         'assets/logo.png',
-                        height: 240,
+                        height: logoHeight,
                         errorBuilder: (_, __, ___) =>
-                            const SizedBox(height: 100),
+                            SizedBox(height: logoHeight),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -261,7 +272,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                         color:      const Color(0xFF212121),
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
 
                     // E-mail
                     TextFormField(
@@ -489,7 +500,10 @@ class _PaginaLoginState extends State<PaginaLogin> {
                         ),
                       ),
                     const SizedBox(height: 24),
+                    const Spacer(),
                   ],
+                ),
+              ),
                 ),
               ),
             ),

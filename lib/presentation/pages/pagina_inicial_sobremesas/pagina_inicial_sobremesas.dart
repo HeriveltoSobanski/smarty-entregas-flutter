@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -18,6 +18,7 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
   int _bannerAtual = 0;
   List<Map<String, dynamic>> _produtos = [];
   bool _carregando = true;
+  bool _erro = false;
 
   @override
   void initState() {
@@ -29,7 +30,11 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
     setState(() => _carregando = true);
     final lista = await ApiService.getProdutosPublico(categoria: 'Sobremesas');
     if (!mounted) return;
-    setState(() { _produtos = lista; _carregando = false; });
+    if (lista == null) {
+      setState(() { _erro = true; _carregando = false; });
+    } else {
+      setState(() { _produtos = lista; _carregando = false; });
+    }
   }
 
   @override
@@ -73,7 +78,19 @@ class _PaginaInicialSobremesasState extends State<PaginaInicialSobremesas> {
                         children: const [ShimmerCard(), ShimmerCard(), ShimmerCard()],
                       ),
                     )
-                  : _produtos.isEmpty
+                                    : _erro
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text('Erro ao carregar. Puxe para tentar novamente.',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        )                  : _produtos.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: 32),
                           child: Center(

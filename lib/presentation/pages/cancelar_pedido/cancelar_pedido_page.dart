@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 
 const Color _laranja = Color(0xFFF5841F);
@@ -101,7 +102,8 @@ class _CancelarPedidoPageState extends State<CancelarPedidoPage> {
         ),
       );
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('CancelarPedido', e, st);
       if (!mounted) return;
       setState(() => _cancelando = false);
       ScaffoldMessenger.of(context).showSnackBar(

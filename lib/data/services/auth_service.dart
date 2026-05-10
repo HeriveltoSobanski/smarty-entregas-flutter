@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import '../../core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -38,7 +39,8 @@ class AuthService {
     Map<String, dynamic> data;
     try {
       data = jsonDecode(res.body) as Map<String, dynamic>;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('AuthService', e, st);
       throw Exception('Resposta inválida do servidor (${res.statusCode}): ${res.body}');
     }
 

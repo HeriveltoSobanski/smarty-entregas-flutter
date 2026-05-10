@@ -1,4 +1,5 @@
 ﻿import 'dart:convert';
+import '../core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../data/session_store.dart';
@@ -29,7 +30,8 @@ class ApiService {
       if (exp == null) return false;
       return DateTime.now()
           .isAfter(DateTime.fromMillisecondsSinceEpoch(exp * 1000));
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return true;
     }
   }
@@ -123,7 +125,8 @@ class ApiService {
   static Map<String, dynamic> _safeJson(http.Response resp, String fallback) {
     try {
       return jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {'error': '$fallback (${resp.statusCode})'};
     }
   }
@@ -264,7 +267,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['categorias'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -282,12 +286,13 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['produtos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getProdutosPublico({
+  static Future<List<Map<String, dynamic>>?> getProdutosPublico({
     String? categoria,
   }) async {
     try {
@@ -301,9 +306,10 @@ class ApiService {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['produtos'] ?? []);
       }
-      return [];
-    } catch (_) {
-      return [];
+      return null;
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return null;
     }
   }
 
@@ -336,7 +342,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar produto';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -369,7 +376,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atualizar produto';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -377,13 +385,13 @@ class ApiService {
   static Future<void> deleteProduto(int idProduto) async {
     try {
       await _delete(Uri.parse('$baseUrl/produtos/$idProduto'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<void> toggleProdutoAtivo(int idProduto) async {
     try {
       await _patch(Uri.parse('$baseUrl/produtos/$idProduto/ativo'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
@@ -400,7 +408,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['empresas'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -417,7 +426,8 @@ class ApiService {
         return data['pedido'] as Map<String, dynamic>?;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -435,7 +445,8 @@ class ApiService {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode == 200) return data;
       return {'erro': data['error']?.toString() ?? 'Cupom inválido'};
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {'erro': 'Servidor indisponível.'};
     }
   }
@@ -470,7 +481,8 @@ class ApiService {
         return {'id_pedido': data['id_pedido'] as int};
       }
       return {'erro': data['error']?.toString() ?? 'Erro ao criar pedido'};
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {'erro': 'Servidor indisponível.'};
     }
   }
@@ -492,7 +504,7 @@ class ApiService {
           fromCache: false,
         );
       }
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
 
     if (pagina == 1) {
       final cached = await CacheStore.load<List>(cacheKey);
@@ -510,7 +522,7 @@ class ApiService {
   static Future<void> atualizarStatusPedido(int idPedido, int idStatus) async {
     try {
       await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/status'), body: jsonEncode({'id_status': idStatus}));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
@@ -532,7 +544,7 @@ class ApiService {
         await CacheStore.save(cacheKey, lista);
         return (empresas: lista, fromCache: false);
       }
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
 
     final cached = await CacheStore.load<List>(cacheKey);
     if (cached != null) {
@@ -556,7 +568,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['grupos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -582,7 +595,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar adicional';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -590,14 +604,14 @@ class ApiService {
   static Future<void> deleteAdicional(int idAdicional) async {
     try {
       await _delete(Uri.parse('$baseUrl/adicionais/$idAdicional'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
   // ENDEREÇOS DO CLIENTE
   // ----------------------------------------------------------------
 
-  static Future<List<Map<String, dynamic>>> getEnderecosCliente(
+  static Future<List<Map<String, dynamic>>?> getEnderecosCliente(
       int idUsuario) async {
     try {
       final resp = await _get(Uri.parse('$baseUrl/clientes/$idUsuario/enderecos'));
@@ -605,9 +619,10 @@ class ApiService {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['enderecos'] ?? []);
       }
-      return [];
-    } catch (_) {
-      return [];
+      return null;
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return null;
     }
   }
 
@@ -628,7 +643,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar endereço';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -636,13 +652,13 @@ class ApiService {
   static Future<void> deletarEnderecoCliente(int idEndereco) async {
     try {
       await _delete(Uri.parse('$baseUrl/clientes/enderecos/$idEndereco'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<void> marcarEnderecoClientePrincipal(int idEndereco) async {
     try {
       await _patch(Uri.parse('$baseUrl/clientes/enderecos/$idEndereco/principal'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
@@ -656,7 +672,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -672,7 +689,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar endereço';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -688,7 +706,8 @@ class ApiService {
         };
       }
       return {};
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {};
     }
   }
@@ -710,7 +729,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar foto';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -726,7 +746,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -741,7 +762,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar configurações';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -757,7 +779,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return {'disponiveis': 0, 'em_rota': 0};
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {'disponiveis': 0, 'em_rota': 0};
     }
   }
@@ -766,7 +789,7 @@ class ApiService {
       int idMotoboy, String status) async {
     try {
       await _patch(Uri.parse('$baseUrl/motoboy/meu-status'), body: jsonEncode({'id_motoboy': idMotoboy, 'status': status}));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<List<Map<String, dynamic>>> getEntregasEmRota(
@@ -778,7 +801,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -786,7 +810,7 @@ class ApiService {
   static Future<void> marcarQuasePronto(int idPedido) async {
     try {
       await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/quase-pronto'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<String?> chamarMotoboy(int idPedido) async {
@@ -795,7 +819,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -803,7 +828,7 @@ class ApiService {
   static Future<void> entregaPropria(int idPedido) async {
     try {
       await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/entrega-propria'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<List<Map<String, dynamic>>> getEntregasDisponiveis() async {
@@ -814,7 +839,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -828,7 +854,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -840,7 +867,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao aceitar entrega';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -849,7 +877,7 @@ class ApiService {
       int idPedido, int idStatus) async {
     try {
       await _patch(Uri.parse('$baseUrl/motoboy/status'), body: jsonEncode({'id_pedido': idPedido, 'id_status': idStatus}));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<Map<String, dynamic>> getHistoricoMotoboy(int idMotoboy,
@@ -862,7 +890,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return {};
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return {};
     }
   }
@@ -885,7 +914,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['pedidos'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -906,7 +936,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -934,7 +965,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -951,7 +983,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['motoboys'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -965,7 +998,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -979,7 +1013,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao cadastrar motoboy';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -987,7 +1022,7 @@ class ApiService {
   static Future<void> deletarMotoboyEmpresa(int id) async {
     try {
       await _delete(Uri.parse('$baseUrl/empresas/motoboys/$id'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<String?> atribuirMotoboyEmpresa({
@@ -999,7 +1034,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atribuir motoboy';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1008,14 +1044,15 @@ class ApiService {
   // NOTIFICAÇÕES
   // ----------------------------------------------------------------
 
-  static Future<List<Map<String, dynamic>>> getNotificacoes(int idUsuario) async {
+  static Future<List<Map<String, dynamic>>?> getNotificacoes(int idUsuario) async {
     try {
       final resp = await _get(Uri.parse('$baseUrl/notificacoes?id_usuario=$idUsuario'));
-      if (resp.statusCode != 200) return [];
+      if (resp.statusCode != 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return List<Map<String, dynamic>>.from(data['notificacoes'] ?? []);
-    } catch (_) {
-      return [];
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return null;
     }
   }
 
@@ -1025,7 +1062,8 @@ class ApiService {
       if (resp.statusCode != 200) return 0;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return (data['total'] as num?)?.toInt() ?? 0;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 0;
     }
   }
@@ -1033,13 +1071,13 @@ class ApiService {
   static Future<void> marcarNotificacaoLida(int idNotificacao) async {
     try {
       await _patch(Uri.parse('$baseUrl/notificacoes/$idNotificacao/lida'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   static Future<void> marcarTodasNotificacoesLidas(int idUsuario) async {
     try {
       await _patch(Uri.parse('$baseUrl/notificacoes/todas-lidas?id_usuario=$idUsuario'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
@@ -1052,7 +1090,8 @@ class ApiService {
       final resp = await _get(Uri.parse('$baseUrl/usuarios/$idUsuario/perfil'));
       if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -1078,7 +1117,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atualizar perfil';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1126,7 +1166,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao enviar avaliação';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1142,7 +1183,8 @@ class ApiService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
       return null;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return null;
     }
   }
@@ -1159,7 +1201,8 @@ class ApiService {
         return List<Map<String, dynamic>>.from(data['sabores'] ?? []);
       }
       return [];
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return [];
     }
   }
@@ -1175,7 +1218,8 @@ class ApiService {
       if (resp.statusCode == 201) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao salvar sabor';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1198,7 +1242,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['error']?.toString() ?? 'Erro ao atualizar sabor';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1206,7 +1251,7 @@ class ApiService {
   static Future<void> deletePizzaSabor(int idSabor) async {
     try {
       await _delete(Uri.parse('$baseUrl/pizza/sabores/$idSabor'));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 
   // ----------------------------------------------------------------
@@ -1228,7 +1273,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body);
       return data['error']?.toString() ?? 'Código inválido.';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1245,7 +1291,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body);
       return data['error']?.toString() ?? 'Erro ao enviar código.';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1270,7 +1317,8 @@ class ApiService {
       if (resp.statusCode == 200) return null;
       final data = jsonDecode(resp.body);
       return data['error']?.toString() ?? 'Erro ao redefinir senha.';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
       return 'Servidor indisponível.';
     }
   }
@@ -1288,6 +1336,6 @@ class ApiService {
           'fcm_token':  token,
           'plataforma': plataforma,
         }));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
 }

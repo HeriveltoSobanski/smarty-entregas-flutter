@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -45,7 +46,7 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
     if (id == null) return;
     final enderecos = await ApiService.getEnderecosCliente(id);
     if (!mounted) return;
-    if (enderecos.isEmpty) {
+    if (enderecos != null && enderecos.isEmpty) {
       _mostrarModalEnderecoObrigatorio();
     }
   }
@@ -89,7 +90,7 @@ class _PaginaInicialClientesState extends State<PaginaInicialClientes> {
                 final id = SessionStore.idUsuario;
                 if (id == null) return;
                 final enderecos = await ApiService.getEnderecosCliente(id);
-                if (enderecos.isEmpty && mounted) {
+                if ((enderecos == null || enderecos.isEmpty) && mounted) {
                   _mostrarModalEnderecoObrigatorio();
                 }
               },
@@ -914,7 +915,8 @@ class _LogoEmpresaState extends State<_LogoEmpresa> {
     if (foto != null && foto.contains(',')) {
       try {
         _bytes = base64Decode(foto.split(',').last);
-      } catch (_) {
+      } catch (e, st) {
+      AppLogger.e('PaginaInicial', e, st);
         _bytes = null;
       }
     } else {

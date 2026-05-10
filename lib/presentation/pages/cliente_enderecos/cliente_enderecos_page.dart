@@ -23,6 +23,7 @@ class ClienteEnderecosPage extends StatefulWidget {
 class _ClienteEnderecosPageState extends State<ClienteEnderecosPage> {
   List<Map<String, dynamic>> _enderecos = [];
   bool _carregando = true;
+  bool _erro = false;
 
   @override
   void initState() {
@@ -31,10 +32,16 @@ class _ClienteEnderecosPageState extends State<ClienteEnderecosPage> {
   }
 
   Future<void> _carregar() async {
-    setState(() => _carregando = true);
+    setState(() { _carregando = true; _erro = false; });
     final id = SessionStore.idUsuario;
     if (id != null) {
-      _enderecos = await ApiService.getEnderecosCliente(id);
+      final lista = await ApiService.getEnderecosCliente(id);
+      if (!mounted) return;
+      if (lista == null) {
+        setState(() { _erro = true; _carregando = false; });
+        return;
+      }
+      _enderecos = lista;
     }
     if (mounted) setState(() => _carregando = false);
   }
@@ -207,9 +214,11 @@ class _ClienteEnderecosPageState extends State<ClienteEnderecosPage> {
       ),
       body: _carregando
           ? const Center(child: CircularProgressIndicator(color: _cor))
-          : _enderecos.isEmpty
-              ? _buildVazio()
-              : _buildLista(),
+          : _erro
+              ? _buildErro()
+              : _enderecos.isEmpty
+                  ? _buildVazio()
+                  : _buildLista(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _adicionarEndereco,
         backgroundColor: _cor,
@@ -220,6 +229,29 @@ class _ClienteEnderecosPageState extends State<ClienteEnderecosPage> {
       ),
     );
   }
+
+  Widget _buildErro() => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text('Não foi possível carregar endereços',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey)),
+            const SizedBox(height: 6),
+            const Text('Verifique sua conexão e tente novamente.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: _carregar,
+              icon: const Icon(Icons.refresh, color: _cor),
+              label: const Text('Tentar novamente',
+                  style: TextStyle(color: _cor, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      );
 
   Widget _buildVazio() => Center(
         child: Column(

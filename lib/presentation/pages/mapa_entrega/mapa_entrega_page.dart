@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import '../../../core/utils/app_logger.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -147,7 +148,8 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
           });
         }
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('MapaEntrega', e, st);
       // Rota falhou — exibe pins sem polyline
     }
 

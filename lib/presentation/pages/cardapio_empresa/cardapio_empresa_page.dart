@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import '../../../core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../checkout/checkout_page.dart';
@@ -388,7 +389,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
         return ClipOval(
           child: Image.memory(bytes, width: 80, height: 80, fit: BoxFit.cover),
         );
-      } catch (_) {}
+      } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); }
     }
     return Container(
       width: 80, height: 80,
@@ -534,7 +535,7 @@ class _ImagemProduto extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: Image.memory(bytes, width: 88, height: 88, fit: BoxFit.cover),
         );
-      } catch (_) {}
+      } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); }
     }
     return Container(
       width: 88, height: 88,
@@ -864,7 +865,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
       final bytes = base64Decode(imagem.split(',').last);
       return Image.memory(bytes,
           width: double.infinity, height: 220, fit: BoxFit.cover);
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('CardapioEmpresa', e, st);
       return const SizedBox.shrink();
     }
   }
@@ -1007,7 +1009,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
         borderRadius: BorderRadius.circular(6),
         child: Image.memory(bytes, width: 56, height: 56, fit: BoxFit.cover),
       );
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('CardapioEmpresa', e, st);
       return const SizedBox.shrink();
     }
   }
@@ -1149,7 +1152,7 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                     try {
                       return Image.memory(base64Decode(imagem.split(',').last),
                           width: double.infinity, height: 200, fit: BoxFit.cover);
-                    } catch (_) { return const SizedBox.shrink(); }
+                    } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); return const SizedBox.shrink(); }
                   })
                 else
                   Container(

@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
 import '../avaliacao/avaliacao_page.dart';
@@ -151,7 +152,8 @@ class _DetalhesPedidoPageState extends State<DetalhesPedidoPage> {
       dataFormatada =
           '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}'
           '  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('DetalhesPedido', e, st);
       dataFormatada = criadoEm;
     }
 

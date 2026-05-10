@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
+import '../../core/utils/app_logger.dart';
 
 class CartItem {
   final String nome;
@@ -28,6 +29,9 @@ class Cart extends ChangeNotifier {
   Cart._();
   static final Cart instance = Cart._();
 
+  // ignore: prefer_constructors_over_static_methods
+  static Cart testInstance() => Cart._();
+
   final List<CartItem> _itens = [];
 
   List<CartItem> get itens =>
@@ -40,7 +44,8 @@ class Cart extends ChangeNotifier {
   int quantidadeDe(String nome) {
     try {
       return _itens.firstWhere((i) => i.nome == nome).quantidade;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('Cart', e, st);
       return 0;
     }
   }

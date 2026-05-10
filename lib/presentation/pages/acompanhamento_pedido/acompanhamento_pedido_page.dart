@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 import '../avaliacao/avaliacao_page.dart';
 import '../suporte/suporte_page.dart';
@@ -33,16 +34,17 @@ class _AcompanhamentoPedidoPageState
   bool   _carregando = true;
   Timer? _timer;
   bool   _navegouAvaliacao = false;
+  int    _ultimoStatus = 0;
 
-  // Última vez que mudou de status — para calcular tempo decorrido
-  int _ultimoStatus = 0;
+  static const _intervalMin     = 6;
+  static const _intervalMax     = 30;
+  static const _intervalMaxErro = 60;
+  int _intervalAtual = _intervalMin;
 
   @override
   void initState() {
     super.initState();
     _carregar();
-    // Polling a cada 6 segundos
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) => _carregar());
   }
 
   @override
@@ -51,16 +53,45 @@ class _AcompanhamentoPedidoPageState
     super.dispose();
   }
 
+  void _agendarPoll(int segundos) {
+    _timer?.cancel();
+    _timer = Timer(Duration(seconds: segundos), _carregar);
+  }
+
   Future<void> _carregar() async {
-    final data = await ApiService.getPedidoDetalhes(widget.idPedido);
+    Map<String, dynamic>? data;
+    try {
+      data = await ApiService.getPedidoDetalhes(widget.idPedido);
+    } catch (e, st) {
+      AppLogger.e('AcompanhamentoPedido', e, st);
+      // Backoff em erro: dobra intervalo até máximo de 60s
+      _intervalAtual = (_intervalAtual * 2).clamp(_intervalMin, _intervalMaxErro);
+      if (mounted) {
+        setState(() => _carregando = false);
+        _agendarPoll(_intervalAtual);
+      }
+      return;
+    }
+
     if (!mounted) return;
     if (data != null) {
       final novoStatus = data['id_status'] is int
           ? data['id_status'] as int
           : int.tryParse(data['id_status']?.toString() ?? '') ?? 1;
 
+      final statusMudou = novoStatus != _ultimoStatus;
+
       if (novoStatus == 4 || novoStatus == 5) {
+        // Status terminal — para polling
         _timer?.cancel();
+      } else if (statusMudou) {
+        // Mudança detectada — reseta para intervalo mínimo
+        _intervalAtual = _intervalMin;
+        _agendarPoll(_intervalAtual);
+      } else {
+        // Sem mudança — aumenta intervalo 1.5x até máximo de 30s
+        _intervalAtual = (_intervalAtual * 1.5).round().clamp(_intervalMin, _intervalMax);
+        _agendarPoll(_intervalAtual);
       }
 
       setState(() {
@@ -95,7 +126,10 @@ class _AcompanhamentoPedidoPageState
         }
       }
     } else {
+      // API retornou null — trata como erro transitório
+      _intervalAtual = (_intervalAtual * 2).clamp(_intervalMin, _intervalMaxErro);
       setState(() => _carregando = false);
+      _agendarPoll(_intervalAtual);
     }
   }
 
@@ -122,6 +156,7 @@ class _AcompanhamentoPedidoPageState
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
+              _intervalAtual = _intervalMin;
               setState(() => _carregando = true);
               _carregar();
             },

@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -343,7 +344,7 @@ class _MiniImagem extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           child: Image.memory(bytes, width: size, height: size, fit: BoxFit.cover),
         );
-      } catch (_) {}
+      } catch (e, st) { AppLogger.e('BuscaPage', e, st); }
     }
     return Container(
       width: size,

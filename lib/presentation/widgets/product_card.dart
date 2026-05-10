@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/cart/cart.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -35,10 +36,9 @@ class ProductCard extends StatelessWidget {
       builder: (context, selecionado, _) {
         final mostrarControles = selecionado == nome;
 
-        return AnimatedBuilder(
-          animation: Cart.instance,
-          builder: (context, _) {
-            final qty = Cart.instance.quantidadeDe(nome);
+        return Consumer<Cart>(
+          builder: (context, cart, _) {
+            final qty = cart.quantidadeDe(nome);
 
             return GestureDetector(
               onTap: () => _produtoSelecionado.value =
@@ -224,7 +224,7 @@ class ProductCard extends StatelessWidget {
                                   icon: Icons.remove,
                                   onTap: qty > 0
                                       ? () {
-                                          Cart.instance.remover(nome);
+                                          cart.remover(nome);
                                           if (qty == 1) {
                                             _produtoSelecionado.value = null;
                                           }
@@ -245,8 +245,7 @@ class ProductCard extends StatelessWidget {
                                 ),
                                 _BotaoQtd(
                                   icon: Icons.add,
-                                  onTap: () => Cart.instance
-                                      .adicionar(nome, preco, imgPath),
+                                  onTap: () => cart.adicionar(nome, preco, imgPath),
                                 ),
                               ],
                             ),

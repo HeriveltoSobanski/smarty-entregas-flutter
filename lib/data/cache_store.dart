@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import '../core/utils/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CacheStore {
@@ -8,7 +9,7 @@ class CacheStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_prefix$key', jsonEncode(data));
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('CacheStore', e, st); }
   }
 
   static Future<T?> load<T>(String key) async {
@@ -17,7 +18,8 @@ class CacheStore {
       final raw = prefs.getString('$_prefix$key');
       if (raw == null) return null;
       return jsonDecode(raw) as T?;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('CacheStore', e, st);
       return null;
     }
   }
@@ -26,6 +28,6 @@ class CacheStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('$_prefix$key');
-    } catch (_) {}
+    } catch (e, st) { AppLogger.e('CacheStore', e, st); }
   }
 }

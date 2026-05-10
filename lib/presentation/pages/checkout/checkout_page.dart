@@ -131,6 +131,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (id == null) return;
     final lista = await ApiService.getEnderecosCliente(id);
     if (!mounted) return;
+    if (lista == null) return;
     // Pré-seleciona o principal (ou o primeiro)
     final sel = lista.firstWhere(
       (e) => e['principal'] as bool? ?? false,
