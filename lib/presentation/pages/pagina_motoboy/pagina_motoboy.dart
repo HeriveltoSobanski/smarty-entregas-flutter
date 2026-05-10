@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../presentation/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -40,7 +41,7 @@ class _PaginaMotoboyState extends State<PaginaMotoboy> {
             await SessionStore.logout();
             if (!context.mounted) return;
             Navigator.of(context)
-                .pushNamedAndRemoveUntil('/login', (_) => false);
+                .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
           },
         ),
       ),

@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../presentation/navigation/app_routes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../data/session_store.dart';
 import '../../../data/auth_storage.dart';
@@ -332,7 +333,7 @@ class _PerfilPageState extends State<PerfilPage> {
               await SessionStore.logout();
               if (!context.mounted) return;
               Navigator.pushNamedAndRemoveUntil(
-                  context, '/login', (_) => false);
+                  context, AppRoutes.login, (_) => false);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text('Sair',

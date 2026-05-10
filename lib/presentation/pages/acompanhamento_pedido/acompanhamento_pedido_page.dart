@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../presentation/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
@@ -493,7 +494,7 @@ class _AcompanhamentoPedidoPageState
                     borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () => Navigator.of(context)
-                  .pushNamedAndRemoveUntil('/home', (_) => false),
+                  .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
               icon: const Icon(Icons.home_outlined),
               label: const Text('Voltar ao início',
                   style: TextStyle(

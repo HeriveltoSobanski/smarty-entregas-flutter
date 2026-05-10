@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/cart/cart.dart';
 import '../../core/theme/app_theme.dart';
+import '../pages/checkout/checkout_page.dart';
 
 class FloatingCart extends StatelessWidget {
   const FloatingCart({super.key});
@@ -12,7 +13,14 @@ class FloatingCart extends StatelessWidget {
     if (cart.totalItens == 0) return const SizedBox.shrink();
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/checkout'),
+      onTap: () {
+        final empresa = context.read<Cart>().empresa;
+        if (empresa == null) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => CheckoutPage(empresa: empresa)),
+        );
+      },
       child: Container(
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 16),

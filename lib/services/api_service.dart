@@ -1,4 +1,5 @@
 ﻿import 'dart:convert';
+import '../presentation/navigation/app_routes.dart';
 import '../core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -39,7 +40,7 @@ class ApiService {
   static Future<void> _handleUnauthorized() async {
     await SessionStore.logout();
     PushNotificationService.navigatorKey.currentState
-        ?.pushNamedAndRemoveUntil('/login', (_) => false);
+        ?.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
   // Wrappers que checam expiração antes e 401 depois.

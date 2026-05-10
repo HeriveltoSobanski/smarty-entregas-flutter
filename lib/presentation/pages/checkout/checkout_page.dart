@@ -1,6 +1,9 @@
-import 'dart:math';
+﻿import 'dart:math';
+import '../../../presentation/navigation/app_routes.dart';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/cart/cart.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
@@ -30,14 +33,10 @@ const Color _cor = Color(0xFFFFA726);
 
 class CheckoutPage extends StatefulWidget {
   final Map<String, dynamic> empresa;
-  final List<Map<String, dynamic>> itens;
-  final double total;
 
   const CheckoutPage({
     super.key,
     required this.empresa,
-    required this.itens,
-    required this.total,
   });
 
   @override
@@ -169,7 +168,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final result = await ApiService.validarCupom(
       codigo:      codigo,
-      valorPedido: widget.total,
+      valorPedido: context.read<Cart>().total,
     );
 
     if (!mounted) return;
@@ -207,12 +206,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.dispose();
   }
 
-  double _precoItem(dynamic preco) {
-    if (preco is num) return preco.toDouble();
-    if (preco is String) return double.tryParse(preco) ?? 0.0;
-    return 0.0;
-  }
-
   Future<void> _confirmarPedido() async {
     final idUsuario = SessionStore.idUsuario;
     if (idUsuario == null) {
@@ -232,20 +225,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     setState(() => _carregando = true);
 
-    final itensParaEnvio = widget.itens.map((item) {
-      final adicionais = item['adicionais']?.toString() ?? '';
-      final obs        = item['observacao']?.toString() ?? '';
-      final descricao  = [adicionais, obs]
+    final cart = context.read<Cart>();
+    final itensParaEnvio = cart.itens.map((item) {
+      final descricao = [item.resumoAdicionais, item.observacao ?? '']
           .where((s) => s.isNotEmpty)
           .join(' | ');
-      final ids = (item['adicionais_ids'] as List? ?? [])
-          .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
-          .where((id) => id > 0)
-          .toList();
+      final ids = item.adicionaisIds;
       return {
-        'id_produto': item['id_produto'],
-        'quantidade': item['quantidade'],
-        'preco_unit': _precoItem(item['preco']),
+        'id_produto': item.idProduto,
+        'quantidade': item.quantidade,
+        'preco_unit': item.preco,
         if (descricao.isNotEmpty) 'observacao': descricao,
         if (ids.isNotEmpty) 'adicionais': ids,
       };
@@ -271,11 +260,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     double? troco;
     if (_pagamento == _Pagamento.dinheiro) {
       final t = double.tryParse(_trocoCtrl.text.replaceAll(',', '.'));
-      if (t != null && t < widget.total) {
+      final total = cart.total;
+      if (t != null && t < total) {
         setState(() => _carregando = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(
-            'Troco inválido. O valor deve ser maior que R\$ ${widget.total.toStringAsFixed(2)}.')),
+            'Troco inválido. O valor deve ser maior que R\$ ${total.toStringAsFixed(2)}.')),
         );
         return;
       }
@@ -313,7 +303,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ? idEmpresa
         : int.tryParse(idEmpresa.toString()) ?? 0;
 
+    final subtotal = cart.total;
+    // Snapshot para display ANTES de limpar o carrinho
+    final itensDisplay = cart.itens.map((i) => i.toItemCheckout()).toList();
+    cart.limpar();
+
     // Navega para tela de confirmação
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => _PedidoConfirmadoPage(
@@ -321,8 +317,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           idEmpresa:       idEmpresaInt,
           nomeEmpresa:     nomeEmpresa,
           enderecoEntrega: endereco,
-          itens:           widget.itens,
-          subtotal:        widget.total,
+          itens:           itensDisplay,
+          subtotal:        subtotal,
           taxaEntrega:     _taxaEntrega,
           desconto:        _desconto,
           tempoMinutos:    _tempoMinutos,
@@ -334,6 +330,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cart = context.watch<Cart>();
     final nomeEmpresa =
         widget.empresa['nome']?.toString() ?? 'Empresa';
 
@@ -394,13 +391,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const Divider(height: 20),
-                    ...widget.itens.map((item) {
-                      final nome       = item['nome']?.toString() ?? '';
-                      final qtd        = item['quantidade'] ?? 1;
-                      final preco      = _precoItem(item['preco']);
-                      final subtotal   = preco * (qtd is num ? qtd.toInt() : 1);
-                      final adicionais = item['adicionais']?.toString() ?? '';
-                      final obs        = item['observacao']?.toString() ?? '';
+                    ...cart.itens.map((item) {
+                      final nome       = item.nome;
+                      final qtd        = item.quantidade;
+                      final preco      = item.preco;
+                      final subtotal   = item.subtotal;
+                      final adicionais = item.resumoAdicionais;
+                      final obs        = item.observacao ?? '';
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -461,7 +458,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               fontSize: 17, fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          'R\$ ${widget.total.toStringAsFixed(2)}',
+                          'R\$ ${cart.total.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -1076,7 +1073,7 @@ class _PedidoConfirmadoPage extends StatelessWidget {
                 width: double.infinity,
                 child: TextButton(
                   onPressed: () => Navigator.of(context)
-                      .pushNamedAndRemoveUntil('/home', (_) => false),
+                      .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
                   child: Text('Voltar ao início',
                       style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                 ),

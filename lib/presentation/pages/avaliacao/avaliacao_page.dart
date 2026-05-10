@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../presentation/navigation/app_routes.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
 
@@ -99,7 +100,7 @@ class _AvaliacaoPageState extends State<AvaliacaoPage> {
       return;
     }
 
-    Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
   }
 
   @override
@@ -266,7 +267,7 @@ class _AvaliacaoPageState extends State<AvaliacaoPage> {
               width: double.infinity,
               child: TextButton(
                 onPressed: () => Navigator.of(context)
-                    .pushNamedAndRemoveUntil('/home', (_) => false),
+                    .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
                 child: Text('Pular por agora',
                     style: TextStyle(
                         color: Colors.grey.shade500, fontSize: 14)),

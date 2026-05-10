@@ -13,7 +13,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.smartyentregas.app"
+    namespace = "com.example.smarty_entregas"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

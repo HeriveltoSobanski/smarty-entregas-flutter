@@ -1,4 +1,5 @@
-import 'dart:async';
+﻿import 'dart:async';
+import '../../../presentation/navigation/app_routes.dart';
 import 'dart:convert';
 import '../../../core/utils/image_cache.dart';
 import '../../../core/utils/app_logger.dart';
@@ -148,7 +149,7 @@ class _PaginaEmpresaState extends State<PaginaEmpresa> {
               onPressed: () async {
                 await SessionStore.logout();
                 if (!context.mounted) return;
-                Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
               },
             ),
           ),

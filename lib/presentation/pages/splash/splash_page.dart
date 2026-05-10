@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import '../../../presentation/navigation/app_routes.dart';
 import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -82,16 +83,16 @@ class _SplashPageState extends State<SplashPage>
       PushNotificationService.registrarAposLogin();
       final tipo = saved['tipoUsuario'] as String;
       if (tipo == 'empresa') {
-        Navigator.of(context).pushReplacementNamed('/empresa');
+        Navigator.of(context).pushReplacementNamed(AppRoutes.empresa);
       } else if (tipo == 'motoboy') {
-        Navigator.of(context).pushReplacementNamed('/motoboy');
+        Navigator.of(context).pushReplacementNamed(AppRoutes.motoboy);
       } else {
-        Navigator.of(context).pushReplacementNamed('/home');
+        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
       }
     } else {
       if (saved != null) await AuthStorage.clear();
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/login');
+      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
     }
   }
 

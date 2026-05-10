@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../presentation/navigation/app_routes.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../register/register_page.dart';
@@ -104,11 +105,11 @@ class _PaginaLoginState extends State<PaginaLogin> {
     PushNotificationService.registrarAposLogin();
     if (!mounted) return;
     if (tipoUsuario == 'empresa') {
-      Navigator.pushReplacementNamed(context, '/empresa');
+      Navigator.pushReplacementNamed(context, AppRoutes.empresa);
     } else if (tipoUsuario == 'motoboy') {
-      Navigator.pushReplacementNamed(context, '/motoboy');
+      Navigator.pushReplacementNamed(context, AppRoutes.motoboy);
     } else {
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
     }
   }
 
@@ -144,11 +145,11 @@ class _PaginaLoginState extends State<PaginaLogin> {
     PushNotificationService.registrarAposLogin();
     if (!mounted) return;
     if (tipoUsuario == 'empresa') {
-      Navigator.pushReplacementNamed(context, '/empresa');
+      Navigator.pushReplacementNamed(context, AppRoutes.empresa);
     } else if (tipoUsuario == 'motoboy') {
-      Navigator.pushReplacementNamed(context, '/motoboy');
+      Navigator.pushReplacementNamed(context, AppRoutes.motoboy);
     } else {
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
     }
   }
 

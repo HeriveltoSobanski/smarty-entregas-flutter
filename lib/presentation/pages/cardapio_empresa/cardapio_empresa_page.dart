@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/cart/cart.dart';
 import '../../../core/utils/image_cache.dart';
 import '../../../core/utils/app_logger.dart';
-import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../checkout/checkout_page.dart';
 import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
@@ -10,47 +12,6 @@ const Color _primary = Color(0xFFF5841F);
 // ══════════════════════════════════════════════════════════════════
 // Representa um item no carrinho (produto + adicionais escolhidos)
 // ══════════════════════════════════════════════════════════════════
-class _ItemCarrinho {
-  final Map<String, dynamic> produto;
-  final List<Map<String, dynamic>> adicionais; // itens selecionados
-  final String observacao;
-  final int quantidade;
-
-  _ItemCarrinho({
-    required this.produto,
-    required this.adicionais,
-    required this.observacao,
-    this.quantidade = 1,
-  });
-
-  int get idProduto {
-    final v = produto['id_produto'];
-    return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
-  }
-
-  double get precoBase {
-    final v = produto['preco'];
-    return v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
-  }
-
-  double get precoAdicionais => adicionais.fold(0.0, (acc, a) {
-        final p = a['preco'];
-        return acc + (p is num ? p.toDouble() : double.tryParse(p?.toString() ?? '') ?? 0.0);
-      });
-
-  double get precoTotal => (precoBase + precoAdicionais) * quantidade;
-
-  String get resumoAdicionais =>
-      adicionais.map((a) => a['nome']?.toString() ?? '').join(', ');
-
-  List<int> get adicionaisIds => adicionais
-      .map((a) {
-        final v = a['id_adicional'];
-        return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
-      })
-      .where((id) => id > 0)
-      .toList();
-}
 
 // ══════════════════════════════════════════════════════════════════
 // PÁGINA DO CARDÁPIO
@@ -65,10 +26,14 @@ class CardapioEmpresaPage extends StatefulWidget {
 
 class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     with SingleTickerProviderStateMixin {
-  final List<_ItemCarrinho> _carrinho = [];
   late TabController _tabController;
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
+
+  int get _idEmpresa {
+    final v = widget.empresa['id_empresa'];
+    return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+  }
 
   List<Map<String, dynamic>> get _produtos =>
       List<Map<String, dynamic>>.from(widget.empresa['produtos'] as List? ?? []);
@@ -98,58 +63,46 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
   }
 
-  // Quantidade total de itens no carrinho para um produto
-  int _qtdNoCarrinho(int idProduto) => _carrinho
-      .where((i) => i.idProduto == idProduto)
-      .fold(0, (acc, i) => acc + i.quantidade);
-
-  double get _totalCarrinho =>
-      _carrinho.fold(0.0, (acc, i) => acc + i.precoTotal);
-
-  int get _totalItens =>
-      _carrinho.fold(0, (acc, i) => acc + i.quantidade);
-
   void _abrirProduto(Map<String, dynamic> produto) async {
     final isPizza = produto['is_pizza'] as bool? ?? false;
-    final idProduto = produto['id_produto'] is int
-        ? produto['id_produto'] as int
-        : int.tryParse(produto['id_produto']?.toString() ?? '') ?? 0;
-
-    final resultado = await Navigator.push<_ItemCarrinho>(
+    final idProduto = _idProduto(produto);
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => isPizza
-            ? _PizzaDetalhePage(produto: produto, idProduto: idProduto)
-            : _ProdutoDetalhePage(produto: produto),
+            ? _PizzaDetalhePage(produto: produto, idProduto: idProduto, empresa: widget.empresa)
+            : _ProdutoDetalhePage(produto: produto, empresa: widget.empresa),
         fullscreenDialog: true,
       ),
     );
-    if (resultado != null) {
-      setState(() => _carrinho.add(resultado));
-    }
+    // Cart atualizado diretamente pelo detail page — rebuild via Consumer
   }
 
   void _irParaCheckout() {
-    final itens = _carrinho.map((item) => {
-      'id_produto': item.idProduto,
-      'nome': item.produto['nome'],
-      'preco': item.precoBase + item.precoAdicionais,
-      'quantidade': item.quantidade,
-      'adicionais': item.resumoAdicionais,
-      'adicionais_ids': item.adicionaisIds,
-      'observacao': item.observacao,
-    }).toList();
-
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CheckoutPage(
-          empresa: widget.empresa,
-          itens: itens,
-          total: _totalCarrinho,
-        ),
+        builder: (_) => CheckoutPage(empresa: widget.empresa),
       ),
     );
+  }
+
+  Future<void> _verificarConflito() async {
+    final cart = context.read<Cart>();
+    if (!cart.conflitaComEmpresa(_idEmpresa)) return;
+    final limpar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Carrinho de outro restaurante'),
+        content: const Text('Você tem itens de outro restaurante no carrinho. Deseja limpá-lo para adicionar itens daqui?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true),  child: const Text('Limpar e continuar')),
+        ],
+      ),
+    );
+    if (limpar == true && mounted) cart.limpar();
+    if (limpar != true && mounted) Navigator.pop(context);
   }
 
   List<String> get _categoriasOrdenadas => _porCategoria.keys.toList();
@@ -159,6 +112,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     super.initState();
     final cats = _categoriasOrdenadas;
     _tabController = TabController(length: cats.isEmpty ? 1 : cats.length, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verificarConflito());
   }
 
   @override
@@ -179,6 +133,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
 
   @override
   Widget build(BuildContext context) {
+    final cart = context.watch<Cart>();
     final nome = widget.empresa['nome']?.toString() ?? 'Restaurante';
     final categorias = _categoriasOrdenadas;
     final color = _headerColor;
@@ -335,7 +290,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                       }
                       final p = prods[i - 1];
                       final id = _idProduto(p);
-                      final qtd = _qtdNoCarrinho(id);
+                      final qtd = cart.quantidadeDe(id);
                       return _CardProduto(
                         produto: p,
                         qtdNoCarrinho: qtd,
@@ -346,7 +301,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                 }).toList(),
               ),
       ),
-      bottomNavigationBar: _totalItens == 0
+      bottomNavigationBar: cart.totalItens == 0
           ? null
           : SafeArea(
               child: Padding(
@@ -367,12 +322,12 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                         decoration: BoxDecoration(
                             color: Colors.white24,
                             borderRadius: BorderRadius.circular(8)),
-                        child: Text('$_totalItens',
+                        child: Text('${cart.totalItens}',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       ),
                       const Text('Fazer Pedido',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('R\$ ${_totalCarrinho.toStringAsFixed(2)}',
+                      Text('R\$ ${cart.total.toStringAsFixed(2)}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     ],
                   ),
@@ -553,7 +508,8 @@ class _ImagemProduto extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════
 class _ProdutoDetalhePage extends StatefulWidget {
   final Map<String, dynamic> produto;
-  const _ProdutoDetalhePage({required this.produto});
+  final Map<String, dynamic> empresa;
+  const _ProdutoDetalhePage({required this.produto, required this.empresa});
 
   @override
   State<_ProdutoDetalhePage> createState() => _ProdutoDetalhePageState();
@@ -666,15 +622,28 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
 
   void _adicionar() {
     if (!_podePedir) return;
-    Navigator.pop(
-      context,
-      _ItemCarrinho(
-        produto: widget.produto,
-        adicionais: _adicionaisSelecionados,
-        observacao: _obsCtrl.text.trim(),
-        quantidade: _quantidade,
-      ),
+    final p = widget.produto;
+    final idProduto = p['id_produto'] is int
+        ? p['id_produto'] as int
+        : int.tryParse(p['id_produto']?.toString() ?? '') ?? 0;
+    final idEmpresa = widget.empresa['id_empresa'] is int
+        ? widget.empresa['id_empresa'] as int
+        : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
+    final precoBase = (p['preco'] as num?)?.toDouble() ?? 0.0;
+    final precoAdicionais = _adicionaisSelecionados.fold(
+        0.0, (acc, a) => acc + ((a['preco'] as num?)?.toDouble() ?? 0.0));
+    final item = CartItem(
+      idProduto: idProduto,
+      idEmpresa: idEmpresa,
+      nome: p['nome']?.toString() ?? '',
+      preco: precoBase + precoAdicionais,
+      imgPath: p['imagem']?.toString() ?? '',
+      adicionais: _adicionaisSelecionados,
+      observacao: _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
+      quantidade: _quantidade,
     );
+    context.read<Cart>().adicionarItem(item, widget.empresa);
+    Navigator.pop(context);
   }
 
   @override
@@ -1021,8 +990,9 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
 // ══════════════════════════════════════════════════════════════════
 class _PizzaDetalhePage extends StatefulWidget {
   final Map<String, dynamic> produto;
+  final Map<String, dynamic> empresa;
   final int idProduto;
-  const _PizzaDetalhePage({required this.produto, required this.idProduto});
+  const _PizzaDetalhePage({required this.produto, required this.idProduto, required this.empresa});
 
   @override
   State<_PizzaDetalhePage> createState() => _PizzaDetalhePageState();
@@ -1095,20 +1065,22 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
   void _adicionar() {
     if (!_podePedir) return;
     final nomesSabores = _selecionados.map((s) => s['nome']?.toString() ?? '').join(' / ');
-    // Representa sabores como "adicionais" com preço médio para compatibilidade com o carrinho
-    final adicionalPizza = {
-      'nome': nomesSabores,
-      'preco': _precoSabores,
-    };
-    Navigator.pop(
-      context,
-      _ItemCarrinho(
-        produto: widget.produto,
-        adicionais: [adicionalPizza],
-        observacao: _obsCtrl.text.trim(),
-        quantidade: _quantidade,
-      ),
+    final adicionais = [{'nome': nomesSabores, 'preco': _precoSabores}];
+    final idEmpresa = widget.empresa['id_empresa'] is int
+        ? widget.empresa['id_empresa'] as int
+        : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
+    final item = CartItem(
+      idProduto: widget.idProduto,
+      idEmpresa: idEmpresa,
+      nome: widget.produto['nome']?.toString() ?? '',
+      preco: _precoSabores,
+      imgPath: widget.produto['imagem']?.toString() ?? '',
+      adicionais: adicionais,
+      observacao: _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
+      quantidade: _quantidade,
     );
+    context.read<Cart>().adicionarItem(item, widget.empresa);
+    Navigator.pop(context);
   }
 
   @override

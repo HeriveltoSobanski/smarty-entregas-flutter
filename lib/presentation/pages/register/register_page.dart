@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../presentation/navigation/app_routes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
@@ -342,7 +343,7 @@ class _PaginaRegistroState extends State<PaginaRegistro> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).pushNamedAndRemoveUntil(
-                    '/home', (_) => false);
+                    AppRoutes.home, (_) => false);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _orange,

@@ -4,40 +4,72 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/app_logger.dart';
 
 class CartItem {
+  final int idProduto;
+  final int idEmpresa;
   final String nome;
-  final String preco;
+  final double preco; // preço unitário já incluindo adicionais
   final String imgPath;
+  final List<Map<String, dynamic>> adicionais;
+  final String? observacao;
   int quantidade;
 
   CartItem({
+    required this.idProduto,
+    required this.idEmpresa,
     required this.nome,
     required this.preco,
     required this.imgPath,
-    this.quantidade = 0,
+    this.adicionais = const [],
+    this.observacao,
+    this.quantidade = 1,
   });
 
-  double get precoNumerico {
-    final limpo = preco
-        .replaceAll('R\$', '')
-        .replaceAll(' ', '')
-        .replaceAll(',', '.');
-    return double.tryParse(limpo) ?? 0;
-  }
+  double get subtotal => preco * quantidade;
 
-  double get subtotal => precoNumerico * quantidade;
+  String get resumoAdicionais =>
+      adicionais.map((a) => a['nome']?.toString() ?? '').join(', ');
+
+  List<int> get adicionaisIds => adicionais
+      .map((a) {
+        final v = a['id_adicional'];
+        return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+      })
+      .where((id) => id > 0)
+      .toList();
+
+  Map<String, dynamic> toItemCheckout() => {
+        'id_produto': idProduto,
+        'nome': nome,
+        'preco': preco,
+        'quantidade': quantidade,
+        'adicionais': resumoAdicionais,
+        'adicionais_ids': adicionaisIds,
+        'observacao': observacao ?? '',
+      };
 
   Map<String, dynamic> toJson() => {
+        'idProduto': idProduto,
+        'idEmpresa': idEmpresa,
         'nome': nome,
         'preco': preco,
         'imgPath': imgPath,
+        'adicionais': adicionais,
+        'observacao': observacao,
         'quantidade': quantidade,
       };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
+        idProduto: json['idProduto'] as int? ?? 0,
+        idEmpresa: json['idEmpresa'] as int? ?? 0,
         nome: json['nome'] as String? ?? '',
-        preco: json['preco'] as String? ?? '',
+        preco: (json['preco'] as num?)?.toDouble() ?? 0.0,
         imgPath: json['imgPath'] as String? ?? '',
-        quantidade: json['quantidade'] as int? ?? 0,
+        adicionais: (json['adicionais'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e as Map))
+                .toList() ??
+            [],
+        observacao: json['observacao'] as String?,
+        quantidade: json['quantidade'] as int? ?? 1,
       );
 }
 
@@ -48,12 +80,15 @@ class Cart extends ChangeNotifier {
   // ignore: prefer_constructors_over_static_methods
   static Cart testInstance() => Cart._();
 
-  static const _prefsKey = 'cart_items';
+  static const _prefsKey      = 'cart_items';
+  static const _prefsEmpresa  = 'cart_empresa';
 
+  Map<String, dynamic>? _empresa;
   final List<CartItem> _itens = [];
 
-  List<CartItem> get itens =>
-      List.unmodifiable(_itens.where((i) => i.quantidade > 0));
+  Map<String, dynamic>? get empresa => _empresa;
+
+  List<CartItem> get itens => List.unmodifiable(_itens);
 
   double get total => _itens.fold(0.0, (s, i) => s + i.subtotal);
 
@@ -62,38 +97,48 @@ class Cart extends ChangeNotifier {
   String get totalFormatado =>
       'R\$ ${total.toStringAsFixed(2).replaceAll('.', ',')}';
 
-  int quantidadeDe(String nome) {
-    try {
-      return _itens.firstWhere((i) => i.nome == nome).quantidade;
-    } catch (e, st) {
-      AppLogger.e('Cart', e, st);
-      return 0;
-    }
-  }
+  bool get isEmpty => _itens.isEmpty;
 
-  void adicionar(String nome, String preco, String imgPath) {
-    final idx = _itens.indexWhere((i) => i.nome == nome);
+  /// Retorna true se carrinho tem itens de outro restaurante.
+  bool conflitaComEmpresa(int idEmpresa) =>
+      _itens.isNotEmpty && _empresa?['id_empresa'] != idEmpresa;
+
+  int quantidadeDe(int idProduto) => _itens
+      .where((i) => i.idProduto == idProduto)
+      .fold(0, (s, i) => s + i.quantidade);
+
+  /// Adiciona item ao carrinho. Chame [conflitaComEmpresa] antes se necessário.
+  void adicionarItem(CartItem item, Map<String, dynamic> empresa) {
+    _empresa = empresa;
+    // Se mesmo produto + mesmos adicionais, incrementa. Senão, nova entrada.
+    final idx = _itens.indexWhere((i) =>
+        i.idProduto == item.idProduto &&
+        _mesmasAdicionais(i.adicionaisIds, item.adicionaisIds));
     if (idx >= 0) {
-      _itens[idx].quantidade++;
+      _itens[idx].quantidade += item.quantidade;
     } else {
-      _itens.add(CartItem(nome: nome, preco: preco, imgPath: imgPath, quantidade: 1));
+      _itens.add(item);
     }
     notifyListeners();
     _salvar();
   }
 
-  void remover(String nome) {
-    final idx = _itens.indexWhere((i) => i.nome == nome);
-    if (idx >= 0 && _itens[idx].quantidade > 0) {
+  void remover(int idProduto) {
+    final idx = _itens.lastIndexWhere((i) => i.idProduto == idProduto);
+    if (idx < 0) return;
+    if (_itens[idx].quantidade > 1) {
       _itens[idx].quantidade--;
-      if (_itens[idx].quantidade == 0) _itens.removeAt(idx);
-      notifyListeners();
-      _salvar();
+    } else {
+      _itens.removeAt(idx);
     }
+    if (_itens.isEmpty) _empresa = null;
+    notifyListeners();
+    _salvar();
   }
 
   void limpar() {
     _itens.clear();
+    _empresa = null;
     notifyListeners();
     _salvar();
   }
@@ -101,15 +146,18 @@ class Cart extends ChangeNotifier {
   Future<void> carregar() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw == null) return;
-      final lista = jsonDecode(raw) as List<dynamic>;
-      _itens
-        ..clear()
-        ..addAll(lista
-            .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
-            .where((i) => i.quantidade > 0));
-      notifyListeners();
+      final rawItens   = prefs.getString(_prefsKey);
+      final rawEmpresa = prefs.getString(_prefsEmpresa);
+      if (rawItens != null) {
+        final lista = jsonDecode(rawItens) as List<dynamic>;
+        _itens
+          ..clear()
+          ..addAll(lista.map((e) => CartItem.fromJson(e as Map<String, dynamic>)));
+      }
+      if (rawEmpresa != null) {
+        _empresa = jsonDecode(rawEmpresa) as Map<String, dynamic>;
+      }
+      if (_itens.isNotEmpty) notifyListeners();
     } catch (e, st) {
       AppLogger.e('Cart', e, st);
     }
@@ -119,8 +167,20 @@ class Cart extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefsKey, jsonEncode(_itens.map((i) => i.toJson()).toList()));
+      if (_empresa != null) {
+        await prefs.setString(_prefsEmpresa, jsonEncode(_empresa));
+      } else {
+        await prefs.remove(_prefsEmpresa);
+      }
     } catch (e, st) {
       AppLogger.e('Cart', e, st);
     }
+  }
+
+  bool _mesmasAdicionais(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    final sa = {...a};
+    final sb = {...b};
+    return sa.difference(sb).isEmpty;
   }
 }

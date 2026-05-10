@@ -1,4 +1,5 @@
 ﻿import 'dart:io';
+import '../presentation/navigation/app_routes.dart';
 import '../core/utils/app_logger.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -118,7 +119,7 @@ class PushNotificationService {
 
   static void _navegarParaPedido(Map<String, dynamic> data) {
     // Navega para home; a badge de notificação leva ao detalhe do pedido
-    navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (_) => false);
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
   }
 
   static Future<void> _registrar(String token) async {
