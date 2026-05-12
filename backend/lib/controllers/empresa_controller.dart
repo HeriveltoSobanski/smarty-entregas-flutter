@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/image_service.dart';
 
 class EmpresaController {
   final Connection conn;
-  EmpresaController(this.conn);
+  final ImageService imageService;
+  EmpresaController(this.conn, this.imageService);
 
   // ----------------------------------------------------------------
   // PATCH /empresas/:id/foto
@@ -22,25 +24,31 @@ class EmpresaController {
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
 
-      final fotoPerfil = data['foto_perfil']?.toString();
-      final fotoCapa = data['foto_capa']?.toString();
-      final temFotoPerfil = fotoPerfil != null && fotoPerfil.isNotEmpty;
-      final temFotoCapa = fotoCapa != null && fotoCapa.isNotEmpty;
+      final fotoPerfilRaw = data['foto_perfil']?.toString();
+      final fotoCapaRaw   = data['foto_capa']?.toString();
+      final temFotoPerfil = fotoPerfilRaw != null && fotoPerfilRaw.isNotEmpty;
+      final temFotoCapa   = fotoCapaRaw   != null && fotoCapaRaw.isNotEmpty;
 
       if (!temFotoPerfil && !temFotoCapa) {
         return _json(400, {'error': 'foto_perfil ou foto_capa e obrigatorio'});
       }
 
+      final fotoPerfil = temFotoPerfil ? await imageService.processar(fotoPerfilRaw) : null;
+      final fotoCapa   = temFotoCapa   ? await imageService.processar(fotoCapaRaw)   : null;
+
       final sets = <String>[];
       final params = <String, dynamic>{'id': idEmpresa};
 
-      if (temFotoPerfil) {
+      if (fotoPerfil != null) {
         sets.add('foto_perfil = @foto_perfil');
         params['foto_perfil'] = fotoPerfil;
       }
-      if (temFotoCapa) {
+      if (fotoCapa != null) {
         sets.add('foto_capa = @foto_capa');
         params['foto_capa'] = fotoCapa;
+      }
+      if (sets.isEmpty) {
+        return _json(400, {'error': 'Nenhuma imagem válida recebida'});
       }
 
       await conn.execute(

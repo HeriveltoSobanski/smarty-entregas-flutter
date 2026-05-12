@@ -1,5 +1,6 @@
 ﻿import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'services/push_notification_service.dart';
@@ -13,6 +14,8 @@ import 'core/utils/app_logger.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Dispara download da Poppins antes do primeiro frame — evita FOUC e jank
+  GoogleFonts.poppins().fontFamily;
   try {
     await PushNotificationService.init();
   } catch (e, st) { AppLogger.e('main', e, st); }

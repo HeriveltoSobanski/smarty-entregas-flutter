@@ -12,7 +12,20 @@
           "package_name": "com.example.smarty_entregas"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1088560191949-m1hvjtetn13p4ep18h70ulok7rgubuf4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.smarty_entregas",
+            "certificate_hash": "ad7981c9c87f5b49d1a72d566f66a8c45d27d3ec"
+          }
+        },
+        {
+          "client_id": "1088560191949-p50cghn8dfefgfj0umakokvo87ioi7cj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAwC0xh2ab1hj8MWW_NCxPW-nnptOerVqc"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1088560191949-p50cghn8dfefgfj0umakokvo87ioi7cj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1088560191949-kq6ve4sn32s9vrkjukgu6beo7nb55ge5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.smartyEntregas"
+              }
+            }
+          ]
         }
       }
     }

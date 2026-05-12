@@ -37,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.smartyentregas.app"
+        applicationId = "com.example.smarty_entregas"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

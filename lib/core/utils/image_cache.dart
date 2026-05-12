@@ -15,5 +15,9 @@ class Base64Cache {
     );
   }
 
+  static Uint8List? get(String base64) => _cache[base64];
+
+  static void put(String base64, Uint8List bytes) => _cache[base64] = bytes;
+
   static void clear() => _cache.clear();
 }

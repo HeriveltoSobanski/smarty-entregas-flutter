@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:shelf_static/shelf_static.dart';
 import 'package:dotenv/dotenv.dart';
 import 'package:shelf_cors_headers/shelf_cors_headers.dart';
 
@@ -27,6 +29,7 @@ import 'package:backend/controllers/cupom_controller.dart';
 import 'package:backend/services/fcm_service.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
+import 'package:backend/services/image_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
 
 void main() async {
@@ -38,6 +41,11 @@ void main() async {
   final gmailPass    = env['GMAIL_APP_PASSWORD'] ?? '';
   final jwtService   = JwtService(jwtSecret);
   final emailService = EmailService(gmailUser, gmailPass);
+
+  // Diretório public/ relativo ao local onde o binário roda (backend/)
+  final publicDir = p.join(Directory.current.path, 'public');
+  await Directory(p.join(publicDir, 'uploads', 'imagens')).create(recursive: true);
+  final imageService = ImageService(publicDir);
 
   final fcmService = FcmService(
     projectId:           env['FCM_PROJECT_ID']            ?? '',
@@ -290,12 +298,15 @@ void main() async {
   }
   print('Migrações aplicadas');
 
+  // Converte imagens base64 antigas para arquivos em disco
+  await imageService.migrarBanco(db.connection);
+
   final auth           = AuthController(db.connection, jwtService, emailService);
-  final produto        = ProdutoController(db.connection);
+  final produto        = ProdutoController(db.connection, imageService);
   final pedido         = PedidoController(db.connection, fcmService: fcmService);
   final criarPedido    = CriarPedidoController(db.connection);
   final adicional      = AdicionalController(db.connection);
-  final empresa        = EmpresaController(db.connection);
+  final empresa        = EmpresaController(db.connection, imageService);
   final motoboy        = MotoboyController(db.connection);
   final clienteEndereco  = ClienteEnderecoController(db.connection);
   final empresaMotoboy   = EmpresaMotoboyController(db.connection);
@@ -485,11 +496,20 @@ void main() async {
     'Access-Control-Allow-Headers': 'Origin, Content-Type, Authorization, ngrok-skip-browser-warning',
   };
 
+  // Handler de arquivos estáticos (sem JWT)
+  final staticFiles = createStaticHandler(publicDir, serveFilesOutsidePath: false);
+
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(corsHeaders(headers: overrideHeaders))
-      .addMiddleware(jwtMiddleware(jwtService))
-      .addHandler(app.call);
+      .addHandler((Request req) {
+        // /uploads/* servido diretamente sem JWT
+        if (req.url.path.startsWith('uploads/')) return staticFiles(req);
+        return Pipeline()
+            .addMiddleware(jwtMiddleware(jwtService))
+            .addHandler(app.call)
+            .call(req);
+      });
 
   final port = int.tryParse(env['PORT'] ?? '') ?? 8081;
   final server = await serve(handler, InternetAddress.anyIPv4, port);

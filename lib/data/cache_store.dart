@@ -1,20 +1,28 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import '../core/utils/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CacheStore {
   static const _prefix = 'cache_';
+  static SharedPreferences? _prefs;
+
+  static Future<SharedPreferences> get _instance async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
+  }
 
   static Future<void> save(String key, dynamic data) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _instance;
       await prefs.setString('$_prefix$key', jsonEncode(data));
-    } catch (e, st) { AppLogger.e('CacheStore', e, st); }
+    } catch (e, st) {
+      AppLogger.e('CacheStore', e, st);
+    }
   }
 
   static Future<T?> load<T>(String key) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _instance;
       final raw = prefs.getString('$_prefix$key');
       if (raw == null) return null;
       return jsonDecode(raw) as T?;
@@ -26,8 +34,10 @@ class CacheStore {
 
   static Future<void> clear(String key) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _instance;
       await prefs.remove('$_prefix$key');
-    } catch (e, st) { AppLogger.e('CacheStore', e, st); }
+    } catch (e, st) {
+      AppLogger.e('CacheStore', e, st);
+    }
   }
 }

@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/image_service.dart';
 
 class ProdutoController {
   final Connection conn;
+  final ImageService imageService;
 
-  ProdutoController(this.conn);
+  ProdutoController(this.conn, this.imageService);
 
   // ----------------------------------------------------------------
   // GET /produtos/categorias
@@ -160,7 +162,7 @@ class ProdutoController {
           : double.tryParse(
                   data['preco']?.toString().replaceAll(',', '.') ?? '0') ??
               0.0;
-      final imagem           = data['imagem']?.toString();
+      final imagemRaw        = data['imagem']?.toString();
       final isPizza          = data['is_pizza'] as bool? ?? false;
       final pizzaMeioAMeio   = data['pizza_meio_a_meio'] as bool? ?? false;
       final pizzaTresSabores = data['pizza_tres_sabores'] as bool? ?? false;
@@ -171,6 +173,8 @@ class ProdutoController {
           'error': 'id_empresa, id_categoria, nome e preco são obrigatórios'
         });
       }
+
+      final imagem = await imageService.processar(imagemRaw);
 
       final result = await conn.execute(
         Sql.named('''
@@ -224,7 +228,7 @@ class ProdutoController {
       final descricao        = data['descricao']?.toString().trim() ?? '';
       final preco            = (data['preco'] is num) ? (data['preco'] as num).toDouble() : double.tryParse(data['preco']?.toString() ?? '') ?? 0;
       final idCat            = data['id_categoria'] is int ? data['id_categoria'] as int : int.tryParse(data['id_categoria']?.toString() ?? '') ?? 0;
-      final imagem           = data['imagem']?.toString();
+      final imagemRaw        = data['imagem']?.toString();
       final isPizza          = data['is_pizza'] as bool? ?? false;
       final pizzaMeioAMeio   = data['pizza_meio_a_meio'] as bool? ?? false;
       final pizzaTresSabores = data['pizza_tres_sabores'] as bool? ?? false;
@@ -232,6 +236,8 @@ class ProdutoController {
       if (nome.isEmpty || preco <= 0 || idCat == 0) {
         return _json(400, {'error': 'nome, preço e categoria são obrigatórios'});
       }
+
+      final imagem = await imageService.processar(imagemRaw);
 
       final sets = <String>[
         'nome = @nome',

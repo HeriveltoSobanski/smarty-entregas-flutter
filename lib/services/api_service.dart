@@ -50,7 +50,7 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp = await http.get(uri, headers: _authHeaders);
+    final resp = await _client.get(uri, headers: _authHeaders);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -62,7 +62,7 @@ class ApiService {
       throw Exception('Sessão expirada');
     }
     final resp =
-        await http.post(uri, headers: _authHeaders, body: body);
+        await _client.post(uri, headers: _authHeaders, body: body);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -74,7 +74,7 @@ class ApiService {
       throw Exception('Sessão expirada');
     }
     final resp =
-        await http.put(uri, headers: _authHeaders, body: body);
+        await _client.put(uri, headers: _authHeaders, body: body);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -86,7 +86,7 @@ class ApiService {
       throw Exception('Sessão expirada');
     }
     final resp =
-        await http.patch(uri, headers: _authHeaders, body: body);
+        await _client.patch(uri, headers: _authHeaders, body: body);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -97,11 +97,13 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp = await http.delete(uri, headers: _authHeaders);
+    final resp = await _client.delete(uri, headers: _authHeaders);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
 
+
+  static final _client = http.Client();
 
   // Configure via: --dart-define=API_URL=https://api.example.com
   // Dev local: http://localhost:8081 (padrão, somente para debug)

@@ -2,7 +2,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class SocialAuthService {
-  static final _google = GoogleSignIn(scopes: ['email', 'profile']);
+  static final _google = GoogleSignIn(
+    serverClientId:
+        '1088560191949-p50cghn8dfefgfj0umakokvo87ioi7cj.apps.googleusercontent.com',
+    scopes: ['email', 'profile'],
+  );
 
   /// Abre o fluxo de autenticação do Google e retorna o ID token.
   /// Retorna null se o usuário cancelar.

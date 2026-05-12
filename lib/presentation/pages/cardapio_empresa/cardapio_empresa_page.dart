@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/cart/cart.dart';
@@ -8,10 +12,6 @@ import '../checkout/checkout_page.dart';
 import '../avaliacao/avaliacao_page.dart' show NotaEstrelas;
 
 const Color _primary = Color(0xFFF5841F);
-
-// ══════════════════════════════════════════════════════════════════
-// Representa um item no carrinho (produto + adicionais escolhidos)
-// ══════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════
 // PÁGINA DO CARDÁPIO
@@ -28,34 +28,34 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchCtrl = TextEditingController();
-  String _searchTerm = '';
+  Timer? _debounceTimer;
+
+  // Produtos e categorias cacheados — não recalculados a cada build
+  late final List<Map<String, dynamic>> _produtos;
+  late final List<String> _categoriasFixas; // nunca muda — define o TabController
+  Map<String, List<Map<String, dynamic>>> _porCategoriaFiltrado = {};
 
   int get _idEmpresa {
     final v = widget.empresa['id_empresa'];
     return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
   }
 
-  List<Map<String, dynamic>> get _produtos =>
-      List<Map<String, dynamic>>.from(widget.empresa['produtos'] as List? ?? []);
+  void _recalcular(String termo) {
+    final filtered = termo.isEmpty
+        ? _produtos
+        : _produtos.where((p) {
+            final t = termo.toLowerCase();
+            return (p['nome']?.toString() ?? '').toLowerCase().contains(t) ||
+                (p['descricao']?.toString() ?? '').toLowerCase().contains(t) ||
+                (p['categoria_nome']?.toString() ?? '').toLowerCase().contains(t);
+          }).toList();
 
-  List<Map<String, dynamic>> get _produtosFiltrados {
-    if (_searchTerm.isEmpty) return _produtos;
-    final t = _searchTerm.toLowerCase();
-    return _produtos
-        .where((p) =>
-            (p['nome']?.toString() ?? '').toLowerCase().contains(t) ||
-            (p['descricao']?.toString() ?? '').toLowerCase().contains(t) ||
-            (p['categoria_nome']?.toString() ?? '').toLowerCase().contains(t))
-        .toList();
-  }
-
-  Map<String, List<Map<String, dynamic>>> get _porCategoria {
-    final Map<String, List<Map<String, dynamic>>> map = {};
-    for (final p in _produtosFiltrados) {
+    final map = <String, List<Map<String, dynamic>>>{};
+    for (final p in filtered) {
       final cat = p['categoria_nome']?.toString() ?? 'Outros';
       map.putIfAbsent(cat, () => []).add(p);
     }
-    return map;
+    _porCategoriaFiltrado = map;
   }
 
   int _idProduto(Map<String, dynamic> p) {
@@ -75,15 +75,12 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
         fullscreenDialog: true,
       ),
     );
-    // Cart atualizado diretamente pelo detail page — rebuild via Consumer
   }
 
   void _irParaCheckout() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => CheckoutPage(empresa: widget.empresa),
-      ),
+      MaterialPageRoute(builder: (_) => CheckoutPage(empresa: widget.empresa)),
     );
   }
 
@@ -94,10 +91,11 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Carrinho de outro restaurante'),
-        content: const Text('Você tem itens de outro restaurante no carrinho. Deseja limpá-lo para adicionar itens daqui?'),
+        content: const Text(
+            'Você tem itens de outro restaurante no carrinho. Deseja limpá-lo para adicionar itens daqui?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true),  child: const Text('Limpar e continuar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Limpar e continuar')),
         ],
       ),
     );
@@ -105,18 +103,29 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
     if (limpar != true && mounted) Navigator.pop(context);
   }
 
-  List<String> get _categoriasOrdenadas => _porCategoria.keys.toList();
-
   @override
   void initState() {
     super.initState();
-    final cats = _categoriasOrdenadas;
-    _tabController = TabController(length: cats.isEmpty ? 1 : cats.length, vsync: this);
+    _produtos = List<Map<String, dynamic>>.from(
+        widget.empresa['produtos'] as List? ?? []);
+
+    // Categorias fixas a partir de todos os produtos (nunca muda com busca)
+    final allMap = <String, bool>{};
+    for (final p in _produtos) {
+      allMap[p['categoria_nome']?.toString() ?? 'Outros'] = true;
+    }
+    _categoriasFixas = allMap.keys.toList();
+    _recalcular('');
+
+    _tabController = TabController(
+        length: _categoriasFixas.isEmpty ? 1 : _categoriasFixas.length,
+        vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _verificarConflito());
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _tabController.dispose();
     _searchCtrl.dispose();
     super.dispose();
@@ -133,9 +142,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
 
   @override
   Widget build(BuildContext context) {
-    final cart = context.watch<Cart>();
     final nome = widget.empresa['nome']?.toString() ?? 'Restaurante';
-    final categorias = _categoriasOrdenadas;
     final color = _headerColor;
     final fotoPerfil = widget.empresa['foto_perfil']?.toString();
     final fotoCapa = widget.empresa['foto_capa']?.toString();
@@ -144,7 +151,6 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
       backgroundColor: const Color(0xFFF5F5F5),
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          // ── Header expandível ──────────────────────────────────
           SliverAppBar(
             expandedHeight: 160,
             pinned: true,
@@ -164,11 +170,10 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (fotoCapa != null && fotoCapa.contains(','))
-                    Image.memory(
-                      Base64Cache.decode(fotoCapa),
+                  if (fotoCapa != null && fotoCapa.isNotEmpty)
+                    _SmartImage(
+                      base64: fotoCapa,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     )
                   else
                     Container(
@@ -187,7 +192,6 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
             ),
           ),
 
-          // ── Barra de info ──────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
               color: Colors.white,
@@ -217,10 +221,16 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                     NotaEstrelas(
                       nota: (widget.empresa['nota_media'] is num
                           ? (widget.empresa['nota_media'] as num).toDouble()
-                          : double.tryParse(widget.empresa['nota_media']?.toString() ?? '0') ?? 0.0),
+                          : double.tryParse(
+                                  widget.empresa['nota_media']?.toString() ??
+                                      '0') ??
+                              0.0),
                       total: (widget.empresa['nota_total'] is int
                           ? widget.empresa['nota_total'] as int
-                          : int.tryParse(widget.empresa['nota_total']?.toString() ?? '0') ?? 0),
+                          : int.tryParse(
+                                  widget.empresa['nota_total']?.toString() ??
+                                      '0') ??
+                              0),
                       tamanho: 13,
                     ),
                   ]),
@@ -233,11 +243,18 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                     ),
                     child: TextField(
                       controller: _searchCtrl,
-                      onChanged: (v) => setState(() => _searchTerm = v),
+                      onChanged: (v) {
+                        _debounceTimer?.cancel();
+                        _debounceTimer =
+                            Timer(const Duration(milliseconds: 300), () {
+                          if (mounted) setState(() => _recalcular(v));
+                        });
+                      },
                       decoration: const InputDecoration(
                         hintText: 'busque por item ou categoria',
                         hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
+                        prefixIcon:
+                            Icon(Icons.search, color: Colors.grey, size: 20),
                         border: InputBorder.none,
                         fillColor: Colors.transparent,
                         contentPadding: EdgeInsets.symmetric(vertical: 12),
@@ -250,8 +267,7 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
             ),
           ),
 
-          // ── Abas de categorias ─────────────────────────────────
-          if (categorias.isNotEmpty)
+          if (_categoriasFixas.isNotEmpty)
             SliverPersistentHeader(
               pinned: true,
               delegate: _TabBarDelegate(
@@ -262,21 +278,23 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                   unselectedLabelColor: Colors.grey,
                   indicatorColor: _primary,
                   indicatorWeight: 3,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                   unselectedLabelStyle: const TextStyle(fontSize: 14),
-                  tabs: categorias.map((c) => Tab(text: c)).toList(),
+                  tabs: _categoriasFixas.map((c) => Tab(text: c)).toList(),
                 ),
               ),
             ),
         ],
-        body: categorias.isEmpty
+        body: _categoriasFixas.isEmpty
             ? const Center(child: Text('Nenhum produto disponível'))
             : TabBarView(
                 controller: _tabController,
-                children: categorias.map((cat) {
-                  final prods = _porCategoria[cat] ?? [];
+                children: _categoriasFixas.map((cat) {
+                  final prods = _porCategoriaFiltrado[cat] ?? [];
                   return ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
                     itemCount: prods.length + 1,
                     separatorBuilder: (_, i) =>
                         i == 0 ? const SizedBox.shrink() : const Divider(height: 1),
@@ -285,15 +303,13 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                         return Padding(
                           padding: const EdgeInsets.only(top: 8, bottom: 12),
                           child: Text(cat,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 18)),
                         );
                       }
                       final p = prods[i - 1];
-                      final id = _idProduto(p);
-                      final qtd = cart.quantidadeDe(id);
                       return _CardProduto(
                         produto: p,
-                        qtdNoCarrinho: qtd,
                         onTap: () => _abrirProduto(p),
                       );
                     },
@@ -301,53 +317,54 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
                 }).toList(),
               ),
       ),
-      bottomNavigationBar: cart.totalItens == 0
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _irParaCheckout,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Text('${cart.totalItens}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                      const Text('Fazer Pedido',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('R\$ ${cart.total.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    ],
+      // Consumer limita rebuild ao botão inferior — não rebuilda o cardápio inteiro
+      bottomNavigationBar: Consumer<Cart>(
+        builder: (_, cart, __) => cart.totalItens == 0
+            ? const SizedBox.shrink()
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _irParaCheckout,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Text('${cart.totalItens}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                        const Text('Fazer Pedido',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text('R\$ ${cart.total.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+      ),
     );
   }
 
   Widget _buildLogo(String nome, String? fotoPerfil) {
-    if (fotoPerfil != null && fotoPerfil.contains(',')) {
-      try {
-        final bytes = Base64Cache.decode(fotoPerfil);
-        return ClipOval(
-          child: Image.memory(bytes, width: 80, height: 80, fit: BoxFit.cover),
-        );
-      } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); }
-    }
-    return Container(
-      width: 80, height: 80,
+    final placeholder = Container(
+      width: 80,
+      height: 80,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.25),
         shape: BoxShape.circle,
@@ -356,9 +373,19 @@ class _CardapioEmpresaPageState extends State<CardapioEmpresaPage>
       child: Center(
         child: Text(
           nome.isNotEmpty ? nome[0].toUpperCase() : '?',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 36),
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 36),
         ),
       ),
+    );
+    if (fotoPerfil == null || fotoPerfil.isEmpty) return placeholder;
+    return _SmartImage(
+      base64: fotoPerfil,
+      width: 80,
+      height: 80,
+      fit: BoxFit.cover,
+      circular: true,
+      placeholder: placeholder,
     );
   }
 }
@@ -368,8 +395,10 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar _tabBar;
   const _TabBarDelegate(this._tabBar);
 
-  @override double get minExtent => _tabBar.preferredSize.height;
-  @override double get maxExtent => _tabBar.preferredSize.height;
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) =>
@@ -379,17 +408,17 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_TabBarDelegate old) => false;
 }
 
-// ── Card de produto no cardápio (clicável) ────────────────────────
+// ── Card de produto no cardápio ───────────────────────────────────
 class _CardProduto extends StatelessWidget {
   final Map<String, dynamic> produto;
-  final int qtdNoCarrinho;
   final VoidCallback onTap;
 
-  const _CardProduto({
-    required this.produto,
-    required this.qtdNoCarrinho,
-    required this.onTap,
-  });
+  const _CardProduto({required this.produto, required this.onTap});
+
+  int _idProduto(Map<String, dynamic> p) {
+    final v = p['id_produto'];
+    return v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -400,6 +429,7 @@ class _CardProduto extends StatelessWidget {
         ? precoRaw.toDouble()
         : double.tryParse(precoRaw?.toString() ?? '') ?? 0.0;
     final imagem = produto['imagem']?.toString();
+    final id = _idProduto(produto);
 
     return InkWell(
       onTap: onTap,
@@ -408,13 +438,13 @@ class _CardProduto extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Texto
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(nome,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
                   if (descricao.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(descricao,
@@ -431,43 +461,44 @@ class _CardProduto extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-            // Imagem + badge carrinho
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _ImagemProduto(imagem: imagem),
-                // Badge com quantidade no carrinho
-                if (qtdNoCarrinho > 0)
-                  Positioned(
-                    top: -6,
-                    right: -6,
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: const BoxDecoration(
-                          color: _primary, shape: BoxShape.circle),
-                      child: Center(
-                        child: Text('$qtdNoCarrinho',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold)),
+            // Selector rebuildda só quando qty deste produto muda
+            Selector<Cart, int>(
+              selector: (_, cart) => cart.quantidadeDe(id),
+              builder: (_, qtd, __) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _ImagemProduto(imagem: imagem),
+                  if (qtd > 0)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: const BoxDecoration(
+                            color: _primary, shape: BoxShape.circle),
+                        child: Center(
+                          child: Text('$qtd',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ),
+                  Positioned(
+                    bottom: -10,
+                    right: -10,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: const BoxDecoration(
+                          color: _primary, shape: BoxShape.circle),
+                      child: const Icon(Icons.add, color: Colors.white, size: 18),
+                    ),
                   ),
-                // Botão +
-                Positioned(
-                  bottom: -10,
-                  right: -10,
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                        color: _primary, shape: BoxShape.circle),
-                    child: const Icon(Icons.add, color: Colors.white, size: 18),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -483,22 +514,23 @@ class _ImagemProduto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imagem != null && imagem!.contains(',')) {
-      try {
-        final bytes = Base64Cache.decode(imagem!);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.memory(bytes, width: 88, height: 88, fit: BoxFit.cover),
-        );
-      } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); }
-    }
-    return Container(
-      width: 88, height: 88,
+    final placeholder = Container(
+      width: 88,
+      height: 88,
       decoration: BoxDecoration(
         color: _primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: const Icon(Icons.fastfood, color: _primary, size: 36),
+    );
+    if (imagem == null || imagem!.isEmpty) return placeholder;
+    return _SmartImage(
+      base64: imagem!,
+      width: 88,
+      height: 88,
+      fit: BoxFit.cover,
+      borderRadius: BorderRadius.circular(10),
+      placeholder: placeholder,
     );
   }
 }
@@ -519,7 +551,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
   List<Map<String, dynamic>> _grupos = [];
   bool _loading = true;
 
-  // seleções: grupo -> lista de ids selecionados
   final Map<String, List<int>> _selecoes = {};
   int _quantidade = 1;
   final _obsCtrl = TextEditingController();
@@ -545,7 +576,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
     if (mounted) {
       setState(() {
         _grupos = grupos;
-        // Inicializa seleções vazias
         for (final g in grupos) {
           final grupo = g['grupo']?.toString() ?? '';
           _selecoes[grupo] = [];
@@ -582,7 +612,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
   double get _precoTotal => (_precoBase + _precoAdicionais) * _quantidade;
 
   bool get _podePedir {
-    // Verifica obrigatórios
     for (final g in _grupos) {
       final obrig = g['obrigatorio'] == true;
       if (obrig) {
@@ -663,7 +692,9 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
         ),
         title: Text(nome,
             style: const TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 15),
             overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
@@ -676,9 +707,19 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
           ? const Center(child: CircularProgressIndicator(color: _primary))
           : ListView(
               children: [
-                // ── Imagem / hero ──────────────────────────────────
-                if (imagem != null && imagem.contains(','))
-                  _buildImagemHero(imagem)
+                if (imagem != null && imagem.isNotEmpty)
+                  _SmartImage(
+                    base64: imagem,
+                    width: double.infinity,
+                    height: 220,
+                    fit: BoxFit.cover,
+                    placeholder: Container(
+                      height: 180,
+                      color: _primary.withValues(alpha: 0.08),
+                      child: const Center(
+                          child: Icon(Icons.fastfood, color: _primary, size: 72)),
+                    ),
+                  )
                 else
                   Container(
                     height: 180,
@@ -686,8 +727,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                     child: const Center(
                         child: Icon(Icons.fastfood, color: _primary, size: 72)),
                   ),
-
-                // ── Info do produto ────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Column(
@@ -713,13 +752,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                     ],
                   ),
                 ),
-
                 const Divider(height: 1),
-
-                // ── Grupos de adicionais ───────────────────────────
                 ..._grupos.map((g) => _buildGrupo(g)),
-
-                // ── Observação ────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
@@ -753,12 +787,9 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                     ],
                   ),
                 ),
-
-                // Espaço para o botão
                 const SizedBox(height: 100),
               ],
             ),
-      // ── Barra inferior: quantidade + adicionar ─────────────────
       bottomNavigationBar: _loading
           ? null
           : SafeArea(
@@ -767,7 +798,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: Row(
                   children: [
-                    // Controle de quantidade
                     Container(
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade300),
@@ -791,7 +821,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                       ]),
                     ),
                     const SizedBox(width: 12),
-                    // Botão adicionar
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -808,7 +837,9 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              _podePedir ? 'Adicionar' : 'Selecione obrigatórios',
+                              _podePedir
+                                  ? 'Adicionar'
+                                  : 'Selecione obrigatórios',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: _podePedir ? 15 : 12,
@@ -817,7 +848,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                             if (_podePedir)
                               Text('R\$ ${_precoTotal.toStringAsFixed(2)}',
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 15)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15)),
                           ],
                         ),
                       ),
@@ -827,17 +859,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
               ),
             ),
     );
-  }
-
-  Widget _buildImagemHero(String imagem) {
-    try {
-      final bytes = Base64Cache.decode(imagem);
-      return Image.memory(bytes,
-          width: double.infinity, height: 220, fit: BoxFit.cover);
-    } catch (e, st) {
-      AppLogger.e('CardapioEmpresa', e, st);
-      return const SizedBox.shrink();
-    }
   }
 
   Widget _buildGrupo(Map<String, dynamic> g) {
@@ -852,7 +873,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Cabeçalho do grupo
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           color: const Color(0xFFF5F5F5),
@@ -875,7 +895,8 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
             ),
             if (obrig)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(4),
@@ -888,7 +909,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
               ),
           ]),
         ),
-        // Itens do grupo
         ...itens.map((item) {
           final id = item['id_adicional'] is int
               ? item['id_adicional'] as int
@@ -908,7 +928,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(children: [
-                // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,33 +942,41 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
                       if (precoVal > 0)
                         Text('+ R\$ ${precoVal.toStringAsFixed(2)}',
                             style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade700)),
+                                fontSize: 13, color: Colors.grey.shade700)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Imagem (se houver)
-                if (itemImagem != null && itemImagem.contains(','))
+                if (itemImagem != null && itemImagem.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
-                    child: _buildItemImagem(itemImagem),
+                    child: _SmartImage(
+                      base64: itemImagem,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
-                // Checkbox/radio
                 maximo == 1
                     ? GestureDetector(
                         onTap: () => _toggleAdicional(grupo, id, maximo),
                         child: Container(
-                          width: 22, height: 22,
+                          width: 22,
+                          height: 22,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: selecionado ? _primary : Colors.grey.shade400,
+                                color: selecionado
+                                    ? _primary
+                                    : Colors.grey.shade400,
                                 width: 2),
-                            color: selecionado ? _primary : Colors.transparent,
+                            color:
+                                selecionado ? _primary : Colors.transparent,
                           ),
                           child: selecionado
-                              ? const Icon(Icons.check, size: 14, color: Colors.white)
+                              ? const Icon(Icons.check,
+                                  size: 14, color: Colors.white)
                               : null,
                         ),
                       )
@@ -970,19 +997,6 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
       ],
     );
   }
-
-  Widget _buildItemImagem(String imagem) {
-    try {
-      final bytes = Base64Cache.decode(imagem);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Image.memory(bytes, width: 56, height: 56, fit: BoxFit.cover),
-      );
-    } catch (e, st) {
-      AppLogger.e('CardapioEmpresa', e, st);
-      return const SizedBox.shrink();
-    }
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -992,7 +1006,10 @@ class _PizzaDetalhePage extends StatefulWidget {
   final Map<String, dynamic> produto;
   final Map<String, dynamic> empresa;
   final int idProduto;
-  const _PizzaDetalhePage({required this.produto, required this.idProduto, required this.empresa});
+  const _PizzaDetalhePage(
+      {required this.produto,
+      required this.idProduto,
+      required this.empresa});
 
   @override
   State<_PizzaDetalhePage> createState() => _PizzaDetalhePageState();
@@ -1005,12 +1022,13 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
   int _quantidade = 1;
   final _obsCtrl = TextEditingController();
 
-  bool get _meioAMeio   => widget.produto['pizza_meio_a_meio']  as bool? ?? false;
-  bool get _tresSabores => widget.produto['pizza_tres_sabores'] as bool? ?? false;
+  bool get _meioAMeio => widget.produto['pizza_meio_a_meio'] as bool? ?? false;
+  bool get _tresSabores =>
+      widget.produto['pizza_tres_sabores'] as bool? ?? false;
 
   int get _maxSabores {
     if (_tresSabores) return 3;
-    if (_meioAMeio)  return 2;
+    if (_meioAMeio) return 2;
     return 1;
   }
 
@@ -1020,12 +1038,10 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
       final p = s['preco'];
       return acc + (p is num ? p.toDouble() : double.tryParse(p?.toString() ?? '') ?? 0.0);
     });
-    return soma / _selecionados.length; // média dos sabores
+    return soma / _selecionados.length;
   }
 
-  // Para pizza, preço = apenas média dos sabores (sem base)
   double get _precoTotal => _precoSabores * _quantidade;
-
   bool get _podePedir => _selecionados.isNotEmpty;
 
   @override
@@ -1064,8 +1080,11 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
 
   void _adicionar() {
     if (!_podePedir) return;
-    final nomesSabores = _selecionados.map((s) => s['nome']?.toString() ?? '').join(' / ');
-    final adicionais = [{'nome': nomesSabores, 'preco': _precoSabores}];
+    final nomesSabores =
+        _selecionados.map((s) => s['nome']?.toString() ?? '').join(' / ');
+    final adicionais = [
+      {'nome': nomesSabores, 'preco': _precoSabores}
+    ];
     final idEmpresa = widget.empresa['id_empresa'] is int
         ? widget.empresa['id_empresa'] as int
         : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
@@ -1085,14 +1104,12 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
 
   @override
   Widget build(BuildContext context) {
-    final nome     = widget.produto['nome']?.toString() ?? '';
+    final nome = widget.produto['nome']?.toString() ?? '';
     final descricao = widget.produto['descricao']?.toString() ?? '';
-    final imagem   = widget.produto['imagem']?.toString();
+    final imagem = widget.produto['imagem']?.toString();
 
     String divisaoLabel;
-    if (_tresSabores && _meioAMeio) {
-      divisaoLabel = 'Escolha até 3 sabores (preço = média)';
-    } else if (_tresSabores) {
+    if (_tresSabores) {
       divisaoLabel = 'Escolha até 3 sabores (preço = média)';
     } else if (_meioAMeio) {
       divisaoLabel = 'Escolha até 2 sabores (preço = média)';
@@ -1111,136 +1128,172 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
         ),
         title: Text(nome,
             style: const TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 15),
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 15),
             overflow: TextOverflow.ellipsis),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _primary))
           : ListView(
               children: [
-                // Imagem
-                if (imagem != null && imagem.contains(','))
-                  Builder(builder: (_) {
-                    try {
-                      return Image.memory(Base64Cache.decode(imagem),
-                          width: double.infinity, height: 200, fit: BoxFit.cover);
-                    } catch (e, st) { AppLogger.e('CardapioEmpresa', e, st); return const SizedBox.shrink(); }
-                  })
+                if (imagem != null && imagem.isNotEmpty)
+                  _SmartImage(
+                    base64: imagem,
+                    width: double.infinity,
+                    height: 200,
+                    fit: BoxFit.cover,
+                    placeholder: Container(
+                      height: 160,
+                      color: _primary.withValues(alpha: 0.08),
+                      child: const Center(
+                          child: Icon(Icons.local_pizza_outlined,
+                              color: _primary, size: 72)),
+                    ),
+                  )
                 else
                   Container(
                     height: 160,
                     color: _primary.withValues(alpha: 0.08),
-                    child: const Center(child: Icon(Icons.local_pizza_outlined, color: _primary, size: 72)),
+                    child: const Center(
+                        child: Icon(Icons.local_pizza_outlined,
+                            color: _primary, size: 72)),
                   ),
-
-                // Info
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(nome,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 20)),
                       if (descricao.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(descricao,
-                            style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5)),
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                                height: 1.5)),
                       ],
                       const SizedBox(height: 8),
                       Text(
                         _selecionados.isEmpty
                             ? 'Preço definido pelo sabor'
                             : 'R\$ ${_precoTotal.toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _primary),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: _primary),
                       ),
                     ],
                   ),
                 ),
-
                 const Divider(height: 1),
-
-                // Seção sabores
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
                   color: const Color(0xFFF5F5F5),
                   child: Row(children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Sabores', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const Text('Sabores',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
                           Text(divisaoLabel,
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600)),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(4)),
                       child: const Text('OBRIGATÓRIO',
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ]),
                 ),
-
                 if (_sabores.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Center(child: Text('Nenhum sabor disponível', style: TextStyle(color: Colors.grey))),
+                    child: Center(
+                        child: Text('Nenhum sabor disponível',
+                            style: TextStyle(color: Colors.grey))),
                   )
                 else
                   ..._sabores.map((s) {
                     final id = s['id_sabor'];
                     final nomeSabor = s['nome']?.toString() ?? '';
                     final desc = s['descricao']?.toString() ?? '';
-                    final preco = s['preco'] is num ? (s['preco'] as num).toDouble()
+                    final preco = s['preco'] is num
+                        ? (s['preco'] as num).toDouble()
                         : double.tryParse(s['preco']?.toString() ?? '') ?? 0.0;
-                    final selecionado = _selecionados.any((x) => x['id_sabor'] == id);
-                    final podeSelecionar = selecionado || _selecionados.length < _maxSabores;
+                    final selecionado =
+                        _selecionados.any((x) => x['id_sabor'] == id);
+                    final podeSelecionar =
+                        selecionado || _selecionados.length < _maxSabores;
 
                     return InkWell(
                       onTap: podeSelecionar ? () => _toggleSabor(s) : null,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         child: Row(children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(nomeSabor, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                                Text(nomeSabor,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14)),
                                 if (desc.isNotEmpty)
-                                  Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                  Text(desc,
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500)),
                                 if (preco > 0)
                                   Text('+ R\$ ${preco.toStringAsFixed(2)}',
-                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade700)),
                               ],
                             ),
                           ),
                           Checkbox(
                             value: selecionado,
-                            onChanged: podeSelecionar ? (_) => _toggleSabor(s) : null,
+                            onChanged:
+                                podeSelecionar ? (_) => _toggleSabor(s) : null,
                             activeColor: _primary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4)),
                           ),
                         ]),
                       ),
                     );
                   }),
-
                 const Divider(height: 1),
-
-                // Observação
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Row(children: [
-                        Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey),
+                        Icon(Icons.chat_bubble_outline,
+                            size: 16, color: Colors.grey),
                         SizedBox(width: 6),
                         Text('Alguma observação?',
-                            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w500, fontSize: 14)),
                       ]),
                       const SizedBox(height: 8),
                       TextField(
@@ -1281,13 +1334,17 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                       child: Row(children: [
                         IconButton(
                           icon: const Icon(Icons.remove, size: 18),
-                          onPressed: _quantidade > 1 ? () => setState(() => _quantidade--) : null,
+                          onPressed: _quantidade > 1
+                              ? () => setState(() => _quantidade--)
+                              : null,
                           color: _quantidade > 1 ? _primary : Colors.grey,
                         ),
                         Text('$_quantidade',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
                         IconButton(
-                          icon: const Icon(Icons.add, size: 18, color: _primary),
+                          icon: const Icon(Icons.add,
+                              size: 18, color: _primary),
                           onPressed: () => setState(() => _quantidade++),
                         ),
                       ]),
@@ -1296,10 +1353,12 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _podePedir ? _primary : Colors.grey.shade300,
+                          backgroundColor:
+                              _podePedir ? _primary : Colors.grey.shade300,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                           elevation: 0,
                         ),
                         onPressed: _podePedir ? _adicionar : null,
@@ -1307,14 +1366,18 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              _podePedir ? 'Adicionar' : 'Escolha um sabor',
+                              _podePedir
+                                  ? 'Adicionar'
+                                  : 'Escolha um sabor',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: _podePedir ? 15 : 13),
                             ),
                             if (_podePedir)
                               Text('R\$ ${_precoTotal.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15)),
                           ],
                         ),
                       ),
@@ -1324,5 +1387,148 @@ class _PizzaDetalhePageState extends State<_PizzaDetalhePage> {
               ),
             ),
     );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Widget reutilizável: URL → CachedNetworkImage | base64 → isolate
+// ══════════════════════════════════════════════════════════════════
+class _CachedBase64Image extends StatefulWidget {
+  final String base64;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final BorderRadius? borderRadius;
+  final bool circular;
+  final Widget? placeholder;
+
+  const _CachedBase64Image({
+    required this.base64,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.borderRadius,
+    this.circular = false,
+    this.placeholder,
+  });
+
+  @override
+  State<_CachedBase64Image> createState() => _CachedBase64ImageState();
+}
+
+class _CachedBase64ImageState extends State<_CachedBase64Image> {
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_CachedBase64Image old) {
+    super.didUpdateWidget(old);
+    if (old.base64 != widget.base64) _load();
+  }
+
+  void _load() {
+    final cached = Base64Cache.get(widget.base64);
+    if (cached != null) {
+      _bytes = cached;
+      return;
+    }
+    compute((s) => base64Decode(s.split(',').last), widget.base64)
+        .then((bytes) {
+      Base64Cache.put(widget.base64, bytes);
+      if (mounted) setState(() => _bytes = bytes);
+    }).catchError((Object e, StackTrace st) {
+      AppLogger.e('CachedBase64Image', e, st);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    if (bytes == null) return widget.placeholder ?? const SizedBox.shrink();
+
+    Widget img = Image.memory(
+      bytes,
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      gaplessPlayback: true,
+    );
+
+    if (widget.circular) return ClipOval(child: img);
+    if (widget.borderRadius != null) {
+      return ClipRRect(borderRadius: widget.borderRadius!, child: img);
+    }
+    return img;
+  }
+}
+
+/// Detecta automaticamente URL vs base64 e renderiza de forma otimizada.
+/// URL  → CachedNetworkImage (HTTP cache do SO)
+/// base64 → _CachedBase64Image (decode em isolate + cache em memória)
+/// URL → CachedNetworkImage | base64 legacy → isolate decode
+class _SmartImage extends StatelessWidget {
+  final String base64; // pode ser URL ou base64 data URI
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final BorderRadius? borderRadius;
+  final bool circular;
+  final Widget? placeholder;
+
+  const _SmartImage({
+    required this.base64,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.borderRadius,
+    this.circular = false,
+    this.placeholder,
+  });
+
+  bool get _isUrl =>
+      base64.startsWith('http://') ||
+      base64.startsWith('https://') ||
+      base64.startsWith('/uploads/');
+
+  String get _fullUrl => base64.startsWith('/')
+      ? '${ApiService.baseUrl}$base64'
+      : base64;
+
+  @override
+  Widget build(BuildContext context) {
+    final ph = placeholder ?? const SizedBox.shrink();
+
+    if (_isUrl) {
+      Widget img = CachedNetworkImage(
+        imageUrl: _fullUrl,
+        width: width,
+        height: height,
+        fit: fit,
+        placeholder: (_, __) => ph,
+        errorWidget: (_, __, ___) => ph,
+      );
+      if (circular) return ClipOval(child: img);
+      if (borderRadius != null) return ClipRRect(borderRadius: borderRadius!, child: img);
+      return img;
+    }
+
+    if (base64.contains(',')) {
+      return _CachedBase64Image(
+        base64: base64,
+        width: width,
+        height: height,
+        fit: fit,
+        borderRadius: borderRadius,
+        circular: circular,
+        placeholder: ph,
+      );
+    }
+
+    return ph;
   }
 }

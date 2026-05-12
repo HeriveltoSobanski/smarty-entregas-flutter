@@ -234,9 +234,10 @@ class _PaginaLoginState extends State<PaginaLogin> {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        resizeToAvoidBottomInset: true,
+        resizeToAvoidBottomInset: false,
         body: SafeArea(
             child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: ConstrainedBox(
                 constraints: BoxConstraints(

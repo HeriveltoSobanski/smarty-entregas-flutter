@@ -1,8 +1,10 @@
 ﻿import 'dart:async';
-import '../../../core/utils/app_logger.dart';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
 import '../busca/busca_page.dart';
@@ -242,7 +244,7 @@ class _HomeContentState extends State<_HomeContent> with WidgetsBindingObserver 
 
   void _iniciarTimerNotif() {
     _notifTimer?.cancel();
-    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarNaoLidas());
+    _notifTimer = Timer.periodic(const Duration(seconds: 60), (_) => _atualizarNaoLidas());
   }
 
   Future<void> _carregarFavoritos() async {
@@ -967,22 +969,76 @@ class _LogoEmpresaState extends State<_LogoEmpresa> {
     if (old.fotoPerfil != widget.fotoPerfil) _decode();
   }
 
-  void _decode() {
-    final foto = widget.fotoPerfil;
-    if (foto != null && foto.contains(',')) {
-      try {
-        _bytes = base64Decode(foto.split(',').last);
-      } catch (e, st) {
-      AppLogger.e('PaginaInicial', e, st);
-        _bytes = null;
-      }
-    } else {
-      _bytes = null;
-    }
+  bool get _isUrl {
+    final f = widget.fotoPerfil;
+    return f != null &&
+        (f.startsWith('http://') ||
+            f.startsWith('https://') ||
+            f.startsWith('/uploads/'));
   }
+
+  void _decode() {
+    if (_isUrl) return; // URL tratado diretamente no build
+    final foto = widget.fotoPerfil;
+    if (foto == null || !foto.contains(',')) {
+      _bytes = null;
+      return;
+    }
+    final cached = Base64Cache.get(foto);
+    if (cached != null) {
+      _bytes = cached;
+      return;
+    }
+    compute((s) => base64Decode(s.split(',').last), foto).then((bytes) {
+      Base64Cache.put(foto, bytes);
+      if (mounted) setState(() => _bytes = bytes);
+    }).catchError((Object e, StackTrace st) {
+      AppLogger.e('PaginaInicial', e, st);
+    });
+  }
+
+  Widget _placeholder() => Container(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: widget.color.withValues(alpha: 0.35),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            widget.nome.isNotEmpty ? widget.nome[0].toUpperCase() : '?',
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 26),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
+    // URL → CachedNetworkImage
+    if (_isUrl) {
+      final url = widget.fotoPerfil!.startsWith('/')
+          ? '${ApiService.baseUrl}${widget.fotoPerfil}'
+          : widget.fotoPerfil!;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => _placeholder(),
+          errorWidget: (_, __, ___) => _placeholder(),
+        ),
+      );
+    }
+    // base64 legacy
     if (_bytes != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
