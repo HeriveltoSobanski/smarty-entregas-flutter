@@ -1,6 +1,5 @@
 ﻿import 'dart:async';
 import '../../../presentation/navigation/app_routes.dart';
-import 'dart:convert';
 import '../../../core/utils/image_cache.dart';
 import '../../../core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
+import '../../../services/cloudinary_service.dart';
 import '../selecionar_endereco/selecionar_endereco_page.dart';
 import '../empresa_motoboys/empresa_motoboys_page.dart';
 
@@ -743,8 +743,8 @@ class _FormProdutoState extends State<_FormProduto> {
       source: ImageSource.gallery, maxWidth: 800, maxHeight: 800, imageQuality: 75,
     );
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() => _imagemBase64 = 'data:image/jpeg;base64,${base64Encode(bytes)}');
+    final url = await CloudinaryService.uploadImage(picked.path);
+    if (url != null && mounted) setState(() => _imagemBase64 = url);
   }
 
   Future<void> _carregarCats() async {
@@ -2714,15 +2714,14 @@ class _TabContaState extends State<_TabConta> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 600, maxHeight: 600, imageQuality: 80);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
     setState(() => _salvandoFotoPerfil = true);
+    final url = await CloudinaryService.uploadImage(picked.path);
     final idEmpresa = SessionStore.idEmpresa;
-    if (idEmpresa != null) {
-      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoPerfil: b64);
-      if (mounted) setState(() { _fotoPerfil = b64; _salvandoFotoPerfil = false; });
+    if (url != null && idEmpresa != null) {
+      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoPerfil: url);
+      if (mounted) setState(() { _fotoPerfil = url; _salvandoFotoPerfil = false; });
     } else {
-      setState(() => _salvandoFotoPerfil = false);
+      if (mounted) setState(() => _salvandoFotoPerfil = false);
     }
   }
 
@@ -2730,15 +2729,14 @@ class _TabContaState extends State<_TabConta> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1400, maxHeight: 900, imageQuality: 85);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
     setState(() => _salvandoFotoCapa = true);
+    final url = await CloudinaryService.uploadImage(picked.path);
     final idEmpresa = SessionStore.idEmpresa;
-    if (idEmpresa != null) {
-      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoCapa: b64);
-      if (mounted) setState(() { _fotoCapa = b64; _salvandoFotoCapa = false; });
+    if (url != null && idEmpresa != null) {
+      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoCapa: url);
+      if (mounted) setState(() { _fotoCapa = url; _salvandoFotoCapa = false; });
     } else {
-      setState(() => _salvandoFotoCapa = false);
+      if (mounted) setState(() => _salvandoFotoCapa = false);
     }
   }
 
