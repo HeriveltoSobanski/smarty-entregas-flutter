@@ -35,11 +35,13 @@ class _SplashPageState extends State<SplashPage>
   }
 
   Future<void> _checkSession() async {
-    // Aguarda o mínimo de 2s para exibir o splash
-    await Future.wait([
+    final results = await Future.wait([
       Future.delayed(const Duration(seconds: 2)),
-      _tryAutoLogin(),
+      _resolveRoute(),
     ]);
+    if (!mounted) return;
+    final route = results[1] as String;
+    Navigator.of(context).pushReplacementNamed(route);
   }
 
   static bool _isTokenExpired(String token) {
@@ -65,11 +67,10 @@ class _SplashPageState extends State<SplashPage>
     }
   }
 
-  Future<void> _tryAutoLogin() async {
+  Future<String> _resolveRoute() async {
     final saved = await AuthStorage.load();
-    if (!mounted) return;
-
     final token = saved != null ? (saved['token'] as String?) ?? '' : '';
+
     if (saved != null && token.isNotEmpty && !_isTokenExpired(token)) {
       SessionStore.set(
         idUsuario:   saved['idUsuario'] as int,
@@ -79,20 +80,14 @@ class _SplashPageState extends State<SplashPage>
         idEmpresa:   saved['idEmpresa']  as int?,
         token:       token,
       );
-
       PushNotificationService.registrarAposLogin();
       final tipo = saved['tipoUsuario'] as String;
-      if (tipo == 'empresa') {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.empresa);
-      } else if (tipo == 'motoboy') {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.motoboy);
-      } else {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
-      }
+      if (tipo == 'empresa') return AppRoutes.empresa;
+      if (tipo == 'motoboy') return AppRoutes.motoboy;
+      return AppRoutes.home;
     } else {
       if (saved != null) await AuthStorage.clear();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+      return AppRoutes.login;
     }
   }
 
