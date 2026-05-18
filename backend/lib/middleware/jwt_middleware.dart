@@ -5,6 +5,7 @@ import '../services/jwt_service.dart';
 /// Rotas públicas que não exigem autenticação.
 const _publicPaths = {
   '',
+  'health',
   'auth/login',
   'auth/register/cliente',
   'auth/register/empresa',
