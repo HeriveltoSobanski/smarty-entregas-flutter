@@ -3,7 +3,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class AvaliacaoController {
-  final Connection conn;
+  final Pool conn;
   AvaliacaoController(this.conn);
 
   // ----------------------------------------------------------------

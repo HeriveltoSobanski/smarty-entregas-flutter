@@ -6,7 +6,7 @@ import 'notificacao_controller.dart';
 import '../services/fcm_service.dart';
 
 class PedidoController {
-  final Connection conn;
+  final Pool conn;
   final FcmService? fcmService;
 
   PedidoController(this.conn, {this.fcmService});

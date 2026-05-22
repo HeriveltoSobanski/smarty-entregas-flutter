@@ -4,7 +4,7 @@ import 'package:shelf/shelf.dart';
 import '../services/image_service.dart';
 
 class EmpresaController {
-  final Connection conn;
+  final Pool conn;
   final ImageService imageService;
   EmpresaController(this.conn, this.imageService);
 
@@ -31,6 +31,15 @@ class EmpresaController {
 
       if (!temFotoPerfil && !temFotoCapa) {
         return _json(400, {'error': 'foto_perfil ou foto_capa e obrigatorio'});
+      }
+
+      if (temFotoPerfil) {
+        final erroFoto = imageService.validar(fotoPerfilRaw);
+        if (erroFoto != null) return _json(400, {'error': 'foto_perfil: $erroFoto'});
+      }
+      if (temFotoCapa) {
+        final erroCapa = imageService.validar(fotoCapaRaw);
+        if (erroCapa != null) return _json(400, {'error': 'foto_capa: $erroCapa'});
       }
 
       final fotoPerfil = temFotoPerfil ? await imageService.processar(fotoPerfilRaw) : null;

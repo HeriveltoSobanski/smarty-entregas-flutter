@@ -2,6 +2,19 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url 'https://api.mapbox.com/downloads/v2/releases/maven'
+            authentication { basic(BasicAuthentication) }
+            credentials {
+                username = "mapbox"
+                // Token secreto para download do SDK nativo — nunca commitar.
+                // Adicionar em ~/.gradle/gradle.properties:
+                //   MAPBOX_DOWNLOADS_TOKEN=sk.eyJ1...
+                password = project.hasProperty('MAPBOX_DOWNLOADS_TOKEN')
+                    ? project.property('MAPBOX_DOWNLOADS_TOKEN')
+                    : (System.getenv('MAPBOX_DOWNLOADS_TOKEN') ?: '')
+            }
+        }
     }
 }
 

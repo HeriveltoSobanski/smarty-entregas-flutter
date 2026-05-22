@@ -10,33 +10,60 @@ import '../services/password_service.dart';
 import '../services/email_service.dart';
 
 class AuthController {
-  final Connection conn;
+  final Pool conn;
   final JwtService _jwt;
   final EmailService _email;
 
   AuthController(this.conn, this._jwt, this._email);
 
-  // Rate limiting em memória: chave → {tentativas, bloqueado até}
-  static final _attempts = <String, ({int count, DateTime until})>{};
+  // ---- Rate limiting persistente no banco ----
 
-  static bool _isRateLimited(String key) {
-    final e = _attempts[key];
-    if (e == null) return false;
-    if (DateTime.now().isAfter(e.until)) { _attempts.remove(key); return false; }
-    return e.count >= 5;
-  }
-
-  static void _recordFail(String key) {
-    final e = _attempts[key];
-    final now = DateTime.now();
-    if (e == null || now.isAfter(e.until)) {
-      _attempts[key] = (count: 1, until: now.add(const Duration(minutes: 15)));
-    } else {
-      _attempts[key] = (count: e.count + 1, until: e.until);
+  Future<bool> _isRateLimited(String key) async {
+    try {
+      final r = await conn.execute(
+        Sql.named('''
+          SELECT tentativas FROM login_attempts
+          WHERE chave = @chave AND tentativas >= 5 AND bloqueado_ate > NOW()
+        '''),
+        parameters: {'chave': key},
+      );
+      return r.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
-  static void _clearAttempts(String key) => _attempts.remove(key);
+  Future<void> _recordFail(String key) async {
+    try {
+      await conn.execute(
+        Sql.named('''
+          INSERT INTO login_attempts (chave, tentativas, bloqueado_ate)
+          VALUES (@chave, 1, NOW() + INTERVAL '15 minutes')
+          ON CONFLICT (chave) DO UPDATE
+            SET tentativas   = CASE
+                  WHEN login_attempts.bloqueado_ate <= NOW()
+                  THEN 1
+                  ELSE login_attempts.tentativas + 1
+                END,
+                bloqueado_ate = CASE
+                  WHEN login_attempts.bloqueado_ate <= NOW()
+                  THEN NOW() + INTERVAL '15 minutes'
+                  ELSE login_attempts.bloqueado_ate
+                END
+        '''),
+        parameters: {'chave': key},
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _clearAttempts(String key) async {
+    try {
+      await conn.execute(
+        Sql.named('DELETE FROM login_attempts WHERE chave = @chave'),
+        parameters: {'chave': key},
+      );
+    } catch (_) {}
+  }
 
   // ----------------------------------------------------------------
   // LOGIN
@@ -55,7 +82,7 @@ class AuthController {
         return _json(400, {'error': 'Email e senha são obrigatórios'});
       }
 
-      if (_isRateLimited('login:$email')) {
+      if (await _isRateLimited('login:$email')) {
         return _json(429, {'error': 'Muitas tentativas. Aguarde 15 minutos.'});
       }
 
@@ -73,7 +100,7 @@ class AuthController {
       );
 
       if (result.isEmpty) {
-        _recordFail('login:$email');
+        await _recordFail('login:$email');
         return _json(401, {'error': 'Credenciais inválidas'});
       }
 
@@ -91,11 +118,11 @@ class AuthController {
       }
 
       if (!PasswordService.verify(senha, dbSenha)) {
-        _recordFail('login:$email');
+        await _recordFail('login:$email');
         return _json(401, {'error': 'Credenciais inválidas'});
       }
 
-      _clearAttempts('login:$email');
+      await _clearAttempts('login:$email');
 
       // Migração automática: se a senha estava em texto plano, re-hasheia
       if (PasswordService.needsUpgrade(dbSenha)) {
@@ -473,7 +500,7 @@ class AuthController {
       final email = (data['email'] ?? '').toString().trim();
 
       if (email.isEmpty) return _json(400, {'error': 'E-mail obrigatório'});
-      if (_isRateLimited('reset:$email')) {
+      if (await _isRateLimited('reset:$email')) {
         return _json(429, {'error': 'Muitas tentativas. Aguarde 15 minutos.'});
       }
 
@@ -526,10 +553,10 @@ class AuthController {
       );
 
       if (result.isEmpty) {
-        _recordFail('reset:$email');
+        await _recordFail('reset:$email');
         return _json(400, {'error': 'Código inválido ou expirado'});
       }
-      _clearAttempts('reset:$email');
+      await _clearAttempts('reset:$email');
       return _json(200, {'ok': true});
     } catch (e) {
       return _json(500, {'error': 'Erro ao verificar código'});

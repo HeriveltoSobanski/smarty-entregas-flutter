@@ -4,7 +4,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class CupomController {
-  final Connection conn;
+  final Pool conn;
 
   CupomController(this.conn);
 

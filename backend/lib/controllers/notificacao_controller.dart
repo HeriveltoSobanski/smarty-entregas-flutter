@@ -4,7 +4,7 @@ import 'package:shelf/shelf.dart';
 import '../services/fcm_service.dart';
 
 class NotificacaoController {
-  final Connection conn;
+  final Pool conn;
   NotificacaoController(this.conn);
 
   // ----------------------------------------------------------------
@@ -112,7 +112,7 @@ class NotificacaoController {
   // Helper estático reutilizado pelos outros controllers
   // ----------------------------------------------------------------
   static Future<void> criar({
-    required Connection conn,
+    required Pool conn,
     required int    idUsuario,
     required String titulo,
     required String corpo,

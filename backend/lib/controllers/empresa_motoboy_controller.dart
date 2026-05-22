@@ -5,7 +5,7 @@ import 'package:shelf/shelf.dart';
 /// Gerencia motoboys vinculados a uma empresa específica.
 /// Tabela: empresa_motoboys (id, id_empresa, id_usuario, ativo)
 class EmpresaMotoboyController {
-  final Connection conn;
+  final Pool conn;
   EmpresaMotoboyController(this.conn);
 
   // GET /motoboys/buscar?id=X

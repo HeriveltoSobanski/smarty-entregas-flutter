@@ -11,10 +11,40 @@ class ImageService {
 
   ImageService(this.publicDir);
 
+  static const _maxBytes    = 5 * 1024 * 1024; // 5 MB
+  static const _allowedMime = {
+    'data:image/jpeg',
+    'data:image/jpg',
+    'data:image/png',
+    'data:image/webp',
+  };
+
+  /// Retorna mensagem de erro se o valor for um data URI inválido, null se ok.
+  String? validar(String? valor) {
+    if (valor == null || valor.isEmpty) return null;
+    if (valor.startsWith('http://') ||
+        valor.startsWith('https://') ||
+        valor.startsWith('/uploads/')) {
+      return null;
+    }
+    if (!valor.contains(',')) return 'Formato de imagem inválido';
+    final mime = valor.split(',').first.split(';').first;
+    if (!_allowedMime.contains(mime)) {
+      return 'Tipo de imagem não permitido. Use JPEG, PNG ou WebP.';
+    }
+    try {
+      final bytes = base64Decode(valor.split(',').last);
+      if (bytes.length > _maxBytes) return 'Imagem muito grande. Máximo 5 MB.';
+    } catch (_) {
+      return 'Imagem corrompida ou inválida';
+    }
+    return null;
+  }
+
   /// Processa um valor de imagem:
   /// - null / vazio       → null
   /// - URL já existente   → retorna sem alterar
-  /// - base64 data URI    → salva arquivo → retorna /uploads/imagens/xxx.ext
+  /// - base64 data URI    → valida → salva arquivo → retorna /uploads/imagens/xxx.ext
   Future<String?> processar(String? valor) async {
     if (valor == null || valor.isEmpty) return null;
     if (valor.startsWith('http://') ||
@@ -23,6 +53,8 @@ class ImageService {
       return valor;
     }
     if (!valor.contains(',')) return null;
+    final erro = validar(valor);
+    if (erro != null) return null;
     try {
       final bytes = base64Decode(valor.split(',').last);
       final ext = _ext(valor);
@@ -39,7 +71,7 @@ class ImageService {
 
   /// Converte todos os campos base64 do banco para arquivos em disco.
   /// Executado uma vez na startup — seguro para re-executar.
-  Future<void> migrarBanco(Connection conn) async {
+  Future<void> migrarBanco(Pool conn) async {
     await _migrarColuna(conn, 'produtos',            'imagem',      'id_produto');
     await _migrarColuna(conn, 'empresas',            'foto_perfil', 'id_empresa');
     await _migrarColuna(conn, 'empresas',            'foto_capa',   'id_empresa');
@@ -48,7 +80,7 @@ class ImageService {
   }
 
   Future<void> _migrarColuna(
-      Connection conn, String tabela, String coluna, String pk) async {
+      Pool conn, String tabela, String coluna, String pk) async {
     try {
       final rows = await conn.execute(
         Sql.named(
@@ -76,7 +108,7 @@ class ImageService {
 
   // Versão que não falha se a coluna não existir
   Future<void> _migrarColunaOpcional(
-      Connection conn, String tabela, String coluna, String pk) async {
+      Pool conn, String tabela, String coluna, String pk) async {
     try {
       await _migrarColuna(conn, tabela, coluna, pk);
     } catch (_) {}

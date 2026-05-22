@@ -5,7 +5,7 @@ import 'package:shelf/shelf.dart';
 import '../services/image_service.dart';
 
 class ProdutoController {
-  final Connection conn;
+  final Pool conn;
   final ImageService imageService;
 
   ProdutoController(this.conn, this.imageService);
@@ -174,6 +174,9 @@ class ProdutoController {
         });
       }
 
+      final erroImagem = imageService.validar(imagemRaw);
+      if (erroImagem != null) return _json(400, {'error': 'imagem: $erroImagem'});
+
       final imagem = await imageService.processar(imagemRaw);
 
       final result = await conn.execute(
@@ -236,6 +239,9 @@ class ProdutoController {
       if (nome.isEmpty || preco <= 0 || idCat == 0) {
         return _json(400, {'error': 'nome, preço e categoria são obrigatórios'});
       }
+
+      final erroImagem = imageService.validar(imagemRaw);
+      if (erroImagem != null) return _json(400, {'error': 'imagem: $erroImagem'});
 
       final imagem = await imageService.processar(imagemRaw);
 

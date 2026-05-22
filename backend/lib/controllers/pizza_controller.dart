@@ -3,7 +3,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class PizzaController {
-  final Connection conn;
+  final Pool conn;
   PizzaController(this.conn);
 
   // ----------------------------------------------------------------

@@ -280,8 +280,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       observacao:      _observacaoCtrl.text.trim(),
       formaPagamento:  _pagamento!.slug,
       trocoPara:       troco,
-      taxaEntrega:     _taxaEntrega,
       codigoCupom:     _cupomAplicado,
+      idEndereco:      _enderecoSel?['id_endereco'] is int
+                           ? _enderecoSel!['id_endereco'] as int
+                           : int.tryParse(_enderecoSel?['id_endereco']?.toString() ?? ''),
     );
 
     setState(() => _carregando = false);
