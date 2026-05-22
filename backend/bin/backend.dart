@@ -35,10 +35,14 @@ import 'package:backend/middleware/jwt_middleware.dart';
 void main() async {
   final env = DotEnv(includePlatformEnvironment: true)..load();
 
-  final jwtSecret    = env['JWT_SECRET'] ?? 'smarty_entregas_dev_secret';
-  final orsApiKey    = env['ORS_API_KEY'] ?? '';
-  final gmailUser    = env['GMAIL_USER'] ?? '';
-  final gmailPass    = env['GMAIL_APP_PASSWORD'] ?? '';
+  final jwtSecret = env['JWT_SECRET'];
+  if (jwtSecret == null || jwtSecret.isEmpty) {
+    throw Exception('JWT_SECRET nao encontrado no .env — servidor nao pode iniciar sem este valor.');
+  }
+
+  final mapboxToken = env['MAPBOX_TOKEN'] ?? '';
+  final gmailUser = env['GMAIL_USER'] ?? '';
+  final gmailPass = env['GMAIL_APP_PASSWORD'] ?? '';
   final jwtService   = JwtService(jwtSecret);
   final emailService = EmailService(gmailUser, gmailPass);
 
@@ -287,6 +291,14 @@ void main() async {
     // Cupom aplicado ao pedido
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_cupom VARCHAR(30)",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS desconto NUMERIC(10,2) NOT NULL DEFAULT 0",
+    // Rate limiting persistente
+    '''
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        chave        VARCHAR(200) PRIMARY KEY,
+        tentativas   INT NOT NULL DEFAULT 1,
+        bloqueado_ate TIMESTAMPTZ NOT NULL
+      )
+    ''',
   ];
 
   for (final sql in migrations) {
@@ -421,11 +433,11 @@ void main() async {
   app.patch('/motoboy/status',          motoboy.atualizarStatus);
   app.patch('/motoboy/meu-status',      motoboy.atualizarMeuStatus);
 
-  // ── MAPA / PROXY ORS ─────────────────────────────────────────
-  // Mantém a API key no servidor — o app Flutter não precisa saber a chave.
+  // ── MAPA / PROXY MAPBOX ──────────────────────────────────────
+  // Mantém o token no servidor — o app Flutter não precisa saber a chave.
   app.get('/mapa/rota', (Request req) async {
     try {
-      final params   = req.url.queryParameters;
+      final params    = req.url.queryParameters;
       final origemLat = params['origemLat'] ?? '';
       final origemLng = params['origemLng'] ?? '';
       final destLat   = params['destLat'] ?? '';
@@ -435,23 +447,24 @@ void main() async {
         return _json(400, {'error': 'Parâmetros origemLat, origemLng, destLat, destLng são obrigatórios'});
       }
 
-      final orsResp = await http.post(
-        Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car/geojson'),
-        headers: {
-          'Authorization': orsApiKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'coordinates': [
-            [double.parse(origemLng), double.parse(origemLat)],
-            [double.parse(destLng), double.parse(destLat)],
-          ]
-        }),
+      if (mapboxToken.isEmpty) {
+        return _json(503, {'error': 'Serviço de rotas não configurado'});
+      }
+
+      // Mapbox Directions API — coordenadas em ordem lon,lat
+      final coords = '$origemLng,$origemLat;$destLng,$destLat';
+      final uri = Uri.parse(
+        'https://api.mapbox.com/directions/v5/mapbox/driving/$coords'
+        '?geometries=geojson'
+        '&overview=full'
+        '&access_token=$mapboxToken',
       );
 
+      final mbResp = await http.get(uri);
+
       return Response(
-        orsResp.statusCode,
-        body: orsResp.body,
+        mbResp.statusCode,
+        body: mbResp.body,
         headers: const {'content-type': 'application/json; charset=utf-8'},
       );
     } catch (e) {

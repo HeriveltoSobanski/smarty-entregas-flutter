@@ -5,7 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'notificacao_controller.dart';
 
 class MotoboyController {
-  final Connection conn;
+  final Pool conn;
 
   MotoboyController(this.conn);
 

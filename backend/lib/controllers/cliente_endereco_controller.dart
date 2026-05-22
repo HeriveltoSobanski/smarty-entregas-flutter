@@ -3,7 +3,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class ClienteEnderecoController {
-  final Connection conn;
+  final Pool conn;
   ClienteEnderecoController(this.conn);
 
   // ----------------------------------------------------------------

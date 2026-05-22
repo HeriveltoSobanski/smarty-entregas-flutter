@@ -3,7 +3,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class RelatorioController {
-  final Connection conn;
+  final Pool conn;
   RelatorioController(this.conn);
 
   // GET /empresas/relatorio?inicio=YYYY-MM-DD&fim=YYYY-MM-DD

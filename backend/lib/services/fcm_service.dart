@@ -114,7 +114,7 @@ class FcmService {
   // ── Envio para todos os dispositivos de um usuário ────────────────
 
   Future<void> enviarParaUsuario({
-    required Connection conn,
+    required Pool conn,
     required int idUsuario,
     required String titulo,
     required String corpo,

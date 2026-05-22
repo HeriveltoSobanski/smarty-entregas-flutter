@@ -1,6 +1,7 @@
 ﻿import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'services/push_notification_service.dart';
@@ -11,8 +12,14 @@ import 'presentation/navigation/app_routes.dart';
 import 'presentation/navigation/app_pages.dart';
 import 'core/utils/app_logger.dart';
 
+// Token passado em build: --dart-define=MAPBOX_TOKEN=pk.eyJ1...
+const _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (_mapboxToken.isNotEmpty) {
+    MapboxOptions.setAccessToken(_mapboxToken);
+  }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // Dispara download da Poppins antes do primeiro frame — evita FOUC e jank
   GoogleFonts.poppins().fontFamily;

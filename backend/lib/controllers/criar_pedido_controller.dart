@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class CriarPedidoController {
-  final Connection conn;
+  final Pool conn;
 
   CriarPedidoController(this.conn);
 
@@ -37,9 +38,10 @@ class CriarPedidoController {
       final enderecoEntrega = body['endereco_entrega']?.toString() ?? '';
       final observacao      = body['observacao']?.toString() ?? '';
       final formaPagamento  = body['forma_pagamento']?.toString() ?? '';
-      final trocoPara       = _parseDouble(body['troco_para']);
-      final taxaEntrega     = _parseDouble(body['taxa_entrega']) ?? 0.0;
-      final codigoCupom     = body['codigo_cupom']?.toString().trim().toUpperCase();
+      final trocoPara   = _parseDouble(body['troco_para']);
+      final codigoCupom = body['codigo_cupom']?.toString().trim().toUpperCase();
+
+      final idEndereco = _parseInt(body['id_endereco']);
 
       final rawItens = body['itens'];
       if (rawItens == null || rawItens is! List || rawItens.isEmpty) {
@@ -51,13 +53,12 @@ class CriarPedidoController {
         if (item is! Map) {
           return _json(400, {'error': 'Cada item deve ser um objeto'});
         }
-        final idProduto = _parseInt(item['id_produto']);
+        final idProduto  = _parseInt(item['id_produto']);
         final quantidade = _parseInt(item['quantidade']);
-        final precoUnit  = _parseDouble(item['preco_unit']);
 
-        if (idProduto == null || quantidade == null || precoUnit == null) {
+        if (idProduto == null || quantidade == null) {
           return _json(400, {
-            'error': 'Cada item deve ter id_produto (int), quantidade (int) e preco_unit (num)'
+            'error': 'Cada item deve ter id_produto (int) e quantidade (int)'
           });
         }
         if (quantidade <= 0) {
@@ -70,18 +71,73 @@ class CriarPedidoController {
             .toList() ?? <int>[];
 
         itens.add({
-          'id_produto': idProduto,
-          'quantidade': quantidade,
-          'preco_unit': precoUnit,
-          'observacao': item['observacao']?.toString() ?? '',
+          'id_produto':    idProduto,
+          'quantidade':    quantidade,
+          'observacao':    item['observacao']?.toString() ?? '',
           'adicionais_ids': adicionaisIds,
         });
       }
 
-      // ---- Validar adicionais obrigatórios ----
+      // ---- Buscar preços reais do banco (nunca confiar no cliente) ----
+      double subtotal = 0.0;
+      final itensComPreco = <Map<String, dynamic>>[];
+
       for (final item in itens) {
+        final idProduto  = item['id_produto'] as int;
+        final quantidade = item['quantidade'] as int;
+
+        final produtoResult = await conn.execute(
+          Sql.named('''
+            SELECT preco FROM produtos
+            WHERE id_produto = @id AND id_empresa = @id_empresa AND ativo = true
+          '''),
+          parameters: {'id': idProduto, 'id_empresa': idEmpresa},
+        );
+
+        if (produtoResult.isEmpty) {
+          return _json(422, {
+            'error': 'Produto $idProduto não pertence a esta empresa ou está inativo'
+          });
+        }
+
+        final precoUnit = _parseDouble(produtoResult.first[0]) ?? 0.0;
+
+        // Somar preços dos adicionais selecionados
+        double precoAdicionais = 0.0;
+        final adicionaisIds = item['adicionais_ids'] as List<int>;
+        if (adicionaisIds.isNotEmpty) {
+          final placeholders = adicionaisIds
+              .asMap()
+              .entries
+              .map((e) => '@add${e.key}')
+              .join(', ');
+          final params = <String, dynamic>{};
+          for (var i = 0; i < adicionaisIds.length; i++) {
+            params['add$i'] = adicionaisIds[i];
+          }
+          final adicionaisResult = await conn.execute(
+            Sql.named(
+              'SELECT COALESCE(SUM(preco), 0) FROM produto_adicionais '
+              'WHERE id_adicional IN ($placeholders) AND ativo = true',
+            ),
+            parameters: params,
+          );
+          precoAdicionais = _parseDouble(adicionaisResult.first[0]) ?? 0.0;
+        }
+
+        final precoFinal = precoUnit + precoAdicionais;
+        subtotal += precoFinal * quantidade;
+
+        itensComPreco.add({
+          ...item,
+          'preco_unit': precoFinal,
+        });
+      }
+
+      // ---- Validar adicionais obrigatórios ----
+      for (final item in itensComPreco) {
         final idProduto    = item['id_produto'] as int;
-        final selectedIds  = ((item['adicionais_ids'] as List<int>)).toSet();
+        final selectedIds  = (item['adicionais_ids'] as List<int>).toSet();
 
         final gruposResult = await conn.execute(
           Sql.named('''
@@ -111,11 +167,52 @@ class CriarPedidoController {
         }
       }
 
-      // ---- Calcular valor total ----
-      final subtotal = itens.fold<double>(
-        0.0,
-        (acc, item) => acc + (item['preco_unit'] as double) * (item['quantidade'] as int),
+      // ---- Calcular taxa de entrega server-side ----
+      final empresaResult = await conn.execute(
+        Sql.named('''
+          SELECT taxa_minima, latitude, longitude
+          FROM empresas WHERE id_empresa = @id
+        '''),
+        parameters: {'id': idEmpresa},
       );
+
+      if (empresaResult.isEmpty) {
+        return _json(422, {'error': 'Empresa não encontrada'});
+      }
+
+      final taxaMinima  = _parseDouble(empresaResult.first[0]) ?? 7.0;
+      final empLat      = _parseDouble(empresaResult.first[1]);
+      final empLon      = _parseDouble(empresaResult.first[2]);
+
+      double taxaEntregaFinal;
+
+      if (idEndereco != null && empLat != null && empLon != null) {
+        final endResult = await conn.execute(
+          Sql.named('''
+            SELECT latitude, longitude
+            FROM usuario_enderecos
+            WHERE id_endereco = @id AND id_usuario = @id_usuario
+          '''),
+          parameters: {'id': idEndereco, 'id_usuario': idUsuario},
+        );
+
+        if (endResult.isNotEmpty) {
+          final endLat = _parseDouble(endResult.first[0]);
+          final endLon = _parseDouble(endResult.first[1]);
+
+          if (endLat != null && endLon != null) {
+            final distKm = _haversineKm(empLat, empLon, endLat, endLon);
+            taxaEntregaFinal = taxaMinima + distKm;
+          } else {
+            taxaEntregaFinal = taxaMinima;
+          }
+        } else {
+          taxaEntregaFinal = taxaMinima;
+        }
+      } else {
+        // Sem coordenadas disponíveis — garante ao menos a taxa mínima da empresa
+        taxaEntregaFinal = taxaMinima;
+      }
 
       // ---- Validar e aplicar cupom (se informado) ----
       double desconto = 0.0;
@@ -200,7 +297,7 @@ class CriarPedidoController {
           'observacao':       observacao,
           'forma_pagamento':  formaPagamento.isNotEmpty ? formaPagamento : null,
           'troco_para':       trocoPara,
-          'taxa_entrega':     taxaEntrega,
+          'taxa_entrega':     taxaEntregaFinal,
           'codigo_cupom':     cupomAplicado,
           'desconto':         desconto,
         },
@@ -209,7 +306,7 @@ class CriarPedidoController {
       final idPedido = pedidoResult.first[0] as int;
 
       // ---- Inserir itens do pedido ----
-      for (final item in itens) {
+      for (final item in itensComPreco) {
         await conn.execute(
           Sql.named('''
             INSERT INTO pedido_itens (id_pedido, id_produto, quantidade, preco_unit, observacao)
@@ -249,6 +346,17 @@ class CriarPedidoController {
     if (value is double) return value;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
+  }
+
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371.0;
+    final dLat = (lat2 - lat1) * math.pi / 180;
+    final dLon = (lon2 - lon1) * math.pi / 180;
+    final a = math.pow(math.sin(dLat / 2), 2) +
+        math.cos(lat1 * math.pi / 180) *
+            math.cos(lat2 * math.pi / 180) *
+            math.pow(math.sin(dLon / 2), 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
 
   Response _json(int status, Map<String, dynamic> body) {

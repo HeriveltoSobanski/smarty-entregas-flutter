@@ -43,6 +43,8 @@ class ApiService {
         ?.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
+  static const _timeout = Duration(seconds: 30);
+
   // Wrappers que checam expiração antes e 401 depois.
   static Future<http.Response> _get(Uri uri) async {
     final token = SessionStore.token;
@@ -50,7 +52,9 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp = await _client.get(uri, headers: _authHeaders);
+    final resp = await _client
+        .get(uri, headers: _authHeaders)
+        .timeout(_timeout);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -61,8 +65,9 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp =
-        await _client.post(uri, headers: _authHeaders, body: body);
+    final resp = await _client
+        .post(uri, headers: _authHeaders, body: body)
+        .timeout(_timeout);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -73,8 +78,9 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp =
-        await _client.put(uri, headers: _authHeaders, body: body);
+    final resp = await _client
+        .put(uri, headers: _authHeaders, body: body)
+        .timeout(_timeout);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -85,8 +91,9 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp =
-        await _client.patch(uri, headers: _authHeaders, body: body);
+    final resp = await _client
+        .patch(uri, headers: _authHeaders, body: body)
+        .timeout(_timeout);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -97,7 +104,9 @@ class ApiService {
       await _handleUnauthorized();
       throw Exception('Sessão expirada');
     }
-    final resp = await _client.delete(uri, headers: _authHeaders);
+    final resp = await _client
+        .delete(uri, headers: _authHeaders)
+        .timeout(_timeout);
     if (resp.statusCode == 401) await _handleUnauthorized();
     return resp;
   }
@@ -464,8 +473,8 @@ class ApiService {
     String observacao = '',
     String formaPagamento = '',
     double? trocoPara,
-    double taxaEntrega = 0.0,
     String? codigoCupom,
+    int? idEndereco,
   }) async {
     try {
       final resp = await _post(Uri.parse('$baseUrl/pedidos'), body: jsonEncode({
@@ -474,7 +483,7 @@ class ApiService {
           'itens':            itens,
           'endereco_entrega': enderecoEntrega,
           'observacao':       observacao,
-          'taxa_entrega':     taxaEntrega,
+          if (idEndereco != null) 'id_endereco': idEndereco,
           if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
           if (trocoPara != null) 'troco_para': trocoPara,
           if (codigoCupom != null && codigoCupom.isNotEmpty) 'codigo_cupom': codigoCupom,
@@ -946,10 +955,10 @@ class ApiService {
   }
 
   // ----------------------------------------------------------------
-  // MAPA — rota via proxy do backend (ORS key fica no servidor)
+  // MAPA — rota via proxy do backend (Mapbox token fica no servidor)
   // ----------------------------------------------------------------
 
-  static Future<Map<String, dynamic>?> getRotaORS({
+  static Future<Map<String, dynamic>?> getRota({
     required double origemLat,
     required double origemLng,
     required double destLat,

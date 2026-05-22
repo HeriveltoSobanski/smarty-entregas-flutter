@@ -3,7 +3,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 class DispositivoController {
-  final Connection conn;
+  final Pool conn;
   DispositivoController(this.conn);
 
   // POST /dispositivos/fcm-token

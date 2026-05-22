@@ -1,21 +1,16 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import '../../../core/utils/app_logger.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
-import 'package:latlong2/latlong.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/api_service.dart';
 
-// =============================================================
-// MapaEntregaPage — exibe rota no mapa para o motoboy
-// A chave ORS fica no backend — não exposta no app.
-// =============================================================
 class MapaEntregaPage extends StatefulWidget {
-  final String enderecoOrigem;   // endereço da empresa (origem)
-  final String enderecoDestino;  // endereço de entrega (destino)
+  final String enderecoOrigem;
+  final String enderecoDestino;
   final String nomeEmpresa;
   final int    idPedido;
 
@@ -32,16 +27,17 @@ class MapaEntregaPage extends StatefulWidget {
 }
 
 class _MapaEntregaPageState extends State<MapaEntregaPage> {
-  final MapController _mapCtrl = MapController();
+  MapboxMap? _map;
+  PolylineAnnotationManager? _polylineManager;
+  CircleAnnotationManager?   _circleManager;
 
-  LatLng? _origem;
-  LatLng? _destino;
-  List<LatLng> _rota = [];
+  Position? _origem;
+  Position? _destino;
 
-  bool   _carregando   = true;
-  String _erro         = '';
-  double _distanciaKm  = 0;
-  int    _duracaoMin   = 0;
+  bool   _carregando  = true;
+  String _erro        = '';
+  double _distanciaKm = 0;
+  int    _duracaoMin  = 0;
 
   @override
   void initState() {
@@ -51,9 +47,7 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
 
   Future<void> _inicializar() async {
     setState(() { _carregando = true; _erro = ''; });
-
     try {
-      // Geocodifica os dois endereços em paralelo
       final results = await Future.wait([
         _geocodificar(widget.enderecoOrigem),
         _geocodificar(widget.enderecoDestino),
@@ -64,16 +58,14 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
 
       if (origem == null) {
         setState(() {
-          _erro = 'Não foi possível encontrar o endereço da empresa:\n'
-              '"${widget.enderecoOrigem}"';
+          _erro = 'Não foi possível encontrar o endereço da empresa:\n"${widget.enderecoOrigem}"';
           _carregando = false;
         });
         return;
       }
       if (destino == null) {
         setState(() {
-          _erro = 'Não foi possível encontrar o endereço de entrega:\n'
-              '"${widget.enderecoDestino}"';
+          _erro = 'Não foi possível encontrar o endereço de entrega:\n"${widget.enderecoDestino}"';
           _carregando = false;
         });
         return;
@@ -86,98 +78,157 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
 
       await _calcularRota(origem, destino);
     } catch (e) {
-      setState(() {
-        _erro = 'Erro ao carregar mapa.';
-        _carregando = false;
-      });
+      setState(() { _erro = 'Erro ao carregar mapa.'; _carregando = false; });
     }
   }
 
-  // ── Geocodificação via Nominatim (OpenStreetMap, gratuito) ──
-  Future<LatLng?> _geocodificar(String endereco) async {
+  Future<Position?> _geocodificar(String endereco) async {
     final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search'
-        '?q=${Uri.encodeComponent(endereco)}'
-        '&format=json&limit=1&countrycodes=br');
-
+      'https://nominatim.openstreetmap.org/search'
+      '?q=${Uri.encodeComponent(endereco)}'
+      '&format=json&limit=1&countrycodes=br',
+    );
     final resp = await http.get(url, headers: {
       'User-Agent': 'SmartyEntregas/1.0 (flutter app)',
       'Accept-Language': 'pt-BR',
     });
-
     if (resp.statusCode != 200) return null;
     final data = jsonDecode(resp.body) as List;
     if (data.isEmpty) return null;
-
     final lat = double.tryParse(data[0]['lat']?.toString() ?? '');
     final lon = double.tryParse(data[0]['lon']?.toString() ?? '');
     if (lat == null || lon == null) return null;
-    return LatLng(lat, lon);
+    return Position(lon, lat);
   }
 
-  // ── Rota via proxy do backend (chave ORS não exposta no app) ──
-  Future<void> _calcularRota(LatLng origem, LatLng destino) async {
+  Future<void> _calcularRota(Position origem, Position destino) async {
     try {
-      final data = await ApiService.getRotaORS(
-        origemLat: origem.latitude,
-        origemLng: origem.longitude,
-        destLat: destino.latitude,
-        destLng: destino.longitude,
+      final data = await ApiService.getRota(
+        origemLat: origem.lat.toDouble(),
+        origemLng: origem.lng.toDouble(),
+        destLat:   destino.lat.toDouble(),
+        destLng:   destino.lng.toDouble(),
       );
 
       if (data != null) {
-        final features = (data['features'] as List?) ?? [];
-        if (features.isNotEmpty) {
-          final feature  = features.first as Map<String, dynamic>;
-          final geometry = feature['geometry'] as Map<String, dynamic>;
+        final routes = (data['routes'] as List?) ?? [];
+        if (routes.isNotEmpty) {
+          final route    = routes.first as Map<String, dynamic>;
+          final geometry = route['geometry'] as Map<String, dynamic>;
           final coords   = geometry['coordinates'] as List;
-          final props    = (feature['properties'] as Map?)
-                               ?['summary'] as Map? ?? {};
 
-          final pontos = coords.map((c) {
-            final arr = c as List;
-            return LatLng(
-                (arr[1] as num).toDouble(), (arr[0] as num).toDouble());
-          }).toList();
+          final pontos = coords
+              .map((c) {
+                final arr = c as List;
+                return Position(
+                  (arr[0] as num).toDouble(),
+                  (arr[1] as num).toDouble(),
+                );
+              })
+              .toList();
 
           setState(() {
-            _rota        = pontos;
-            _distanciaKm = ((props['distance'] as num?)?.toDouble() ?? 0) / 1000;
-            _duracaoMin  =
-                (((props['duration'] as num?)?.toDouble() ?? 0) / 60).round();
+            _distanciaKm = ((route['distance'] as num?)?.toDouble() ?? 0) / 1000;
+            _duracaoMin  = (((route['duration'] as num?)?.toDouble() ?? 0) / 60).round();
           });
+
+          if (_map != null) await _desenharRota(pontos);
         }
       }
     } catch (e, st) {
       AppLogger.e('MapaEntrega', e, st);
-      // Rota falhou — exibe pins sem polyline
     }
 
     setState(() => _carregando = false);
-    _ajustarCamara();
+    if (_map != null) await _ajustarCamara();
   }
 
-  void _ajustarCamara() {
-    if (_origem == null || _destino == null) return;
-    final bounds = LatLngBounds.fromPoints([_origem!, _destino!]);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapCtrl.fitCamera(
-        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
-      );
-    });
+  Future<void> _onMapCreated(MapboxMap map) async {
+    _map = map;
+    _polylineManager = await map.annotations.createPolylineAnnotationManager();
+    _circleManager   = await map.annotations.createCircleAnnotationManager();
+
+    // Câmera inicial enquanto geocodificação ainda está rodando
+    if (_origem != null) {
+      await map.setCamera(CameraOptions(
+        center: Point(coordinates: _origem!),
+        zoom: 13.0,
+      ));
+    }
+
+    if (_origem != null && _destino != null && !_carregando) {
+      await _ajustarCamara();
+    }
+  }
+
+  Future<void> _desenharRota(List<Position> pontos) async {
+    await _polylineManager?.deleteAll();
+    await _circleManager?.deleteAll();
+
+    if (pontos.isNotEmpty) {
+      await _polylineManager?.create(PolylineAnnotationOptions(
+        geometry: LineString(coordinates: pontos),
+        lineColor: const Color(0xFF1565C0).toARGB32(),
+        lineWidth:  4.5,
+      ));
+    }
+
+    if (_origem != null) {
+      await _circleManager?.create(CircleAnnotationOptions(
+        geometry: Point(coordinates: _origem!),
+        circleRadius:      10.0,
+        circleColor:       Colors.red.toARGB32(),
+        circleStrokeWidth: 2.0,
+        circleStrokeColor: Colors.white.toARGB32(),
+      ));
+    }
+    if (_destino != null) {
+      await _circleManager?.create(CircleAnnotationOptions(
+        geometry: Point(coordinates: _destino!),
+        circleRadius:      10.0,
+        circleColor:       Colors.green.toARGB32(),
+        circleStrokeWidth: 2.0,
+        circleStrokeColor: Colors.white.toARGB32(),
+      ));
+    }
+  }
+
+  Future<void> _ajustarCamara() async {
+    if (_map == null || _origem == null || _destino == null) return;
+
+    final bounds = CoordinateBounds(
+      southwest: Point(coordinates: Position(
+        _origem!.lng < _destino!.lng ? _origem!.lng.toDouble() : _destino!.lng.toDouble(),
+        _origem!.lat < _destino!.lat ? _origem!.lat.toDouble() : _destino!.lat.toDouble(),
+      )),
+      northeast: Point(coordinates: Position(
+        _origem!.lng > _destino!.lng ? _origem!.lng.toDouble() : _destino!.lng.toDouble(),
+        _origem!.lat > _destino!.lat ? _origem!.lat.toDouble() : _destino!.lat.toDouble(),
+      )),
+      infiniteBounds: false,
+    );
+
+    final camera = await _map!.cameraForCoordinateBounds(
+      bounds,
+      MbxEdgeInsets(top: 80, left: 60, bottom: 80, right: 60),
+      null, null, null, null,
+    );
+    await _map!.flyTo(camera, MapAnimationOptions(duration: 600));
   }
 
   Future<void> _abrirNavegacao() async {
     if (_origem == null || _destino == null) return;
     final uri = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1'
-        '&origin=${_origem!.latitude},${_origem!.longitude}'
-        '&destination=${_destino!.latitude},${_destino!.longitude}'
-        '&travelmode=driving');
+      'https://www.google.com/maps/dir/?api=1'
+      '&origin=${_origem!.lat},${_origem!.lng}'
+      '&destination=${_destino!.lat},${_destino!.lng}'
+      '&travelmode=driving',
+    );
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       final fallback = Uri.parse(
-          'geo:${_destino!.latitude},${_destino!.longitude}'
-          '?q=${Uri.encodeComponent(widget.enderecoDestino)}');
+        'geo:${_destino!.lat},${_destino!.lng}'
+        '?q=${Uri.encodeComponent(widget.enderecoDestino)}',
+      );
       await launchUrl(fallback);
     }
   }
@@ -255,13 +306,15 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                Expanded(child: _infoItem(Icons.store_outlined,
-                    widget.nomeEmpresa, Colors.red[700]!)),
+                Expanded(child: _infoItem(
+                    Icons.store_outlined, widget.nomeEmpresa, Colors.red[700]!)),
                 const SizedBox(width: 8),
                 Container(width: 1, height: 36, color: Colors.grey[300]),
                 const SizedBox(width: 8),
-                Expanded(child: _infoItem(Icons.location_on_outlined,
-                    widget.enderecoDestino, Colors.green[700]!)),
+                Expanded(child: _infoItem(
+                    Icons.location_on_outlined,
+                    widget.enderecoDestino,
+                    Colors.green[700]!)),
               ],
             ),
           ),
@@ -285,49 +338,9 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
               ),
             ),
           Expanded(
-            child: FlutterMap(
-              mapController: _mapCtrl,
-              options: MapOptions(
-                initialCenter: _origem ?? const LatLng(-23.55, -46.63),
-                initialZoom: 14,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'br.com.smartyentregas',
-                ),
-                if (_rota.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _rota,
-                        color: Colors.blue,
-                        strokeWidth: 4.5,
-                      ),
-                    ],
-                  ),
-                MarkerLayer(
-                  markers: [
-                    if (_origem != null)
-                      Marker(
-                        point: _origem!,
-                        width: 40,
-                        height: 40,
-                        child: _marcador(
-                            Icons.store, Colors.red[700]!, 'Restaurante'),
-                      ),
-                    if (_destino != null)
-                      Marker(
-                        point: _destino!,
-                        width: 40,
-                        height: 40,
-                        child: _marcador(
-                            Icons.location_on, Colors.green[700]!, 'Cliente'),
-                      ),
-                  ],
-                ),
-              ],
+            child: MapWidget(
+              styleUri: MapboxStyles.MAPBOX_STREETS,
+              onMapCreated: _onMapCreated,
             ),
           ),
         ],
@@ -345,20 +358,5 @@ class _MapaEntregaPageState extends State<MapaEntregaPage> {
                 overflow: TextOverflow.ellipsis),
           ),
         ],
-      );
-
-  Widget _marcador(IconData icon, Color cor, String tooltip) => Tooltip(
-        message: tooltip,
-        child: Container(
-          decoration: BoxDecoration(
-            color: cor,
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(
-                  color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
-            ],
-          ),
-          child: Icon(icon, color: Colors.white, size: 22),
-        ),
       );
 }
