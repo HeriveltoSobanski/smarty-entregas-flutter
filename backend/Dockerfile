@@ -3,10 +3,10 @@ FROM dart:stable AS build
 
 WORKDIR /app
 
-COPY pubspec.* ./
+COPY backend/pubspec.* ./
 RUN dart pub get --no-example
 
-COPY . .
+COPY backend/ .
 
 RUN dart pub get --offline
 RUN dart compile exe bin/backend.dart -o bin/server
