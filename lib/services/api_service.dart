@@ -1,9 +1,13 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import '../presentation/navigation/app_routes.dart';
 import '../core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../data/session_store.dart';
+import '../data/auth_storage.dart';
 import '../data/cache_store.dart';
 import 'push_notification_service.dart';
 
@@ -37,10 +41,78 @@ class ApiService {
     }
   }
 
+  // Previne múltiplas tentativas de refresh simultâneas
+  static bool _refreshing = false;
+
+  static Future<bool> _tryRefresh() async {
+    if (_refreshing) return false;
+    _refreshing = true;
+    try {
+      final token = SessionStore.token;
+      if (token == null) return false;
+      final resp = await _client
+          .post(
+            Uri.parse('$baseUrl/auth/refresh'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+              if (!kIsWeb) 'ngrok-skip-browser-warning': 'true',
+            },
+          )
+          .timeout(_timeout);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final newToken = data['token'] as String?;
+        if (newToken != null) {
+          SessionStore.token = newToken;
+          await AuthStorage.save(
+            token:       newToken,
+            idUsuario:   SessionStore.idUsuario!,
+            email:       SessionStore.email!,
+            nome:        SessionStore.nome!,
+            tipoUsuario: SessionStore.tipoUsuario!,
+            idEmpresa:   SessionStore.idEmpresa,
+          );
+          return true;
+        }
+      }
+      return false;
+    } catch (e, st) {
+      AppLogger.e('ApiService.refresh', e, st);
+      return false;
+    } finally {
+      _refreshing = false;
+    }
+  }
+
   static Future<void> _handleUnauthorized() async {
+    final refreshed = await _tryRefresh();
+    if (refreshed) return;
+
     await SessionStore.logout();
-    PushNotificationService.navigatorKey.currentState
-        ?.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    final nav = PushNotificationService.navigatorKey.currentState;
+    if (nav == null) return;
+
+    // Dialog antes de redirecionar
+    final ctx = nav.overlay?.context;
+    if (ctx != null && ctx.mounted) {
+      await showDialog<void>(
+        context: ctx,
+        barrierDismissible: false,
+        builder: (ctx2) => AlertDialog(
+          title: const Text('Sessão expirada'),
+          content: const Text('Faça login novamente para continuar.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx2).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
   static const _timeout = Duration(seconds: 30);
@@ -49,66 +121,111 @@ class ApiService {
   static Future<http.Response> _get(Uri uri) async {
     final token = SessionStore.token;
     if (token != null && _isTokenExpired(token)) {
-      await _handleUnauthorized();
-      throw Exception('Sessão expirada');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await _handleUnauthorized();
+        throw Exception('Sessão expirada');
+      }
     }
-    final resp = await _client
-        .get(uri, headers: _authHeaders)
-        .timeout(_timeout);
-    if (resp.statusCode == 401) await _handleUnauthorized();
-    return resp;
+    try {
+      final resp = await _client
+          .get(uri, headers: _authHeaders)
+          .timeout(_timeout);
+      if (resp.statusCode == 401) await _handleUnauthorized();
+      return resp;
+    } on SocketException {
+      throw const OfflineException();
+    } on TimeoutException {
+      throw const TimeoutApiException();
+    }
   }
 
   static Future<http.Response> _post(Uri uri, {Object? body}) async {
     final token = SessionStore.token;
     if (token != null && _isTokenExpired(token)) {
-      await _handleUnauthorized();
-      throw Exception('Sessão expirada');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await _handleUnauthorized();
+        throw Exception('Sessão expirada');
+      }
     }
-    final resp = await _client
-        .post(uri, headers: _authHeaders, body: body)
-        .timeout(_timeout);
-    if (resp.statusCode == 401) await _handleUnauthorized();
-    return resp;
+    try {
+      final resp = await _client
+          .post(uri, headers: _authHeaders, body: body)
+          .timeout(_timeout);
+      if (resp.statusCode == 401) await _handleUnauthorized();
+      return resp;
+    } on SocketException {
+      throw const OfflineException();
+    } on TimeoutException {
+      throw const TimeoutApiException();
+    }
   }
 
   static Future<http.Response> _put(Uri uri, {Object? body}) async {
     final token = SessionStore.token;
     if (token != null && _isTokenExpired(token)) {
-      await _handleUnauthorized();
-      throw Exception('Sessão expirada');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await _handleUnauthorized();
+        throw Exception('Sessão expirada');
+      }
     }
-    final resp = await _client
-        .put(uri, headers: _authHeaders, body: body)
-        .timeout(_timeout);
-    if (resp.statusCode == 401) await _handleUnauthorized();
-    return resp;
+    try {
+      final resp = await _client
+          .put(uri, headers: _authHeaders, body: body)
+          .timeout(_timeout);
+      if (resp.statusCode == 401) await _handleUnauthorized();
+      return resp;
+    } on SocketException {
+      throw const OfflineException();
+    } on TimeoutException {
+      throw const TimeoutApiException();
+    }
   }
 
   static Future<http.Response> _patch(Uri uri, {Object? body}) async {
     final token = SessionStore.token;
     if (token != null && _isTokenExpired(token)) {
-      await _handleUnauthorized();
-      throw Exception('Sessão expirada');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await _handleUnauthorized();
+        throw Exception('Sessão expirada');
+      }
     }
-    final resp = await _client
-        .patch(uri, headers: _authHeaders, body: body)
-        .timeout(_timeout);
-    if (resp.statusCode == 401) await _handleUnauthorized();
-    return resp;
+    try {
+      final resp = await _client
+          .patch(uri, headers: _authHeaders, body: body)
+          .timeout(_timeout);
+      if (resp.statusCode == 401) await _handleUnauthorized();
+      return resp;
+    } on SocketException {
+      throw const OfflineException();
+    } on TimeoutException {
+      throw const TimeoutApiException();
+    }
   }
 
   static Future<http.Response> _delete(Uri uri) async {
     final token = SessionStore.token;
     if (token != null && _isTokenExpired(token)) {
-      await _handleUnauthorized();
-      throw Exception('Sessão expirada');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await _handleUnauthorized();
+        throw Exception('Sessão expirada');
+      }
     }
-    final resp = await _client
-        .delete(uri, headers: _authHeaders)
-        .timeout(_timeout);
-    if (resp.statusCode == 401) await _handleUnauthorized();
-    return resp;
+    try {
+      final resp = await _client
+          .delete(uri, headers: _authHeaders)
+          .timeout(_timeout);
+      if (resp.statusCode == 401) await _handleUnauthorized();
+      return resp;
+    } on SocketException {
+      throw const OfflineException();
+    } on TimeoutException {
+      throw const TimeoutApiException();
+    }
   }
 
 
@@ -1350,4 +1467,16 @@ class ApiService {
         }));
     } catch (e, st) { AppLogger.e('ApiService', e, st); }
   }
+}
+
+class OfflineException implements Exception {
+  const OfflineException();
+  @override
+  String toString() => 'Sem conexão com a internet.';
+}
+
+class TimeoutApiException implements Exception {
+  const TimeoutApiException();
+  @override
+  String toString() => 'Servidor demorou para responder. Tente novamente.';
 }

@@ -30,6 +30,32 @@ class JwtService {
     return '$header.$payload.$signature';
   }
 
+  /// Valida assinatura ignorando expiração. Usado para refresh de tokens expirados.
+  /// Janela de 30 dias após expiração — depois disso exige novo login.
+  Map<String, dynamic>? verifyExpiredToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+
+      final expectedSig = _sign('${parts[0]}.${parts[1]}');
+      if (expectedSig != parts[2]) return null;
+
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, dynamic>;
+
+      final exp = payload['exp'] as int?;
+      if (exp == null) return null;
+
+      final expiredAt = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      if (DateTime.now().difference(expiredAt).inDays > 30) return null;
+
+      return payload;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Valida o token e retorna o payload, ou null se inválido/expirado.
   Map<String, dynamic>? verifyToken(String token) {
     try {

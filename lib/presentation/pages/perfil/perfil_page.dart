@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../data/session_store.dart';
 import '../../../data/auth_storage.dart';
 import '../../../services/api_service.dart';
+import '../../widgets/shimmer_card.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../suporte/suporte_page.dart';
 
@@ -84,6 +85,27 @@ class _PerfilPageState extends State<PerfilPage> {
     );
   }
 
+  Widget _buildSkeleton() => ListView(
+        padding: const EdgeInsets.all(20),
+        children: const [
+          Center(child: ShimmerBlock(width: 96, height: 96, radius: 48)),
+          SizedBox(height: 12),
+          Center(child: ShimmerBlock(width: 160, height: 20)),
+          SizedBox(height: 6),
+          Center(child: ShimmerBlock(width: 100, height: 14)),
+          SizedBox(height: 32),
+          ShimmerBlock(height: 56, radius: 12),
+          SizedBox(height: 12),
+          ShimmerBlock(height: 56, radius: 12),
+          SizedBox(height: 12),
+          ShimmerBlock(height: 56, radius: 12),
+          SizedBox(height: 32),
+          ShimmerBlock(height: 48, radius: 12),
+          SizedBox(height: 12),
+          ShimmerBlock(height: 48, radius: 12),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     final inicial = _nome.isNotEmpty ? _nome[0].toUpperCase() : 'U';
@@ -101,7 +123,7 @@ class _PerfilPageState extends State<PerfilPage> {
         automaticallyImplyLeading: false,
       ),
       body: _carregando
-          ? const Center(child: CircularProgressIndicator(color: _laranja))
+          ? _buildSkeleton()
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

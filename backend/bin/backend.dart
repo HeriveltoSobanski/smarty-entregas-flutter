@@ -355,6 +355,7 @@ void main() async {
   // ── DISPOSITIVOS / FCM ───────────────────────────────────────
   app.post('/dispositivos/fcm-token',       dispositivo.registrarFcmToken);
 
+  app.post('/auth/refresh',            auth.refresh);
   app.post('/auth/esqueci-senha',      auth.esqueciSenha);
   app.post('/auth/verificar-codigo',   auth.verificarCodigo);
   app.post('/auth/redefinir-senha',    auth.redefinirSenha);

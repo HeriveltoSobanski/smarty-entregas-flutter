@@ -289,7 +289,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Informe o e-mail';
-                        if (!RegExp(r'.+@.+\..+').hasMatch(v.trim())) return 'E-mail inválido';
+                        if (!RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$').hasMatch(v.trim())) return 'E-mail inválido';
                         return null;
                       },
                     ),

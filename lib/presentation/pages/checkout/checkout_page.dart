@@ -223,9 +223,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
+    final cart = context.read<Cart>();
+    if (cart.itens.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Adicione itens ao carrinho antes de finalizar.')),
+      );
+      return;
+    }
+
     setState(() => _carregando = true);
 
-    final cart = context.read<Cart>();
     final itensParaEnvio = cart.itens.map((item) {
       final descricao = [item.resumoAdicionais, item.observacao ?? '']
           .where((s) => s.isNotEmpty)

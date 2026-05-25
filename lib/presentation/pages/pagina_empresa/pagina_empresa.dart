@@ -743,8 +743,16 @@ class _FormProdutoState extends State<_FormProduto> {
       source: ImageSource.gallery, maxWidth: 800, maxHeight: 800, imageQuality: 75,
     );
     if (picked == null) return;
-    final url = await CloudinaryService.uploadImage(picked.path);
-    if (url != null && mounted) setState(() => _imagemBase64 = url);
+    try {
+      final url = await CloudinaryService.uploadImage(picked.path);
+      if (mounted) setState(() => _imagemBase64 = url);
+    } on CloudinaryException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _carregarCats() async {
@@ -2715,13 +2723,22 @@ class _TabContaState extends State<_TabConta> {
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 600, maxHeight: 600, imageQuality: 80);
     if (picked == null) return;
     setState(() => _salvandoFotoPerfil = true);
-    final url = await CloudinaryService.uploadImage(picked.path);
-    final idEmpresa = SessionStore.idEmpresa;
-    if (url != null && idEmpresa != null) {
-      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoPerfil: url);
-      if (mounted) setState(() { _fotoPerfil = url; _salvandoFotoPerfil = false; });
-    } else {
-      if (mounted) setState(() => _salvandoFotoPerfil = false);
+    try {
+      final url = await CloudinaryService.uploadImage(picked.path);
+      final idEmpresa = SessionStore.idEmpresa;
+      if (idEmpresa != null) {
+        await ApiService.atualizarFotoEmpresa(idEmpresa, fotoPerfil: url);
+        if (mounted) setState(() { _fotoPerfil = url; _salvandoFotoPerfil = false; });
+      } else {
+        if (mounted) setState(() => _salvandoFotoPerfil = false);
+      }
+    } on CloudinaryException catch (e) {
+      if (mounted) {
+        setState(() => _salvandoFotoPerfil = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -2730,13 +2747,22 @@ class _TabContaState extends State<_TabConta> {
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1400, maxHeight: 900, imageQuality: 85);
     if (picked == null) return;
     setState(() => _salvandoFotoCapa = true);
-    final url = await CloudinaryService.uploadImage(picked.path);
-    final idEmpresa = SessionStore.idEmpresa;
-    if (url != null && idEmpresa != null) {
-      await ApiService.atualizarFotoEmpresa(idEmpresa, fotoCapa: url);
-      if (mounted) setState(() { _fotoCapa = url; _salvandoFotoCapa = false; });
-    } else {
-      if (mounted) setState(() => _salvandoFotoCapa = false);
+    try {
+      final url = await CloudinaryService.uploadImage(picked.path);
+      final idEmpresa = SessionStore.idEmpresa;
+      if (idEmpresa != null) {
+        await ApiService.atualizarFotoEmpresa(idEmpresa, fotoCapa: url);
+        if (mounted) setState(() { _fotoCapa = url; _salvandoFotoCapa = false; });
+      } else {
+        if (mounted) setState(() => _salvandoFotoCapa = false);
+      }
+    } on CloudinaryException catch (e) {
+      if (mounted) {
+        setState(() => _salvandoFotoCapa = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 

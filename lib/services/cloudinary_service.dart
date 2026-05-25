@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class CloudinaryService {
@@ -7,18 +8,46 @@ class CloudinaryService {
   static const _uploadUrl =
       'https://api.cloudinary.com/v1_1/$_cloudName/image/upload';
 
-  static Future<String?> uploadImage(String filePath) async {
-    final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl))
-      ..fields['upload_preset'] = _uploadPreset
-      ..files.add(await http.MultipartFile.fromPath('file', filePath));
+  /// Faz upload da imagem e retorna a URL segura.
+  /// Lança [CloudinaryException] em caso de falha.
+  static Future<String> uploadImage(String filePath) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl))
+        ..fields['upload_preset'] = _uploadPreset
+        ..files.add(await http.MultipartFile.fromPath('file', filePath));
 
-    final streamed = await request.send();
-    final body = await streamed.stream.bytesToString();
+      final streamed = await request.send()
+          .timeout(const Duration(seconds: 30));
+      final body = await streamed.stream.bytesToString();
 
-    if (streamed.statusCode == 200) {
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      return json['secure_url'] as String?;
+      if (streamed.statusCode == 200) {
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        final url = json['secure_url'] as String?;
+        if (url != null && url.isNotEmpty) return url;
+        throw const CloudinaryException('Resposta inválida do servidor de imagens.');
+      }
+
+      String msg = 'Erro ao enviar imagem (${streamed.statusCode}).';
+      try {
+        final err = jsonDecode(body) as Map<String, dynamic>;
+        msg = err['error']?['message']?.toString() ?? msg;
+      } catch (_) {}
+      throw CloudinaryException(msg);
+    } on CloudinaryException {
+      rethrow;
+    } on SocketException {
+      throw const CloudinaryException('Sem conexão. Verifique sua internet.');
+    } on HttpException {
+      throw const CloudinaryException('Falha na requisição de upload.');
+    } catch (e) {
+      throw CloudinaryException('Erro inesperado ao enviar imagem: $e');
     }
-    return null;
   }
+}
+
+class CloudinaryException implements Exception {
+  final String message;
+  const CloudinaryException(this.message);
+  @override
+  String toString() => message;
 }

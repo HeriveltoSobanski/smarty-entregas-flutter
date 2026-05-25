@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../../core/utils/app_logger.dart';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
@@ -45,8 +46,9 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
   // Brasil centro como default
   Position _pin     = Position(-47.93, -15.78);
   String   _endereco = '';
-  bool     _buscando = false;
-  String   _erro     = '';
+  bool     _buscando    = false;
+  bool     _pegandoGps  = false;
+  String   _erro        = '';
 
   @override
   void initState() {
@@ -103,6 +105,49 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
     if (_pinAnnotation != null && _circleManager != null) {
       _pinAnnotation!.geometry = Point(coordinates: pos);
       await _circleManager!.update(_pinAnnotation!);
+    }
+  }
+
+  // ── Localização atual via GPS ─────────────────────────────────
+  Future<void> _usarLocalizacaoAtual() async {
+    setState(() { _pegandoGps = true; _erro = ''; });
+
+    try {
+      geo.LocationPermission permissao = await geo.Geolocator.checkPermission();
+      if (permissao == geo.LocationPermission.denied) {
+        permissao = await geo.Geolocator.requestPermission();
+      }
+
+      if (permissao == geo.LocationPermission.denied ||
+          permissao == geo.LocationPermission.deniedForever) {
+        setState(() {
+          _erro = permissao == geo.LocationPermission.deniedForever
+              ? 'Permissão negada permanentemente. Habilite nas configurações do celular.'
+              : 'Permissão de localização negada.';
+        });
+        return;
+      }
+
+      final pos = await geo.Geolocator.getCurrentPosition(
+        locationSettings: const geo.LocationSettings(
+          accuracy: geo.LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      final mapPos = Position(pos.longitude, pos.latitude);
+      await _moverPin(mapPos);
+      await _reverseGeocode(mapPos);
+
+      await _map?.flyTo(
+        CameraOptions(center: Point(coordinates: mapPos), zoom: 16.0),
+        MapAnimationOptions(duration: 600),
+      );
+    } catch (e, st) {
+      AppLogger.e('SelecionarEndereco.GPS', e, st);
+      setState(() => _erro = 'Não foi possível obter a localização.');
+    } finally {
+      setState(() => _pegandoGps = false);
     }
   }
 
@@ -275,7 +320,7 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
                     SizedBox(
                       height: 44,
                       child: ElevatedButton(
-                        onPressed: _buscando ? null : _buscar,
+                        onPressed: _buscando || _pegandoGps ? null : _buscar,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFFA726),
                           foregroundColor: Colors.white,
@@ -290,6 +335,27 @@ class _SelecionarEnderecoPageState extends State<SelecionarEnderecoPage> {
                                     strokeWidth: 2, color: Colors.white))
                             : const Text('Buscar',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 44,
+                      width: 44,
+                      child: ElevatedButton(
+                        onPressed: _buscando || _pegandoGps ? null : _usarLocalizacaoAtual,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1565C0),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: _pegandoGps
+                            ? const SizedBox(
+                                width: 18, height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.my_location, size: 20),
                       ),
                     ),
                   ],
