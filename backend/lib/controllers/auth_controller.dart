@@ -156,6 +156,38 @@ class AuthController {
   }
 
   // ----------------------------------------------------------------
+  // REFRESH TOKEN
+  // ----------------------------------------------------------------
+  Future<Response> refresh(Request request) async {
+    try {
+      final auth = request.headers['authorization'] ?? '';
+      final token = auth.startsWith('Bearer ') ? auth.substring(7) : '';
+      if (token.isEmpty) {
+        return _json(401, {'error': 'Token ausente'});
+      }
+
+      final payload = _jwt.verifyExpiredToken(token);
+      if (payload == null) {
+        return _json(401, {'error': 'Token inválido ou expirado há mais de 30 dias'});
+      }
+
+      final idUsuario   = payload['sub'] as int;
+      final tipoUsuario = payload['tipo']?.toString() ?? '';
+      final idEmpresa   = payload['id_empresa'] as int?;
+
+      final newToken = _jwt.generateToken(
+        idUsuario: idUsuario,
+        tipoUsuario: tipoUsuario,
+        idEmpresa: idEmpresa,
+      );
+
+      return _json(200, {'token': newToken});
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao renovar token'});
+    }
+  }
+
+  // ----------------------------------------------------------------
   // REGISTRO CLIENTE
   // ----------------------------------------------------------------
   Future<Response> registerCliente(Request request) async {

@@ -13,6 +13,8 @@ import 'api_service.dart';
 @pragma('vm:entry-point')
 Future<void> _bgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  // Processamento em background: sem acesso à UI, apenas persistência futura se necessário.
+  // Notificações em background já são exibidas pelo FCM automaticamente no Android.
 }
 
 class PushNotificationService {
@@ -118,8 +120,17 @@ class PushNotificationService {
   }
 
   static void _navegarParaPedido(Map<String, dynamic> data) {
-    // Navega para home; a badge de notificação leva ao detalhe do pedido
-    navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+
+    final idPedidoRaw = data['id_pedido'];
+    if (idPedidoRaw != null) {
+      // Vai para home e depois empilha meus-pedidos para o usuário ver o pedido
+      nav.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
+      nav.pushNamed(AppRoutes.meusPedidos);
+    } else {
+      nav.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
+    }
   }
 
   static Future<void> _registrar(String token) async {

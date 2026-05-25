@@ -2,6 +2,7 @@
 import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 import '../../../data/session_store.dart';
+import '../../widgets/shimmer_card.dart';
 import '../avaliacao/avaliacao_page.dart';
 
 const Color _laranja = Color(0xFFF5841F);
@@ -105,12 +106,34 @@ class _DetalhesPedidoPageState extends State<DetalhesPedidoPage> {
         elevation: 0,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _laranja))
+          ? _buildSkeleton()
           : _erro != null
               ? _buildErro()
               : _buildConteudo(),
     );
   }
+
+  Widget _buildSkeleton() => SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ShimmerBlock(height: 80, radius: 12),
+            const SizedBox(height: 16),
+            const ShimmerBlock(height: 20, width: 140),
+            const SizedBox(height: 12),
+            const ShimmerBlock(height: 120, radius: 12),
+            const SizedBox(height: 16),
+            const ShimmerBlock(height: 20, width: 100),
+            const SizedBox(height: 12),
+            const ShimmerBlock(height: 60, radius: 12),
+            const SizedBox(height: 8),
+            const ShimmerBlock(height: 60, radius: 12),
+            const SizedBox(height: 16),
+            const ShimmerBlock(height: 80, radius: 12),
+          ],
+        ),
+      );
 
   Widget _buildErro() => Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
