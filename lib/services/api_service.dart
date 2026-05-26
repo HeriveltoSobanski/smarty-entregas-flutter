@@ -580,8 +580,8 @@ class ApiService {
     }
   }
 
-  /// Retorna `{'id_pedido': int}` em caso de sucesso,
-  /// ou `{'erro': String}` em caso de falha.
+  /// Retorna mapa com dados do pedido criado, incluindo dados de PIX se aplicável.
+  /// Em caso de falha retorna `{'erro': String}`.
   static Future<Map<String, dynamic>> criarPedido({
     required int idUsuario,
     required int idEmpresa,
@@ -592,6 +592,7 @@ class ApiService {
     double? trocoPara,
     String? codigoCupom,
     int? idEndereco,
+    String? mpCardToken,
   }) async {
     try {
       final resp = await _post(Uri.parse('$baseUrl/pedidos'), body: jsonEncode({
@@ -604,12 +605,48 @@ class ApiService {
           if (formaPagamento.isNotEmpty) 'forma_pagamento': formaPagamento,
           if (trocoPara != null) 'troco_para': trocoPara,
           if (codigoCupom != null && codigoCupom.isNotEmpty) 'codigo_cupom': codigoCupom,
+          if (mpCardToken != null && mpCardToken.isNotEmpty) 'mp_card_token': mpCardToken,
         }));
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (resp.statusCode == 201) {
-        return {'id_pedido': data['id_pedido'] as int};
-      }
+      if (resp.statusCode == 201) return data;
       return {'erro': data['error']?.toString() ?? 'Erro ao criar pedido'};
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return {'erro': 'Servidor indisponível.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> consultarPagamentoPedido(int idPedido) async {
+    try {
+      final resp = await _get(Uri.parse('$baseUrl/pedidos/$idPedido/pagamento'));
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'status_pagamento': 'pending'};
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return {'status_pagamento': 'pending'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSaldoEmpresa(int idEmpresa) async {
+    try {
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/saldo'));
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'saldo': 0.0};
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return {'saldo': 0.0};
+    }
+  }
+
+  static Future<Map<String, dynamic>> depositarSaldoEmpresa(int idEmpresa, double valor) async {
+    try {
+      final resp = await _post(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/depositar'),
+        body: jsonEncode({'valor': valor}),
+      );
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode == 201) return data;
+      return {'erro': data['error']?.toString() ?? 'Erro ao gerar PIX'};
     } catch (e, st) {
       AppLogger.e('ApiService', e, st);
       return {'erro': 'Servidor indisponível.'};

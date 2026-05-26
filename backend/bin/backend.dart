@@ -30,6 +30,7 @@ import 'package:backend/services/fcm_service.dart';
 import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
 import 'package:backend/services/image_service.dart';
+import 'package:backend/services/mercadopago_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
 
 void main() async {
@@ -45,6 +46,9 @@ void main() async {
   final gmailPass = env['GMAIL_APP_PASSWORD'] ?? '';
   final jwtService   = JwtService(jwtSecret);
   final emailService = EmailService(gmailUser, gmailPass);
+
+  final mpAccessToken = env['MP_ACCESS_TOKEN'] ?? '';
+  final mpService = MercadoPagoService(mpAccessToken);
 
   // Diretório public/ relativo ao local onde o binário roda (backend/)
   final publicDir = p.join(Directory.current.path, 'public');
@@ -299,6 +303,25 @@ void main() async {
         bloqueado_ate TIMESTAMPTZ NOT NULL
       )
     ''',
+    // Pagamento via Mercado Pago
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_pagamento_mp VARCHAR(50)",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS status_pagamento VARCHAR(30) NOT NULL DEFAULT 'pendente'",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS qr_code_pix TEXT",
+    // Saldo (caixa) da empresa para pagamentos em dinheiro
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS saldo NUMERIC(10,2) NOT NULL DEFAULT 0",
+    '''
+      CREATE TABLE IF NOT EXISTS empresa_transacoes (
+        id            SERIAL PRIMARY KEY,
+        id_empresa    INT NOT NULL REFERENCES empresas(id_empresa) ON DELETE CASCADE,
+        tipo          VARCHAR(20) NOT NULL,
+        valor         NUMERIC(10,2) NOT NULL,
+        descricao     TEXT NOT NULL DEFAULT '',
+        id_pedido     INT REFERENCES pedidos(id_pedido) ON DELETE SET NULL,
+        criado_em     TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    ''',
+    // Carteira do motoboy
+    "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS saldo_motoboy NUMERIC(10,2) NOT NULL DEFAULT 0",
   ];
 
   for (final sql in migrations) {
@@ -316,7 +339,7 @@ void main() async {
   final auth           = AuthController(db.connection, jwtService, emailService);
   final produto        = ProdutoController(db.connection, imageService);
   final pedido         = PedidoController(db.connection, fcmService: fcmService);
-  final criarPedido    = CriarPedidoController(db.connection);
+  final criarPedido    = CriarPedidoController(db.connection, mpService);
   final adicional      = AdicionalController(db.connection);
   final empresa        = EmpresaController(db.connection, imageService);
   final motoboy        = MotoboyController(db.connection);
@@ -413,6 +436,169 @@ void main() async {
   app.post('/cupons',                    cupom.criar);
   app.get('/cupons',                     cupom.listar);
   app.patch('/cupons/<codigo>/ativo',    cupom.toggleAtivo);
+
+  // ── PAGAMENTOS / MERCADO PAGO ────────────────────────────────
+  // Consulta status do pagamento de um pedido
+  app.get('/pedidos/<id>/pagamento', (Request req, String id) async {
+    final idPedido = int.tryParse(id);
+    if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
+    final result = await db.connection.execute(
+      Sql.named('''
+        SELECT id_pagamento_mp, status_pagamento, qr_code_pix
+        FROM pedidos WHERE id_pedido = @id
+      '''),
+      parameters: {'id': idPedido},
+    );
+    if (result.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
+
+    final row = result.first;
+    final idMp = row[0]?.toString();
+
+    // Se tem pagamento MP e está pendente, consulta status atualizado
+    if (idMp != null && row[1]?.toString() == 'pending') {
+      try {
+        final mpStatus = await mpService.consultarPagamento(idMp);
+        final novoStatus = mpStatus['status_pagamento'] as String;
+        if (novoStatus != 'pending') {
+          await db.connection.execute(
+            Sql.named('UPDATE pedidos SET status_pagamento = @s WHERE id_pedido = @id'),
+            parameters: {'s': novoStatus, 'id': idPedido},
+          );
+          return _json(200, {
+            'id_pagamento_mp': idMp,
+            'status_pagamento': novoStatus,
+            'qr_code_pix': row[2]?.toString(),
+          });
+        }
+      } catch (_) {}
+    }
+
+    return _json(200, {
+      'id_pagamento_mp': idMp,
+      'status_pagamento': row[1]?.toString() ?? 'pendente',
+      'qr_code_pix': row[2]?.toString(),
+    });
+  });
+
+  // Webhook do Mercado Pago — notifica quando pagamento é aprovado/rejeitado
+  app.post('/pagamentos/webhook', (Request req) async {
+    try {
+      final bodyStr = await req.readAsString();
+      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+
+      final tipo = body['type']?.toString();
+      if (tipo != 'payment') return Response.ok('ok');
+
+      final idMp = body['data']?['id']?.toString();
+      if (idMp == null) return Response.ok('ok');
+
+      final mpStatus = await mpService.consultarPagamento(idMp);
+      final status   = mpStatus['status_pagamento'] as String;
+
+      await db.connection.execute(
+        Sql.named('UPDATE pedidos SET status_pagamento = @s WHERE id_pagamento_mp = @id_mp'),
+        parameters: {'s': status, 'id_mp': idMp},
+      );
+
+      return Response.ok('ok');
+    } catch (_) {
+      return Response.ok('ok');
+    }
+  });
+
+  // ── SALDO DA EMPRESA (caixa para dinheiro) ───────────────────
+  app.get('/empresas/<id>/saldo', (Request req, String id) async {
+    final idEmpresa = int.tryParse(id);
+    if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+    final result = await db.connection.execute(
+      Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
+      parameters: {'id': idEmpresa},
+    );
+    if (result.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+
+    final saldo = (result.first[0] as num?)?.toDouble() ?? 0.0;
+    return _json(200, {'saldo': saldo});
+  });
+
+  app.get('/empresas/<id>/extrato', (Request req, String id) async {
+    final idEmpresa = int.tryParse(id);
+    if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+    final result = await db.connection.execute(
+      Sql.named('''
+        SELECT tipo, valor, descricao, id_pedido, criado_em
+        FROM empresa_transacoes
+        WHERE id_empresa = @id
+        ORDER BY criado_em DESC
+        LIMIT 50
+      '''),
+      parameters: {'id': idEmpresa},
+    );
+
+    final transacoes = result.map((r) => {
+      'tipo':      r[0]?.toString(),
+      'valor':     (r[1] as num?)?.toDouble(),
+      'descricao': r[2]?.toString(),
+      'id_pedido': r[3],
+      'criado_em': r[4]?.toString(),
+    }).toList();
+
+    return _json(200, {'transacoes': transacoes});
+  });
+
+  // Empresa deposita saldo via PIX (gera QR para pagar à Smarty)
+  app.post('/empresas/<id>/depositar', (Request req, String id) async {
+    final idEmpresa = int.tryParse(id);
+    if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+    try {
+      final bodyStr = await req.readAsString();
+      final body    = jsonDecode(bodyStr) as Map<String, dynamic>;
+      final valor   = (body['valor'] as num?)?.toDouble();
+
+      if (valor == null || valor < 10) {
+        return _json(400, {'error': 'Valor mínimo de depósito é R\$ 10,00'});
+      }
+
+      final empResult = await db.connection.execute(
+        Sql.named('SELECT nome FROM empresas WHERE id_empresa = @id'),
+        parameters: {'id': idEmpresa},
+      );
+      if (empResult.isEmpty) return _json(404, {'error': 'Empresa não encontrada'});
+
+      final nomeEmpresa = empResult.first[0]?.toString() ?? 'Empresa';
+      final mpResult = await mpService.criarPagamentoPix(
+        valor:        valor,
+        descricao:    'Depósito de saldo - $nomeEmpresa',
+        emailPagador: 'empresa$idEmpresa@smartyentregas.com',
+        idPedido:     idEmpresa * -1,
+      );
+
+      // Registra depósito pendente como transação
+      await db.connection.execute(
+        Sql.named('''
+          INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao)
+          VALUES (@id_empresa, 'deposito_pendente', @valor, @desc)
+        '''),
+        parameters: {
+          'id_empresa': idEmpresa,
+          'valor':      valor,
+          'desc':       'Depósito via PIX - MP: ${mpResult['id_pagamento_mp']}',
+        },
+      );
+
+      return _json(201, {
+        'qr_code_pix':    mpResult['qr_code_pix'],
+        'qr_code_base64': mpResult['qr_code_base64'],
+        'id_pagamento_mp': mpResult['id_pagamento_mp'],
+        'valor':          valor,
+      });
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao gerar PIX de depósito', 'details': e.toString()});
+    }
+  });
 
   // ── AVALIAÇÕES ───────────────────────────────────────────────
   app.post('/avaliacoes',                    avaliacao.criar);
@@ -517,8 +703,9 @@ void main() async {
       .addMiddleware(logRequests())
       .addMiddleware(corsHeaders(headers: overrideHeaders))
       .addHandler((Request req) {
-        // /uploads/* servido diretamente sem JWT
+        // /uploads/* e webhook do MP servidos sem JWT
         if (req.url.path.startsWith('uploads/')) return staticFiles(req);
+        if (req.url.path == 'pagamentos/webhook') return app.call(req);
         return Pipeline()
             .addMiddleware(jwtMiddleware(jwtService))
             .addHandler(app.call)

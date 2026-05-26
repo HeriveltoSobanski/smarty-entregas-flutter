@@ -4,14 +4,19 @@ import 'dart:math' as math;
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
+import '../services/mercadopago_service.dart';
+
 class CriarPedidoController {
   final Pool conn;
+  final MercadoPagoService _mp;
 
-  CriarPedidoController(this.conn);
+  CriarPedidoController(this.conn, this._mp);
 
   // ----------------------------------------------------------------
   // POST /pedidos
-  // Body: { id_usuario, id_empresa, itens: [{id_produto, quantidade, preco_unit, adicionais?: [int]}] }
+  // Body: { id_empresa, itens, endereco_entrega, forma_pagamento,
+  //         mp_card_token?, observacao?, troco_para?, codigo_cupom?,
+  //         id_endereco? }
   // ----------------------------------------------------------------
   Future<Response> criarPedido(Request request) async {
     try {
@@ -23,25 +28,21 @@ class CriarPedidoController {
         return _json(400, {'error': 'Body JSON inválido'});
       }
 
-      // ---- Validação de campos obrigatórios ----
-      // id_usuario sempre vem do JWT — ignora o body para evitar spoofing
       final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
-      if (idUsuario == null) {
-        return _json(403, {'error': 'Acesso negado'});
-      }
+      if (idUsuario == null) return _json(403, {'error': 'Acesso negado'});
 
       final idEmpresa = _parseInt(body['id_empresa']);
       if (idEmpresa == null) {
-        return _json(400, {'error': 'id_empresa obrigatório e deve ser inteiro'});
+        return _json(400, {'error': 'id_empresa obrigatório'});
       }
 
       final enderecoEntrega = body['endereco_entrega']?.toString() ?? '';
       final observacao      = body['observacao']?.toString() ?? '';
       final formaPagamento  = body['forma_pagamento']?.toString() ?? '';
-      final trocoPara   = _parseDouble(body['troco_para']);
-      final codigoCupom = body['codigo_cupom']?.toString().trim().toUpperCase();
-
-      final idEndereco = _parseInt(body['id_endereco']);
+      final trocoPara       = _parseDouble(body['troco_para']);
+      final codigoCupom     = body['codigo_cupom']?.toString().trim().toUpperCase();
+      final idEndereco      = _parseInt(body['id_endereco']);
+      final mpCardToken     = body['mp_card_token']?.toString();
 
       final rawItens = body['itens'];
       if (rawItens == null || rawItens is! List || rawItens.isEmpty) {
@@ -50,35 +51,29 @@ class CriarPedidoController {
 
       final itens = <Map<String, dynamic>>[];
       for (final item in rawItens) {
-        if (item is! Map) {
-          return _json(400, {'error': 'Cada item deve ser um objeto'});
-        }
+        if (item is! Map) return _json(400, {'error': 'Cada item deve ser um objeto'});
         final idProduto  = _parseInt(item['id_produto']);
         final quantidade = _parseInt(item['quantidade']);
-
         if (idProduto == null || quantidade == null) {
-          return _json(400, {
-            'error': 'Cada item deve ter id_produto (int) e quantidade (int)'
-          });
+          return _json(400, {'error': 'Cada item deve ter id_produto e quantidade'});
         }
-        if (quantidade <= 0) {
-          return _json(400, {'error': 'quantidade deve ser maior que zero'});
-        }
+        if (quantidade <= 0) return _json(400, {'error': 'quantidade deve ser maior que zero'});
 
         final adicionaisIds = (item['adicionais'] as List?)
-            ?.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
-            .where((id) => id > 0)
-            .toList() ?? <int>[];
+                ?.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+                .where((id) => id > 0)
+                .toList() ??
+            <int>[];
 
         itens.add({
-          'id_produto':    idProduto,
-          'quantidade':    quantidade,
-          'observacao':    item['observacao']?.toString() ?? '',
+          'id_produto':     idProduto,
+          'quantidade':     quantidade,
+          'observacao':     item['observacao']?.toString() ?? '',
           'adicionais_ids': adicionaisIds,
         });
       }
 
-      // ---- Buscar preços reais do banco (nunca confiar no cliente) ----
+      // ---- Buscar preços reais do banco ----
       double subtotal = 0.0;
       final itensComPreco = <Map<String, dynamic>>[];
 
@@ -95,31 +90,22 @@ class CriarPedidoController {
         );
 
         if (produtoResult.isEmpty) {
-          return _json(422, {
-            'error': 'Produto $idProduto não pertence a esta empresa ou está inativo'
-          });
+          return _json(422, {'error': 'Produto $idProduto inválido ou inativo'});
         }
 
         final precoUnit = _parseDouble(produtoResult.first[0]) ?? 0.0;
 
-        // Somar preços dos adicionais selecionados
         double precoAdicionais = 0.0;
         final adicionaisIds = item['adicionais_ids'] as List<int>;
         if (adicionaisIds.isNotEmpty) {
-          final placeholders = adicionaisIds
-              .asMap()
-              .entries
-              .map((e) => '@add${e.key}')
-              .join(', ');
+          final placeholders = adicionaisIds.asMap().entries.map((e) => '@add${e.key}').join(', ');
           final params = <String, dynamic>{};
           for (var i = 0; i < adicionaisIds.length; i++) {
             params['add$i'] = adicionaisIds[i];
           }
           final adicionaisResult = await conn.execute(
-            Sql.named(
-              'SELECT COALESCE(SUM(preco), 0) FROM produto_adicionais '
-              'WHERE id_adicional IN ($placeholders) AND ativo = true',
-            ),
+            Sql.named('SELECT COALESCE(SUM(preco), 0) FROM produto_adicionais '
+                'WHERE id_adicional IN ($placeholders) AND ativo = true'),
             parameters: params,
           );
           precoAdicionais = _parseDouble(adicionaisResult.first[0]) ?? 0.0;
@@ -127,22 +113,17 @@ class CriarPedidoController {
 
         final precoFinal = precoUnit + precoAdicionais;
         subtotal += precoFinal * quantidade;
-
-        itensComPreco.add({
-          ...item,
-          'preco_unit': precoFinal,
-        });
+        itensComPreco.add({...item, 'preco_unit': precoFinal});
       }
 
       // ---- Validar adicionais obrigatórios ----
       for (final item in itensComPreco) {
-        final idProduto    = item['id_produto'] as int;
-        final selectedIds  = (item['adicionais_ids'] as List<int>).toSet();
+        final idProduto   = item['id_produto'] as int;
+        final selectedIds = (item['adicionais_ids'] as List<int>).toSet();
 
         final gruposResult = await conn.execute(
           Sql.named('''
-            SELECT DISTINCT grupo
-            FROM produto_adicionais
+            SELECT DISTINCT grupo FROM produto_adicionais
             WHERE id_produto = @id AND obrigatorio = true AND ativo = true
           '''),
           parameters: {'id': idProduto},
@@ -152,69 +133,50 @@ class CriarPedidoController {
           final grupo = grupoRow[0]?.toString() ?? '';
           final itensGrupo = await conn.execute(
             Sql.named('''
-              SELECT id_adicional
-              FROM produto_adicionais
+              SELECT id_adicional FROM produto_adicionais
               WHERE id_produto = @id AND grupo = @grupo AND ativo = true
             '''),
             parameters: {'id': idProduto, 'grupo': grupo},
           );
           final grupoIds = itensGrupo.map((r) => r[0] as int).toSet();
           if (!selectedIds.any(grupoIds.contains)) {
-            return _json(422, {
-              'error': 'Selecione uma opção do grupo obrigatório: $grupo',
-            });
+            return _json(422, {'error': 'Selecione uma opção do grupo obrigatório: $grupo'});
           }
         }
       }
 
-      // ---- Calcular taxa de entrega server-side ----
+      // ---- Taxa de entrega server-side ----
       final empresaResult = await conn.execute(
-        Sql.named('''
-          SELECT taxa_minima, latitude, longitude
-          FROM empresas WHERE id_empresa = @id
-        '''),
+        Sql.named('SELECT taxa_minima, latitude, longitude, saldo FROM empresas WHERE id_empresa = @id'),
         parameters: {'id': idEmpresa},
       );
+      if (empresaResult.isEmpty) return _json(422, {'error': 'Empresa não encontrada'});
 
-      if (empresaResult.isEmpty) {
-        return _json(422, {'error': 'Empresa não encontrada'});
-      }
+      final taxaMinima   = _parseDouble(empresaResult.first[0]) ?? 7.0;
+      final empLat       = _parseDouble(empresaResult.first[1]);
+      final empLon       = _parseDouble(empresaResult.first[2]);
+      final saldoEmpresa = _parseDouble(empresaResult.first[3]) ?? 0.0;
 
-      final taxaMinima  = _parseDouble(empresaResult.first[0]) ?? 7.0;
-      final empLat      = _parseDouble(empresaResult.first[1]);
-      final empLon      = _parseDouble(empresaResult.first[2]);
-
-      double taxaEntregaFinal;
+      double taxaEntregaFinal = taxaMinima;
 
       if (idEndereco != null && empLat != null && empLon != null) {
         final endResult = await conn.execute(
           Sql.named('''
-            SELECT latitude, longitude
-            FROM usuario_enderecos
+            SELECT latitude, longitude FROM usuario_enderecos
             WHERE id_endereco = @id AND id_usuario = @id_usuario
           '''),
           parameters: {'id': idEndereco, 'id_usuario': idUsuario},
         );
-
         if (endResult.isNotEmpty) {
           final endLat = _parseDouble(endResult.first[0]);
           final endLon = _parseDouble(endResult.first[1]);
-
           if (endLat != null && endLon != null) {
-            final distKm = _haversineKm(empLat, empLon, endLat, endLon);
-            taxaEntregaFinal = taxaMinima + distKm;
-          } else {
-            taxaEntregaFinal = taxaMinima;
+            taxaEntregaFinal = taxaMinima + _haversineKm(empLat, empLon, endLat, endLon);
           }
-        } else {
-          taxaEntregaFinal = taxaMinima;
         }
-      } else {
-        // Sem coordenadas disponíveis — garante ao menos a taxa mínima da empresa
-        taxaEntregaFinal = taxaMinima;
       }
 
-      // ---- Validar e aplicar cupom (se informado) ----
+      // ---- Cupom ----
       double desconto = 0.0;
       String? cupomAplicado;
 
@@ -226,45 +188,35 @@ class CriarPedidoController {
           '''),
           parameters: {'codigo': codigoCupom},
         );
+        if (cupomResult.isEmpty) return _json(422, {'error': 'Cupom inválido'});
 
-        if (cupomResult.isEmpty) {
-          return _json(422, {'error': 'Cupom inválido'});
-        }
-
-        final row          = cupomResult.first;
-        final idCupom      = row[0] as int;
-        final tipo         = row[1]?.toString() ?? 'percentual';
-        final valor        = _parseDouble(row[2]) ?? 0.0;
-        final valorMinimo  = _parseDouble(row[3]) ?? 0.0;
-        final usosMaximos  = row[4] as int?;
-        final usosAtuais   = row[5] as int? ?? 0;
-        final ativo        = row[6] as bool? ?? false;
-        final validoAte    = row[7];
+        final row         = cupomResult.first;
+        final idCupom     = row[0] as int;
+        final tipo        = row[1]?.toString() ?? 'percentual';
+        final valor       = _parseDouble(row[2]) ?? 0.0;
+        final valorMinimo = _parseDouble(row[3]) ?? 0.0;
+        final usosMaximos = row[4] as int?;
+        final usosAtuais  = row[5] as int? ?? 0;
+        final ativo       = row[6] as bool? ?? false;
+        final validoAte   = row[7];
 
         if (!ativo) return _json(422, {'error': 'Cupom inativo'});
-
         if (validoAte != null) {
-          final expira = validoAte is DateTime
-              ? validoAte
-              : DateTime.tryParse(validoAte.toString());
+          final expira = validoAte is DateTime ? validoAte : DateTime.tryParse(validoAte.toString());
           if (expira != null && expira.isBefore(DateTime.now())) {
             return _json(422, {'error': 'Cupom expirado'});
           }
         }
-
         if (usosMaximos != null && usosAtuais >= usosMaximos) {
           return _json(422, {'error': 'Cupom esgotado'});
         }
-
         if (subtotal < valorMinimo) {
           return _json(422, {
-            'error': 'Pedido mínimo de R\$ ${valorMinimo.toStringAsFixed(2)} para usar este cupom',
+            'error': 'Pedido mínimo de R\$ ${valorMinimo.toStringAsFixed(2)} para este cupom',
           });
         }
 
-        desconto = tipo == 'percentual'
-            ? subtotal * (valor / 100)
-            : (valor > subtotal ? subtotal : valor);
+        desconto = tipo == 'percentual' ? subtotal * (valor / 100) : (valor > subtotal ? subtotal : valor);
         desconto = double.parse(desconto.toStringAsFixed(2));
         cupomAplicado = codigoCupom;
 
@@ -274,38 +226,67 @@ class CriarPedidoController {
         );
       }
 
-      final valorTotal = subtotal - desconto;
+      final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
 
-      // ---- Inserir pedido (id_status = 1 → 'Aguardando') ----
+      // ---- Validação de pagamento em dinheiro (verifica saldo da empresa) ----
+      if (formaPagamento == 'dinheiro') {
+        // Taxa Smarty = 10% do produto + 10% da entrega
+        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
+        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
+        final debitoTotal           = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
+
+        if (saldoEmpresa < debitoTotal) {
+          return _json(422, {
+            'error': 'Saldo insuficiente para aceitar pagamento em dinheiro. '
+                'Necessário: R\$ ${debitoTotal.toStringAsFixed(2)}, '
+                'disponível: R\$ ${saldoEmpresa.toStringAsFixed(2)}',
+          });
+        }
+      }
+
+      // ---- Validação de cartão (exige token do MP) ----
+      if ((formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') &&
+          (mpCardToken == null || mpCardToken.isEmpty)) {
+        return _json(400, {'error': 'mp_card_token obrigatório para pagamento com cartão'});
+      }
+
+      // ---- Buscar email do usuário (necessário para o MP) ----
+      final usuarioResult = await conn.execute(
+        Sql.named('SELECT email FROM usuarios WHERE id_usuario = @id'),
+        parameters: {'id': idUsuario},
+      );
+      final emailUsuario = usuarioResult.isNotEmpty ? (usuarioResult.first[0]?.toString() ?? '') : '';
+
+      // ---- Inserir pedido ----
       final pedidoResult = await conn.execute(
         Sql.named('''
           INSERT INTO pedidos
             (id_usuario, id_empresa, id_status, total,
              endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega,
-             codigo_cupom, desconto)
+             codigo_cupom, desconto, status_pagamento)
           VALUES
             (@id_usuario, @id_empresa, 1, @total,
              @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega,
-             @codigo_cupom, @desconto)
+             @codigo_cupom, @desconto, 'pendente')
           RETURNING id_pedido
         '''),
         parameters: {
-          'id_usuario':       idUsuario,
-          'id_empresa':       idEmpresa,
-          'total':            valorTotal,
+          'id_usuario':      idUsuario,
+          'id_empresa':      idEmpresa,
+          'total':           valorTotal,
           'endereco_entrega': enderecoEntrega,
-          'observacao':       observacao,
-          'forma_pagamento':  formaPagamento.isNotEmpty ? formaPagamento : null,
-          'troco_para':       trocoPara,
-          'taxa_entrega':     taxaEntregaFinal,
-          'codigo_cupom':     cupomAplicado,
-          'desconto':         desconto,
+          'observacao':      observacao,
+          'forma_pagamento': formaPagamento.isNotEmpty ? formaPagamento : null,
+          'troco_para':      trocoPara,
+          'taxa_entrega':    taxaEntregaFinal,
+          'codigo_cupom':    cupomAplicado,
+          'desconto':        desconto,
         },
       );
 
       final idPedido = pedidoResult.first[0] as int;
 
-      // ---- Inserir itens do pedido ----
+      // ---- Inserir itens ----
       for (final item in itensComPreco) {
         await conn.execute(
           Sql.named('''
@@ -322,6 +303,125 @@ class CriarPedidoController {
         );
       }
 
+      // ---- Processar pagamento via Mercado Pago ----
+      final descricaoPedido = 'Pedido #$idPedido - Smarty Entregas';
+      final valorCobranca   = valorTotal + taxaEntregaFinal;
+
+      if (formaPagamento == 'pix') {
+        final mpResult = await _mp.criarPagamentoPix(
+          valor:        valorCobranca,
+          descricao:    descricaoPedido,
+          emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
+          idPedido:     idPedido,
+        );
+
+        await conn.execute(
+          Sql.named('''
+            UPDATE pedidos SET
+              id_pagamento_mp  = @id_mp,
+              status_pagamento = @status,
+              qr_code_pix      = @qr
+            WHERE id_pedido = @id
+          '''),
+          parameters: {
+            'id_mp':  mpResult['id_pagamento_mp'],
+            'status': mpResult['status_pagamento'],
+            'qr':     mpResult['qr_code_pix'],
+            'id':     idPedido,
+          },
+        );
+
+        return _json(201, {
+          'ok':             true,
+          'id_pedido':      idPedido,
+          'forma_pagamento': 'pix',
+          'qr_code_pix':    mpResult['qr_code_pix'],
+          'qr_code_base64': mpResult['qr_code_base64'],
+          'id_pagamento_mp': mpResult['id_pagamento_mp'],
+        });
+      }
+
+      if (formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') {
+        final mpResult = await _mp.criarPagamentoCartao(
+          valor:        valorCobranca,
+          token:        mpCardToken!,
+          emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
+          descricao:    descricaoPedido,
+          idPedido:     idPedido,
+        );
+
+        final statusMp = mpResult['status_pagamento'] as String;
+
+        await conn.execute(
+          Sql.named('''
+            UPDATE pedidos SET
+              id_pagamento_mp  = @id_mp,
+              status_pagamento = @status
+            WHERE id_pedido = @id
+          '''),
+          parameters: {
+            'id_mp':  mpResult['id_pagamento_mp'],
+            'status': statusMp,
+            'id':     idPedido,
+          },
+        );
+
+        if (statusMp == 'rejected') {
+          return _json(422, {
+            'error': 'Pagamento recusado. Verifique os dados do cartão.',
+            'status_detail': mpResult['status_detail'],
+          });
+        }
+
+        return _json(201, {
+          'ok':              true,
+          'id_pedido':       idPedido,
+          'forma_pagamento': formaPagamento,
+          'status_pagamento': statusMp,
+          'id_pagamento_mp': mpResult['id_pagamento_mp'],
+        });
+      }
+
+      if (formaPagamento == 'dinheiro') {
+        // Debita da empresa: 10% produto + 10% entrega + entrega do motoboy
+        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
+        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
+        final debitoEmpresa         = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
+
+        await conn.execute(
+          Sql.named('UPDATE empresas SET saldo = saldo - @debito WHERE id_empresa = @id'),
+          parameters: {'debito': debitoEmpresa, 'id': idEmpresa},
+        );
+
+        await conn.execute(
+          Sql.named('''
+            INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao, id_pedido)
+            VALUES (@id_empresa, 'debito', @valor, @descricao, @id_pedido)
+          '''),
+          parameters: {
+            'id_empresa': idEmpresa,
+            'valor':      debitoEmpresa,
+            'descricao':  'Taxa Smarty + entrega - Pedido #$idPedido',
+            'id_pedido':  idPedido,
+          },
+        );
+
+        await conn.execute(
+          Sql.named('''
+            UPDATE pedidos SET status_pagamento = 'aprovado' WHERE id_pedido = @id
+          '''),
+          parameters: {'id': idPedido},
+        );
+
+        return _json(201, {
+          'ok':              true,
+          'id_pedido':       idPedido,
+          'forma_pagamento': 'dinheiro',
+          'status_pagamento': 'aprovado',
+        });
+      }
+
+      // Cartão na entrega ou outros — sem processamento MP
       return _json(201, {'ok': true, 'id_pedido': idPedido});
     } catch (e) {
       return _json(500, {
@@ -359,11 +459,9 @@ class CriarPedidoController {
     return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
 
-  Response _json(int status, Map<String, dynamic> body) {
-    return Response(
-      status,
-      body: jsonEncode(body),
-      headers: const {'content-type': 'application/json; charset=utf-8'},
-    );
-  }
+  Response _json(int status, Map<String, dynamic> body) => Response(
+        status,
+        body: jsonEncode(body),
+        headers: const {'content-type': 'application/json; charset=utf-8'},
+      );
 }

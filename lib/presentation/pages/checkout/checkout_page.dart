@@ -2,13 +2,16 @@
 import '../../../presentation/navigation/app_routes.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/cart/cart.dart';
 
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
+import '../../../services/mp_card_service.dart';
 import '../cliente_enderecos/cliente_enderecos_page.dart';
 import '../acompanhamento_pedido/acompanhamento_pedido_page.dart';
+import '../pagamento/pix_page.dart';
 
 // ── Cálculo de taxa de entrega por distância ─────────────────────────────────
 double calcularDistanciaKm(double lat1, double lon1, double lat2, double lon2) {
@@ -44,12 +47,14 @@ class CheckoutPage extends StatefulWidget {
 }
 
 // Opções de pagamento
-enum _Pagamento { pix, cartaoEntrega, dinheiro }
+enum _Pagamento { pix, cartaoCredito, cartaoDebito, cartaoEntrega, dinheiro }
 
 extension _PagamentoExt on _Pagamento {
   String get label {
     switch (this) {
-      case _Pagamento.pix:           return 'Pix';
+      case _Pagamento.pix:           return 'PIX';
+      case _Pagamento.cartaoCredito: return 'Cartão de crédito';
+      case _Pagamento.cartaoDebito:  return 'Cartão de débito';
       case _Pagamento.cartaoEntrega: return 'Cartão na entrega';
       case _Pagamento.dinheiro:      return 'Dinheiro';
     }
@@ -57,6 +62,8 @@ extension _PagamentoExt on _Pagamento {
   String get slug {
     switch (this) {
       case _Pagamento.pix:           return 'pix';
+      case _Pagamento.cartaoCredito: return 'cartao_credito';
+      case _Pagamento.cartaoDebito:  return 'cartao_debito';
       case _Pagamento.cartaoEntrega: return 'cartao_entrega';
       case _Pagamento.dinheiro:      return 'dinheiro';
     }
@@ -64,16 +71,27 @@ extension _PagamentoExt on _Pagamento {
   IconData get icon {
     switch (this) {
       case _Pagamento.pix:           return Icons.qr_code;
-      case _Pagamento.cartaoEntrega: return Icons.credit_card;
+      case _Pagamento.cartaoCredito: return Icons.credit_card;
+      case _Pagamento.cartaoDebito:  return Icons.credit_card_outlined;
+      case _Pagamento.cartaoEntrega: return Icons.point_of_sale;
       case _Pagamento.dinheiro:      return Icons.attach_money;
     }
   }
+  bool get precisaFormularioCartao =>
+      this == _Pagamento.cartaoCredito || this == _Pagamento.cartaoDebito;
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final TextEditingController _observacaoCtrl = TextEditingController();
-  final TextEditingController _trocoCtrl      = TextEditingController();
-  final TextEditingController _cupomCtrl      = TextEditingController();
+  final TextEditingController _observacaoCtrl  = TextEditingController();
+  final TextEditingController _trocoCtrl       = TextEditingController();
+  final TextEditingController _cupomCtrl       = TextEditingController();
+  // Formulário de cartão
+  final TextEditingController _cardNumeroCtrl  = TextEditingController();
+  final TextEditingController _cardNomeCtrl    = TextEditingController();
+  final TextEditingController _cardValidadeCtrl = TextEditingController();
+  final TextEditingController _cardCvvCtrl     = TextEditingController();
+  final TextEditingController _cardCpfCtrl     = TextEditingController();
+
   bool _carregando      = false;
   bool _validandoCupom  = false;
 
@@ -203,6 +221,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _observacaoCtrl.dispose();
     _trocoCtrl.dispose();
     _cupomCtrl.dispose();
+    _cardNumeroCtrl.dispose();
+    _cardNomeCtrl.dispose();
+    _cardValidadeCtrl.dispose();
+    _cardCvvCtrl.dispose();
+    _cardCpfCtrl.dispose();
     super.dispose();
   }
 
@@ -279,6 +302,41 @@ class _CheckoutPageState extends State<CheckoutPage> {
       troco = t;
     }
 
+    // Valida e tokeniza cartão antes de enviar ao backend
+    String? mpCardToken;
+    if (_pagamento!.precisaFormularioCartao) {
+      if (_cardNumeroCtrl.text.replaceAll(' ', '').length < 16 ||
+          _cardNomeCtrl.text.trim().isEmpty ||
+          _cardValidadeCtrl.text.length < 5 ||
+          _cardCvvCtrl.text.length < 3 ||
+          _cardCpfCtrl.text.replaceAll(RegExp(r'\D'), '').length < 11) {
+        setState(() => _carregando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preencha todos os dados do cartão.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+      try {
+        final partes = _cardValidadeCtrl.text.split('/');
+        final tokenData = await MpCardService.tokenizarCartao(
+          numero:        _cardNumeroCtrl.text,
+          mesExpiracao:  partes[0],
+          anoExpiracao:  partes.length > 1 ? '20${partes[1]}' : '',
+          cvv:           _cardCvvCtrl.text,
+          nomePortador:  _cardNomeCtrl.text.trim(),
+          cpf:           _cardCpfCtrl.text,
+        );
+        mpCardToken = tokenData['token'] as String?;
+      } catch (e) {
+        setState(() => _carregando = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro no cartão: $e'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+    }
+
     final result = await ApiService.criarPedido(
       idUsuario:       idUsuario,
       idEmpresa:       idEmpresa is int ? idEmpresa : int.parse(idEmpresa.toString()),
@@ -291,6 +349,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       idEndereco:      _enderecoSel?['id_endereco'] is int
                            ? _enderecoSel!['id_endereco'] as int
                            : int.tryParse(_enderecoSel?['id_endereco']?.toString() ?? ''),
+      mpCardToken:     mpCardToken,
     );
 
     setState(() => _carregando = false);
@@ -298,27 +357,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (result.containsKey('erro')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['erro'] as String),
-          backgroundColor: Colors.red,
+        SnackBar(content: Text(result['erro'] as String), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final idPedido     = result['id_pedido'] as int;
+    final nomeEmpresa  = widget.empresa['nome']?.toString() ?? '';
+    final idEmpresaInt = idEmpresa is int ? idEmpresa : int.tryParse(idEmpresa.toString()) ?? 0;
+    final subtotal     = cart.total;
+    final itensDisplay = cart.itens.map((i) => i.toItemCheckout()).toList();
+    cart.limpar();
+
+    if (!mounted) return;
+
+    // PIX: vai para tela de QR code
+    if (_pagamento == _Pagamento.pix) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PagamentoPixPage(
+            idPedido:        idPedido,
+            idEmpresa:       idEmpresaInt,
+            nomeEmpresa:     nomeEmpresa,
+            enderecoEntrega: endereco,
+            qrCodePix:       result['qr_code_pix']?.toString() ?? '',
+            qrCodeBase64:    result['qr_code_base64']?.toString() ?? '',
+            idPagamentoMp:   result['id_pagamento_mp']?.toString() ?? '',
+            valorTotal:      subtotal + _taxaEntrega - _desconto,
+          ),
         ),
       );
       return;
     }
 
-    final idPedido    = result['id_pedido'] as int;
-    final nomeEmpresa = widget.empresa['nome']?.toString() ?? '';
-    final idEmpresaInt = idEmpresa is int
-        ? idEmpresa
-        : int.tryParse(idEmpresa.toString()) ?? 0;
-
-    final subtotal = cart.total;
-    // Snapshot para display ANTES de limpar o carrinho
-    final itensDisplay = cart.itens.map((i) => i.toItemCheckout()).toList();
-    cart.limpar();
-
-    // Navega para tela de confirmação
-    if (!mounted) return;
+    // Cartão ou dinheiro: vai para tela de confirmação
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => _PedidoConfirmadoPage(
@@ -652,27 +724,91 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                       );
                     }),
-                    // Campo de troco (só aparece se dinheiro selecionado)
+                    // Campo de troco
                     if (_pagamento == _Pagamento.dinheiro) ...[
                       const SizedBox(height: 4),
                       TextField(
                         controller: _trocoCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: 'Troco para quanto? (opcional)',
-                          hintText:
-                              'Ex.: 50,00 (deixe vazio se não precisar)',
+                          hintText: 'Ex.: 50,00 (deixe vazio se não precisar)',
                           prefixText: 'R\$ ',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide:
-                                const BorderSide(color: _cor, width: 2),
+                            borderSide: const BorderSide(color: _cor, width: 2),
                           ),
                           isDense: true,
                         ),
+                      ),
+                    ],
+                    // Formulário de cartão (crédito ou débito)
+                    if (_pagamento != null && _pagamento!.precisaFormularioCartao) ...[
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 4),
+                      const Text('Dados do cartão',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _cor)),
+                      const SizedBox(height: 10),
+                      _cardField(
+                        controller: _cardNumeroCtrl,
+                        label: 'Número do cartão',
+                        hint: '0000 0000 0000 0000',
+                        tipo: TextInputType.number,
+                        maxLength: 19,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          _CardNumberFormatter(),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _cardField(
+                        controller: _cardNomeCtrl,
+                        label: 'Nome no cartão',
+                        hint: 'Como aparece no cartão',
+                        tipo: TextInputType.name,
+                        textCapitalization: TextCapitalization.characters,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        Expanded(
+                          child: _cardField(
+                            controller: _cardValidadeCtrl,
+                            label: 'Validade',
+                            hint: 'MM/AA',
+                            tipo: TextInputType.number,
+                            maxLength: 5,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              _ExpiryFormatter(),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _cardField(
+                            controller: _cardCvvCtrl,
+                            label: 'CVV',
+                            hint: '123',
+                            tipo: TextInputType.number,
+                            maxLength: 4,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            obscure: true,
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 8),
+                      _cardField(
+                        controller: _cardCpfCtrl,
+                        label: 'CPF do titular',
+                        hint: '000.000.000-00',
+                        tipo: TextInputType.number,
+                        maxLength: 14,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          _CpfFormatter(),
+                        ],
                       ),
                     ],
                   ],
@@ -865,6 +1001,92 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _cardField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    TextInputType tipo = TextInputType.text,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
+    bool obscure = false,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) =>
+      TextField(
+        controller: controller,
+        keyboardType: tipo,
+        obscureText: obscure,
+        maxLength: maxLength,
+        inputFormatters: inputFormatters,
+        textCapitalization: textCapitalization,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          counterText: '',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _cor, width: 2),
+          ),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      );
+}
+
+// Formata número do cartão em grupos de 4 dígitos
+class _CardNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue novo) {
+    final digits = novo.text.replaceAll(RegExp(r'\D'), '');
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length && i < 16; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(digits[i]);
+    }
+    final str = buffer.toString();
+    return novo.copyWith(
+      text: str,
+      selection: TextSelection.collapsed(offset: str.length),
+    );
+  }
+}
+
+// Formata validade como MM/AA
+class _ExpiryFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue novo) {
+    final digits = novo.text.replaceAll(RegExp(r'\D'), '');
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length && i < 4; i++) {
+      if (i == 2) buffer.write('/');
+      buffer.write(digits[i]);
+    }
+    final str = buffer.toString();
+    return novo.copyWith(
+      text: str,
+      selection: TextSelection.collapsed(offset: str.length),
+    );
+  }
+}
+
+// Formata CPF como 000.000.000-00
+class _CpfFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue novo) {
+    final digits = novo.text.replaceAll(RegExp(r'\D'), '');
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length && i < 11; i++) {
+      if (i == 3 || i == 6) buffer.write('.');
+      if (i == 9) buffer.write('-');
+      buffer.write(digits[i]);
+    }
+    final str = buffer.toString();
+    return novo.copyWith(
+      text: str,
+      selection: TextSelection.collapsed(offset: str.length),
     );
   }
 }
