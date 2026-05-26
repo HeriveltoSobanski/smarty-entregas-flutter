@@ -329,16 +329,23 @@ void main() async {
         nome         VARCHAR(100) NOT NULL
       )
     ''',
+    // Remove duplicatas antes de criar o índice único
+    '''
+      DELETE FROM categorias c1
+      USING categorias c2
+      WHERE c1.id_categoria > c2.id_categoria
+        AND c1.nome = c2.nome
+    ''',
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nome ON categorias(nome)",
-    // Garante unique em empresas.id_usuario para ON CONFLICT no registro
-    "ALTER TABLE empresas ADD CONSTRAINT IF NOT EXISTS uq_empresas_id_usuario UNIQUE (id_usuario)",
+    // CREATE UNIQUE INDEX é idempotente — substitui ADD CONSTRAINT IF NOT EXISTS (não existe no PG)
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_empresas_id_usuario ON empresas(id_usuario)",
     // Cria linha em empresas para usuários empresa que não têm (dados legados)
     '''
       INSERT INTO empresas (id_usuario)
       SELECT id_usuario FROM usuarios
       WHERE tipo_usuario = 'empresa'
         AND id_usuario NOT IN (SELECT id_usuario FROM empresas WHERE id_usuario IS NOT NULL)
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (id_usuario) DO NOTHING
     ''',
   ];
 
