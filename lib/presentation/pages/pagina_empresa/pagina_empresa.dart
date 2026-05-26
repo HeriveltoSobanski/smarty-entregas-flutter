@@ -703,6 +703,8 @@ class _FormProdutoState extends State<_FormProduto> {
   Map<String, dynamic>?      _catSel;
   String? _erro;
   bool    _salvando = false;
+  bool    _loadingCats = true;
+  bool    _erroCats = false;
 
   bool _isPizza          = false;
   bool _pizzaMeioAMeio   = false;
@@ -756,8 +758,13 @@ class _FormProdutoState extends State<_FormProduto> {
   }
 
   Future<void> _carregarCats() async {
+    if (mounted) setState(() { _loadingCats = true; _erroCats = false; });
     final cats = await ApiService.getCategorias();
-    if (!mounted || cats.isEmpty) return;
+    if (!mounted) return;
+    if (cats.isEmpty) {
+      setState(() { _loadingCats = false; _erroCats = true; });
+      return;
+    }
     final idCat = widget.produto?['id_categoria'];
     final catInicial = idCat != null
         ? cats.firstWhere(
@@ -769,6 +776,8 @@ class _FormProdutoState extends State<_FormProduto> {
       _categorias = cats;
       _catSel = catInicial;
       _isPizza = (catInicial['nome']?.toString().toLowerCase() == 'pizzas');
+      _loadingCats = false;
+      _erroCats = false;
     });
   }
 
@@ -928,10 +937,26 @@ class _FormProdutoState extends State<_FormProduto> {
             ),
             const SizedBox(height: 12),
 
-            _categorias.isEmpty
+            _loadingCats
                 ? const Center(child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: CircularProgressIndicator(color: _cor, strokeWidth: 2)))
+                : _erroCats
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('Erro ao carregar categorias',
+                            style: TextStyle(color: Colors.red, fontSize: 13)),
+                      ),
+                      TextButton(
+                        onPressed: _carregarCats,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ]),
+                  )
                 : DropdownButtonFormField<Map<String, dynamic>>(
                     // ignore: deprecated_member_use
                     value: _catSel,

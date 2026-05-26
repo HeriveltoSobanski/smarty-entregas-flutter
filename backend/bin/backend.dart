@@ -322,6 +322,14 @@ void main() async {
     ''',
     // Carteira do motoboy
     "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS saldo_motoboy NUMERIC(10,2) NOT NULL DEFAULT 0",
+    // Garante que tabela categorias existe com unique constraint para ON CONFLICT
+    '''
+      CREATE TABLE IF NOT EXISTS categorias (
+        id_categoria SERIAL PRIMARY KEY,
+        nome         VARCHAR(100) NOT NULL
+      )
+    ''',
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nome ON categorias(nome)",
   ];
 
   for (final sql in migrations) {

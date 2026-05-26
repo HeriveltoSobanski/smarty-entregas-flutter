@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/session_store.dart';
 import '../../../services/api_service.dart';
 import '../selecionar_endereco/selecionar_endereco_page.dart';
+import 'obter_localizacao_page.dart';
 
 const Color _cor = Color(0xFFF5841F);
 
@@ -50,9 +51,7 @@ class _ClienteEnderecosPageState extends State<ClienteEnderecosPage> {
     final res = await Navigator.push<EnderecoSelecionado>(
       context,
       MaterialPageRoute(
-        builder: (_) => const SelecionarEnderecoPage(
-          titulo: 'Novo Endereço',
-        ),
+        builder: (_) => const ObterLocalizacaoPage(),
       ),
     );
     if (res == null || !mounted) return;
