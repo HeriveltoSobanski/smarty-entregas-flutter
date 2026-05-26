@@ -330,6 +330,16 @@ void main() async {
       )
     ''',
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nome ON categorias(nome)",
+    // Garante unique em empresas.id_usuario para ON CONFLICT no registro
+    "ALTER TABLE empresas ADD CONSTRAINT IF NOT EXISTS uq_empresas_id_usuario UNIQUE (id_usuario)",
+    // Cria linha em empresas para usuários empresa que não têm (dados legados)
+    '''
+      INSERT INTO empresas (id_usuario)
+      SELECT id_usuario FROM usuarios
+      WHERE tipo_usuario = 'empresa'
+        AND id_usuario NOT IN (SELECT id_usuario FROM empresas WHERE id_usuario IS NOT NULL)
+      ON CONFLICT DO NOTHING
+    ''',
   ];
 
   for (final sql in migrations) {
