@@ -29,8 +29,8 @@ class RelatorioController {
           SELECT
             COUNT(*) FILTER (WHERE id_status != 5)                      AS total_pedidos,
             COUNT(*) FILTER (WHERE id_status  = 5)                      AS pedidos_cancelados,
-            COALESCE(SUM(valor_total) FILTER (WHERE id_status != 5), 0) AS total_faturado,
-            COALESCE(AVG(valor_total) FILTER (WHERE id_status != 5), 0) AS ticket_medio
+            COALESCE(SUM(total) FILTER (WHERE id_status != 5), 0) AS total_faturado,
+            COALESCE(AVG(total) FILTER (WHERE id_status != 5), 0) AS ticket_medio
           FROM pedidos
           WHERE id_empresa = @id
             AND criado_em >= @inicio::date
@@ -53,7 +53,7 @@ class RelatorioController {
           SELECT
             COALESCE(forma_pagamento, 'Não informado') AS forma,
             COUNT(*)                                   AS qtd,
-            COALESCE(SUM(valor_total), 0)              AS total
+            COALESCE(SUM(total), 0)              AS total
           FROM pedidos
           WHERE id_empresa = @id
             AND id_status != 5
@@ -104,7 +104,7 @@ class RelatorioController {
           SELECT
             DATE(criado_em)               AS dia,
             COUNT(*)                      AS pedidos,
-            COALESCE(SUM(valor_total), 0) AS total
+            COALESCE(SUM(total), 0) AS total
           FROM pedidos
           WHERE id_empresa = @id
             AND id_status  != 5

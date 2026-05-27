@@ -34,7 +34,7 @@ class PedidoController {
         SELECT p.id_pedido,
                u.nome                                    AS cliente,
                sp.nome                                   AS status,
-               p.valor_total,
+               p.total                                    AS valor_total,
                p.criado_em,
                STRING_AGG(pr.nome, ', ' ORDER BY pr.nome) AS itens,
                p.id_status,
@@ -47,7 +47,7 @@ class PedidoController {
         LEFT JOIN produtos pr       ON pr.id_produto     = pitem.id_produto
         WHERE p.id_empresa = @id_empresa
           ${hasFilter ? 'AND p.criado_em >= @inicio::timestamp AND p.criado_em < (@fim::date + INTERVAL \'1 day\')' : ''}
-        GROUP BY p.id_pedido, u.nome, sp.nome, p.valor_total, p.criado_em,
+        GROUP BY p.id_pedido, u.nome, sp.nome, p.total, p.criado_em,
                  p.id_status, p.quase_pronto, p.tipo_entrega
         ORDER BY p.criado_em DESC
       ''';
@@ -95,7 +95,7 @@ class PedidoController {
       final pedResult = await conn.execute(
         Sql.named('''
           SELECT p.id_pedido, p.id_status, sp.nome AS status,
-                 p.valor_total, p.criado_em,
+                 p.total AS valor_total, p.criado_em,
                  u.nome AS cliente, u.email AS cliente_email,
                  u.telefone AS cliente_telefone,
                  p.endereco_entrega, p.observacao,
@@ -204,7 +204,7 @@ class PedidoController {
           SELECT p.id_pedido,
                  e.nome                                    AS empresa,
                  sp.nome                                   AS status,
-                 p.valor_total,
+                 p.total                                    AS valor_total,
                  p.criado_em,
                  STRING_AGG(pr.nome, ', ' ORDER BY pr.nome) AS itens,
                  p.id_status,
@@ -215,7 +215,7 @@ class PedidoController {
           LEFT JOIN pedido_itens pitem ON pitem.id_pedido = p.id_pedido
           LEFT JOIN produtos pr        ON pr.id_produto   = pitem.id_produto
           WHERE p.id_usuario = @id_usuario
-          GROUP BY p.id_pedido, e.nome, sp.nome, p.valor_total, p.criado_em,
+          GROUP BY p.id_pedido, e.nome, sp.nome, p.total, p.criado_em,
                    p.id_status, p.quase_pronto
           ORDER BY p.criado_em DESC
           LIMIT @limite OFFSET @offset

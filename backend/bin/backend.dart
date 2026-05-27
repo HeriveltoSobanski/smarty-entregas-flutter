@@ -344,6 +344,8 @@ void main() async {
       WHERE u.tipo_usuario = 'empresa'
         AND NOT EXISTS (SELECT 1 FROM empresas e WHERE e.id_usuario = u.id_usuario)
     ''',
+    // Coluna atualizado_em em produtos — usada no INSERT e UPDATE de produto
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
   ];
 
   for (final sql in migrations) {
