@@ -296,28 +296,17 @@ class AuthController {
 
       final idUsuario = result.first[0] as int;
 
-      // Cria linha na tabela empresas se não existir
+      // Cria linha na tabela empresas (novo usuário, não deve existir ainda)
       final empInsert = await conn.execute(
         Sql.named('''
           INSERT INTO empresas (id_usuario)
           VALUES (@id_usuario)
-          ON CONFLICT (id_usuario) DO NOTHING
           RETURNING id_empresa
         '''),
         parameters: {'id_usuario': idUsuario},
       );
 
-      int idEmpresa = 0;
-      if (empInsert.isNotEmpty) {
-        idEmpresa = (empInsert.first[0] as int?) ?? 0;
-      } else {
-        // Linha já existia (ON CONFLICT), busca o id
-        final empSelect = await conn.execute(
-          Sql.named('SELECT id_empresa FROM empresas WHERE id_usuario = @id_usuario LIMIT 1'),
-          parameters: {'id_usuario': idUsuario},
-        );
-        if (empSelect.isNotEmpty) idEmpresa = (empSelect.first[0] as int?) ?? 0;
-      }
+      final idEmpresa = empInsert.isNotEmpty ? (empInsert.first[0] as int?) ?? 0 : 0;
 
       final token = _jwt.generateToken(
         idUsuario: idUsuario,

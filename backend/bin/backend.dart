@@ -337,15 +337,12 @@ void main() async {
         AND c1.nome = c2.nome
     ''',
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nome ON categorias(nome)",
-    // CREATE UNIQUE INDEX é idempotente — substitui ADD CONSTRAINT IF NOT EXISTS (não existe no PG)
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_empresas_id_usuario ON empresas(id_usuario)",
-    // Cria linha em empresas para usuários empresa que não têm (dados legados)
+    // Cria linha em empresas para usuários empresa que não têm — sem ON CONFLICT para não depender de unique index
     '''
       INSERT INTO empresas (id_usuario)
-      SELECT id_usuario FROM usuarios
-      WHERE tipo_usuario = 'empresa'
-        AND id_usuario NOT IN (SELECT id_usuario FROM empresas WHERE id_usuario IS NOT NULL)
-      ON CONFLICT (id_usuario) DO NOTHING
+      SELECT u.id_usuario FROM usuarios u
+      WHERE u.tipo_usuario = 'empresa'
+        AND NOT EXISTS (SELECT 1 FROM empresas e WHERE e.id_usuario = u.id_usuario)
     ''',
   ];
 
