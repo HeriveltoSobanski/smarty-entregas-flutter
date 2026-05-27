@@ -299,11 +299,11 @@ class AuthController {
       // Cria linha na tabela empresas (novo usuário, não deve existir ainda)
       final empInsert = await conn.execute(
         Sql.named('''
-          INSERT INTO empresas (id_usuario)
-          VALUES (@id_usuario)
+          INSERT INTO empresas (id_usuario, nome)
+          VALUES (@id_usuario, @nome)
           RETURNING id_empresa
         '''),
-        parameters: {'id_usuario': idUsuario},
+        parameters: {'id_usuario': idUsuario, 'nome': nome},
       );
 
       final idEmpresa = empInsert.isNotEmpty ? (empInsert.first[0] as int?) ?? 0 : 0;

@@ -337,10 +337,10 @@ void main() async {
         AND c1.nome = c2.nome
     ''',
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nome ON categorias(nome)",
-    // Cria linha em empresas para usuários empresa que não têm — sem ON CONFLICT para não depender de unique index
+    // Cria linha em empresas para usuários empresa que não têm — nome vem de usuarios
     '''
-      INSERT INTO empresas (id_usuario)
-      SELECT u.id_usuario FROM usuarios u
+      INSERT INTO empresas (id_usuario, nome)
+      SELECT u.id_usuario, u.nome FROM usuarios u
       WHERE u.tipo_usuario = 'empresa'
         AND NOT EXISTS (SELECT 1 FROM empresas e WHERE e.id_usuario = u.id_usuario)
     ''',
