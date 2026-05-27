@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 class CloudinaryService {
   static const _cloudName = 'dqju4hjkq';
@@ -13,8 +15,17 @@ class CloudinaryService {
   static Future<String> uploadImage(String filePath) async {
     try {
       final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl))
-        ..fields['upload_preset'] = _uploadPreset
-        ..files.add(await http.MultipartFile.fromPath('file', filePath));
+        ..fields['upload_preset'] = _uploadPreset;
+
+      if (kIsWeb) {
+        // Web: fromPath não funciona — lê bytes diretamente via XFile
+        final xfile = XFile(filePath);
+        final bytes = await xfile.readAsBytes();
+        final filename = xfile.name.isNotEmpty ? xfile.name : 'imagem.jpg';
+        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath('file', filePath));
+      }
 
       final streamed = await request.send()
           .timeout(const Duration(seconds: 30));

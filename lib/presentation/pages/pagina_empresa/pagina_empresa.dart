@@ -904,10 +904,15 @@ class _FormProdutoState extends State<_FormProduto> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.memory(
-                              Base64Cache.decode(_imagemBase64!),
-                              width: double.infinity, height: 110, fit: BoxFit.cover,
-                            ),
+                            child: _imagemBase64!.startsWith('http')
+                                ? Image.network(
+                                    _imagemBase64!,
+                                    width: double.infinity, height: 110, fit: BoxFit.cover,
+                                  )
+                                : Image.memory(
+                                    Base64Cache.decode(_imagemBase64!),
+                                    width: double.infinity, height: 110, fit: BoxFit.cover,
+                                  ),
                           ),
                           Positioned(
                             right: 8, top: 8,
