@@ -1702,9 +1702,15 @@ class _PedidoDetalheSheetState extends State<_PedidoDetalheSheet> {
 
   Future<void> _atualizarStatus(int novoIdStatus) async {
     setState(() => _atualizando = true);
-    await ApiService.atualizarStatusPedido(widget.idPedido, novoIdStatus);
+    final erro = await ApiService.atualizarStatusPedido(widget.idPedido, novoIdStatus);
     await _carregar();
     setState(() => _atualizando = false);
+    if (erro != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: $erro'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     widget.onStatusAtualizado?.call();
   }
 

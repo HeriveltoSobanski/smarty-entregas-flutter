@@ -147,15 +147,14 @@ class CriarPedidoController {
 
       // ---- Taxa de entrega server-side ----
       final empresaResult = await conn.execute(
-        Sql.named('SELECT taxa_minima, latitude, longitude, saldo FROM empresas WHERE id_empresa = @id'),
+        Sql.named('SELECT taxa_minima, latitude, longitude FROM empresas WHERE id_empresa = @id'),
         parameters: {'id': idEmpresa},
       );
       if (empresaResult.isEmpty) return _json(422, {'error': 'Empresa não encontrada'});
 
-      final taxaMinima   = _parseDouble(empresaResult.first[0]) ?? 7.0;
-      final empLat       = _parseDouble(empresaResult.first[1]);
-      final empLon       = _parseDouble(empresaResult.first[2]);
-      final saldoEmpresa = _parseDouble(empresaResult.first[3]) ?? 0.0;
+      final taxaMinima = _parseDouble(empresaResult.first[0]) ?? 7.0;
+      final empLat     = _parseDouble(empresaResult.first[1]);
+      final empLon     = _parseDouble(empresaResult.first[2]);
 
       double taxaEntregaFinal = taxaMinima;
 
@@ -229,8 +228,18 @@ class CriarPedidoController {
       final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
 
       // ---- Validação de pagamento em dinheiro (verifica saldo da empresa) ----
+      double saldoEmpresa = 0.0;
       if (formaPagamento == 'dinheiro') {
-        // Taxa Smarty = 10% do produto + 10% da entrega
+        try {
+          final saldoResult = await conn.execute(
+            Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
+            parameters: {'id': idEmpresa},
+          );
+          saldoEmpresa = saldoResult.isNotEmpty ? (_parseDouble(saldoResult.first[0]) ?? 0.0) : 0.0;
+        } catch (_) {
+          saldoEmpresa = 0.0;
+        }
+
         final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
         final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
         final debitoTotal           = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
@@ -263,11 +272,11 @@ class CriarPedidoController {
           INSERT INTO pedidos
             (id_usuario, id_empresa, id_status, total,
              endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega,
-             codigo_cupom, desconto, status_pagamento)
+             codigo_cupom, desconto)
           VALUES
             (@id_usuario, @id_empresa, 1, @total,
              @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega,
-             @codigo_cupom, @desconto, 'pendente')
+             @codigo_cupom, @desconto)
           RETURNING id_pedido
         '''),
         parameters: {

@@ -305,10 +305,13 @@ void main() async {
     ''',
     // Pagamento via Mercado Pago
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_pagamento_mp VARCHAR(50)",
-    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS status_pagamento VARCHAR(30) NOT NULL DEFAULT 'pendente'",
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS status_pagamento VARCHAR(30)",
+    "ALTER TABLE pedidos ALTER COLUMN status_pagamento SET DEFAULT 'pendente'",
+    "UPDATE pedidos SET status_pagamento = 'pendente' WHERE status_pagamento IS NULL",
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS qr_code_pix TEXT",
     // Saldo (caixa) da empresa para pagamentos em dinheiro
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS saldo NUMERIC(10,2) NOT NULL DEFAULT 0",
+    "ALTER TABLE empresas ALTER COLUMN saldo SET DEFAULT 0",
     '''
       CREATE TABLE IF NOT EXISTS empresa_transacoes (
         id            SERIAL PRIMARY KEY,

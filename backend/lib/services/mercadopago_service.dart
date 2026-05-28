@@ -32,7 +32,7 @@ class MercadoPagoService {
       Uri.parse('$_baseUrl/v1/payments'),
       headers: _headers,
       body: body,
-    );
+    ).timeout(const Duration(seconds: 20));
 
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
 
@@ -72,7 +72,7 @@ class MercadoPagoService {
       Uri.parse('$_baseUrl/v1/payments'),
       headers: _headers,
       body: body,
-    );
+    ).timeout(const Duration(seconds: 20));
 
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
 
@@ -92,7 +92,7 @@ class MercadoPagoService {
     final resp = await http.get(
       Uri.parse('$_baseUrl/v1/payments/$idPagamentoMp'),
       headers: _headers,
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (resp.statusCode != 200) {
       throw Exception('MP consulta erro ${resp.statusCode}');

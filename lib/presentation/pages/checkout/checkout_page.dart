@@ -362,7 +362,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    final idPedido     = result['id_pedido'] as int;
+    final idPedidoRaw = result['id_pedido'];
+    final idPedido = idPedidoRaw is int
+        ? idPedidoRaw
+        : int.tryParse(idPedidoRaw?.toString() ?? '');
+    if (idPedido == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pedido criado, mas resposta inesperada do servidor.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     final nomeEmpresa  = widget.empresa['nome']?.toString() ?? '';
     final idEmpresaInt = idEmpresa is int ? idEmpresa : int.tryParse(idEmpresa.toString()) ?? 0;
     final subtotal     = cart.total;

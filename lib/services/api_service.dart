@@ -685,10 +685,16 @@ class ApiService {
     return (pedidos: <Map<String, dynamic>>[], temMais: false, fromCache: false);
   }
 
-  static Future<void> atualizarStatusPedido(int idPedido, int idStatus) async {
+  static Future<String?> atualizarStatusPedido(int idPedido, int idStatus) async {
     try {
-      await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/status'), body: jsonEncode({'id_status': idStatus}));
-    } catch (e, st) { AppLogger.e('ApiService', e, st); }
+      final resp = await _patch(Uri.parse('$baseUrl/pedidos/$idPedido/status'), body: jsonEncode({'id_status': idStatus}));
+      if (resp.statusCode == 200) return null;
+      final data = _safeJson(resp, 'Erro ao atualizar status');
+      return data['error']?.toString() ?? 'Erro ao atualizar status (${resp.statusCode})';
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return e.toString();
+    }
   }
 
   // ----------------------------------------------------------------
