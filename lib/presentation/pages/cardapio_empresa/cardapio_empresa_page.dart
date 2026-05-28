@@ -568,20 +568,25 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
   }
 
   Future<void> _carregarAdicionais() async {
-    final idProduto = widget.produto['id_produto'] is int
-        ? widget.produto['id_produto'] as int
-        : int.tryParse(widget.produto['id_produto']?.toString() ?? '') ?? 0;
+    try {
+      final idProduto = widget.produto['id_produto'] is int
+          ? widget.produto['id_produto'] as int
+          : int.tryParse(widget.produto['id_produto']?.toString() ?? '') ?? 0;
 
-    final grupos = await ApiService.getAdicionais(idProduto);
-    if (mounted) {
-      setState(() {
-        _grupos = grupos;
-        for (final g in grupos) {
-          final grupo = g['grupo']?.toString() ?? '';
-          _selecoes[grupo] = [];
-        }
-        _loading = false;
-      });
+      final grupos = await ApiService.getAdicionais(idProduto);
+      if (mounted) {
+        setState(() {
+          _grupos = grupos;
+          for (final g in grupos) {
+            final grupo = g['grupo']?.toString() ?? '';
+            _selecoes[grupo] = [];
+          }
+          _loading = false;
+        });
+      }
+    } catch (e, st) {
+      AppLogger.e('ProdutoDetalhePage', e, st);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -658,9 +663,15 @@ class _ProdutoDetalhePageState extends State<_ProdutoDetalhePage> {
     final idEmpresa = widget.empresa['id_empresa'] is int
         ? widget.empresa['id_empresa'] as int
         : int.tryParse(widget.empresa['id_empresa']?.toString() ?? '') ?? 0;
-    final precoBase = (p['preco'] as num?)?.toDouble() ?? 0.0;
+    final precoBase = p['preco'] is num
+        ? (p['preco'] as num).toDouble()
+        : double.tryParse(p['preco']?.toString() ?? '') ?? 0.0;
     final precoAdicionais = _adicionaisSelecionados.fold(
-        0.0, (acc, a) => acc + ((a['preco'] as num?)?.toDouble() ?? 0.0));
+        0.0,
+        (acc, a) => acc +
+            (a['preco'] is num
+                ? (a['preco'] as num).toDouble()
+                : double.tryParse(a['preco']?.toString() ?? '') ?? 0.0));
     final item = CartItem(
       idProduto: idProduto,
       idEmpresa: idEmpresa,
