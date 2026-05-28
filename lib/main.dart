@@ -1,6 +1,8 @@
 ﻿import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+// ignore: unnecessary_import
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -20,9 +22,11 @@ const _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN');
 void main() {
   runZonedGuarded(_boot, (e, st) {
     AppLogger.e('Zone', e, st);
-    try {
-      FirebaseCrashlytics.instance.recordError(e, st, fatal: true);
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        FirebaseCrashlytics.instance.recordError(e, st, fatal: true);
+      } catch (_) {}
+    }
   });
 }
 
@@ -34,11 +38,17 @@ Future<void> _boot() async {
   }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Configura após Firebase.initializeApp para garantir disponibilidade
-  FlutterError.onError = (details) {
-    AppLogger.e('FlutterError', details.exception, details.stack ?? StackTrace.empty);
-    FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-  };
+  // Crashlytics não suporta web
+  if (!kIsWeb) {
+    FlutterError.onError = (details) {
+      AppLogger.e('FlutterError', details.exception, details.stack ?? StackTrace.empty);
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
+  } else {
+    FlutterError.onError = (details) {
+      AppLogger.e('FlutterError', details.exception, details.stack ?? StackTrace.empty);
+    };
+  }
   GoogleFonts.poppins().fontFamily;
   try {
     await PushNotificationService.init();
