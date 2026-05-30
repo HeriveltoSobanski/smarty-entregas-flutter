@@ -5,12 +5,15 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 import '../services/mercadopago_service.dart';
+import '../services/fcm_service.dart';
+import 'notificacao_controller.dart';
 
 class CriarPedidoController {
   final Pool conn;
   final MercadoPagoService _mp;
+  final FcmService? fcmService;
 
-  CriarPedidoController(this.conn, this._mp);
+  CriarPedidoController(this.conn, this._mp, {this.fcmService});
 
   // ----------------------------------------------------------------
   // POST /pedidos
@@ -227,31 +230,7 @@ class CriarPedidoController {
 
       final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
 
-      // ---- Validação de pagamento em dinheiro (verifica saldo da empresa) ----
-      double saldoEmpresa = 0.0;
-      if (formaPagamento == 'dinheiro') {
-        try {
-          final saldoResult = await conn.execute(
-            Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
-            parameters: {'id': idEmpresa},
-          );
-          saldoEmpresa = saldoResult.isNotEmpty ? (_parseDouble(saldoResult.first[0]) ?? 0.0) : 0.0;
-        } catch (_) {
-          saldoEmpresa = 0.0;
-        }
-
-        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
-        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
-        final debitoTotal           = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
-
-        if (saldoEmpresa < debitoTotal) {
-          return _json(422, {
-            'error': 'Saldo insuficiente para aceitar pagamento em dinheiro. '
-                'Necessário: R\$ ${debitoTotal.toStringAsFixed(2)}, '
-                'disponível: R\$ ${saldoEmpresa.toStringAsFixed(2)}',
-          });
-        }
-      }
+      // Pagamento em dinheiro: validação de saldo removida para não bloquear operação
 
       // ---- Validação de cartão (exige token do MP) ----
       if ((formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') &&
@@ -294,6 +273,31 @@ class CriarPedidoController {
       );
 
       final idPedido = pedidoResult.first[0] as int;
+
+      // ---- Notificar o restaurante sobre novo pedido ----
+      try {
+        final empresaUserResult = await conn.execute(
+          Sql.named('SELECT id_usuario FROM empresas WHERE id_empresa = @id'),
+          parameters: {'id': idEmpresa},
+        );
+        if (empresaUserResult.isNotEmpty) {
+          final idUsuarioEmpresa = empresaUserResult.first[0];
+          final uid = idUsuarioEmpresa is int
+              ? idUsuarioEmpresa
+              : int.tryParse(idUsuarioEmpresa?.toString() ?? '');
+          if (uid != null) {
+            await NotificacaoController.criar(
+              conn:       conn,
+              idUsuario:  uid,
+              titulo:     'Novo pedido recebido! 🛒',
+              corpo:      'Pedido #$idPedido chegou. Toque para ver os detalhes.',
+              tipo:       'novo_pedido',
+              idPedido:   idPedido,
+              fcmService: fcmService,
+            );
+          }
+        }
+      } catch (_) {}
 
       // ---- Inserir itens ----
       for (final item in itensComPreco) {
@@ -392,36 +396,10 @@ class CriarPedidoController {
       }
 
       if (formaPagamento == 'dinheiro') {
-        // Debita da empresa: 10% produto + 10% entrega + entrega do motoboy
-        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
-        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
-        final debitoEmpresa         = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
-
         await conn.execute(
-          Sql.named('UPDATE empresas SET saldo = saldo - @debito WHERE id_empresa = @id'),
-          parameters: {'debito': debitoEmpresa, 'id': idEmpresa},
-        );
-
-        await conn.execute(
-          Sql.named('''
-            INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao, id_pedido)
-            VALUES (@id_empresa, 'debito', @valor, @descricao, @id_pedido)
-          '''),
-          parameters: {
-            'id_empresa': idEmpresa,
-            'valor':      debitoEmpresa,
-            'descricao':  'Taxa Smarty + entrega - Pedido #$idPedido',
-            'id_pedido':  idPedido,
-          },
-        );
-
-        await conn.execute(
-          Sql.named('''
-            UPDATE pedidos SET status_pagamento = 'aprovado' WHERE id_pedido = @id
-          '''),
+          Sql.named("UPDATE pedidos SET status_pagamento = 'aprovado' WHERE id_pedido = @id"),
           parameters: {'id': idPedido},
         );
-
         return _json(201, {
           'ok':              true,
           'id_pedido':       idPedido,
@@ -430,8 +408,8 @@ class CriarPedidoController {
         });
       }
 
-      // Cartão na entrega ou outros — sem processamento MP
-      return _json(201, {'ok': true, 'id_pedido': idPedido});
+      // Forma de pagamento não reconhecida
+      return _json(400, {'error': 'Forma de pagamento inválida: $formaPagamento'});
     } catch (e) {
       return _json(500, {
         'error': 'Erro interno ao criar pedido',

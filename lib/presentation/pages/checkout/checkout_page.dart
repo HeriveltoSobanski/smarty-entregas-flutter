@@ -47,7 +47,7 @@ class CheckoutPage extends StatefulWidget {
 }
 
 // Opções de pagamento
-enum _Pagamento { pix, cartaoCredito, cartaoDebito, cartaoEntrega, dinheiro }
+enum _Pagamento { pix, cartaoCredito, cartaoDebito, dinheiro }
 
 extension _PagamentoExt on _Pagamento {
   String get label {
@@ -55,7 +55,6 @@ extension _PagamentoExt on _Pagamento {
       case _Pagamento.pix:           return 'PIX';
       case _Pagamento.cartaoCredito: return 'Cartão de crédito';
       case _Pagamento.cartaoDebito:  return 'Cartão de débito';
-      case _Pagamento.cartaoEntrega: return 'Cartão na entrega';
       case _Pagamento.dinheiro:      return 'Dinheiro';
     }
   }
@@ -64,7 +63,6 @@ extension _PagamentoExt on _Pagamento {
       case _Pagamento.pix:           return 'pix';
       case _Pagamento.cartaoCredito: return 'cartao_credito';
       case _Pagamento.cartaoDebito:  return 'cartao_debito';
-      case _Pagamento.cartaoEntrega: return 'cartao_entrega';
       case _Pagamento.dinheiro:      return 'dinheiro';
     }
   }
@@ -73,7 +71,6 @@ extension _PagamentoExt on _Pagamento {
       case _Pagamento.pix:           return Icons.qr_code;
       case _Pagamento.cartaoCredito: return Icons.credit_card;
       case _Pagamento.cartaoDebito:  return Icons.credit_card_outlined;
-      case _Pagamento.cartaoEntrega: return Icons.point_of_sale;
       case _Pagamento.dinheiro:      return Icons.attach_money;
     }
   }

@@ -366,7 +366,7 @@ void main() async {
   final auth           = AuthController(db.connection, jwtService, emailService);
   final produto        = ProdutoController(db.connection, imageService);
   final pedido         = PedidoController(db.connection, fcmService: fcmService);
-  final criarPedido    = CriarPedidoController(db.connection, mpService);
+  final criarPedido    = CriarPedidoController(db.connection, mpService, fcmService: fcmService);
   final adicional      = AdicionalController(db.connection);
   final empresa        = EmpresaController(db.connection, imageService);
   final motoboy        = MotoboyController(db.connection);
