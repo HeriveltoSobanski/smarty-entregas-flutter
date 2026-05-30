@@ -230,7 +230,29 @@ class CriarPedidoController {
 
       final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
 
-      // Pagamento em dinheiro: validação de saldo removida para não bloquear operação
+      // ---- Validação de pagamento em dinheiro (verifica saldo da empresa) ----
+      if (formaPagamento == 'dinheiro') {
+        double saldoEmpresa = 0.0;
+        try {
+          final saldoResult = await conn.execute(
+            Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
+            parameters: {'id': idEmpresa},
+          );
+          saldoEmpresa = saldoResult.isNotEmpty ? (_parseDouble(saldoResult.first[0]) ?? 0.0) : 0.0;
+        } catch (_) {
+          saldoEmpresa = 0.0;
+        }
+        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
+        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
+        final debitoTotal           = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
+        if (saldoEmpresa < debitoTotal) {
+          return _json(422, {
+            'error': 'Restaurante sem crédito suficiente para aceitar pagamento em dinheiro. '
+                'Necessário: R\$ ${debitoTotal.toStringAsFixed(2)}, '
+                'disponível: R\$ ${saldoEmpresa.toStringAsFixed(2)}',
+          });
+        }
+      }
 
       // ---- Validação de cartão (exige token do MP) ----
       if ((formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') &&
@@ -396,6 +418,29 @@ class CriarPedidoController {
       }
 
       if (formaPagamento == 'dinheiro') {
+        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
+        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
+        final debitoEmpresa         = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
+
+        await conn.execute(
+          Sql.named('UPDATE empresas SET saldo = saldo - @debito WHERE id_empresa = @id'),
+          parameters: {'debito': debitoEmpresa, 'id': idEmpresa},
+        );
+        try {
+          await conn.execute(
+            Sql.named('''
+              INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao, id_pedido)
+              VALUES (@id_empresa, 'debito', @valor, @descricao, @id_pedido)
+            '''),
+            parameters: {
+              'id_empresa': idEmpresa,
+              'valor':      debitoEmpresa,
+              'descricao':  'Taxa Smarty + entrega - Pedido #$idPedido',
+              'id_pedido':  idPedido,
+            },
+          );
+        } catch (_) {}
+
         await conn.execute(
           Sql.named("UPDATE pedidos SET status_pagamento = 'aprovado' WHERE id_pedido = @id"),
           parameters: {'id': idPedido},
