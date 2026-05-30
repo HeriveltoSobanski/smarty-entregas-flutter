@@ -940,6 +940,32 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> getChavePix(int idEmpresa) async {
+    try {
+      final resp = await _get(Uri.parse('$baseUrl/empresas/$idEmpresa/pix'));
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return null;
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return null;
+    }
+  }
+
+  static Future<String?> atualizarChavePix(int idEmpresa, String chavePix, String cidade) async {
+    try {
+      final resp = await _patch(
+        Uri.parse('$baseUrl/empresas/$idEmpresa/pix'),
+        body: jsonEncode({'chave_pix': chavePix, 'cidade': cidade}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      return data['error']?.toString() ?? 'Erro ao salvar chave PIX';
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return 'Servidor indisponível.';
+    }
+  }
+
   // ----------------------------------------------------------------
   // MOTOBOY
   // ----------------------------------------------------------------

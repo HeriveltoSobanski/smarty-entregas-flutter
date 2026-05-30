@@ -349,6 +349,9 @@ void main() async {
     ''',
     // Coluna atualizado_em em produtos — usada no INSERT e UPDATE de produto
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
+    // Chave PIX e cidade da empresa para QR Code
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS chave_pix VARCHAR(150)",
+    "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cidade VARCHAR(80)",
   ];
 
   for (final sql in migrations) {
@@ -439,6 +442,8 @@ void main() async {
   app.patch('/empresas/<id>/endereco',       empresa.atualizarEndereco);
   app.get('/empresas/<id>/configuracoes',    empresa.getConfiguracoes);
   app.patch('/empresas/<id>/configuracoes',  empresa.atualizarConfiguracoes);
+  app.get('/empresas/<id>/pix',             empresa.getChavePix);
+  app.patch('/empresas/<id>/pix',           empresa.atualizarChavePix);
   app.get('/empresas/relatorio',             relatorio.getRelatorio);
 
   // ── ENDEREÇOS DO CLIENTE ─────────────────────────────────────

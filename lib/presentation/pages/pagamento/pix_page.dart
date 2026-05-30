@@ -50,6 +50,7 @@ class _PagamentoPixPageState extends State<PagamentoPixPage> {
     _timer = Timer.periodic(const Duration(seconds: 5), (_) async {
       final result = await ApiService.consultarPagamentoPedido(widget.idPedido);
       if (!mounted) return;
+      // Backend retorna 'approved' quando restaurante aceita o pedido PIX
       final status = result['status_pagamento']?.toString() ?? 'pending';
       setState(() => _status = status);
 

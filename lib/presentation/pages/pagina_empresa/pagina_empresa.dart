@@ -1316,11 +1316,18 @@ class _TabPedidosState extends State<_TabPedidos> {
   String _fmtBR(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+  String _isoDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _carregar({bool silencioso = false}) async {
     if (!silencioso) setState(() => _carregando = true);
     final id = SessionStore.idEmpresa;
     if (id != null) {
-      final lista = await ApiService.getPedidosByEmpresa(id);
+      final lista = await ApiService.getPedidosByEmpresa(
+        id,
+        inicio: _isoDate(_dataInicio),
+        fim: _isoDate(_dataFim),
+      );
       if (mounted) setState(() => _pedidos = lista);
     }
     if (mounted && !silencioso) setState(() => _carregando = false);
@@ -2693,6 +2700,8 @@ class _TabContaState extends State<_TabConta> {
   double? _lng;
   double _taxaMinima   = 7.0;
   int    _tempoPreparo = 30;
+  String _chavePix    = '';
+  String _cidadeEmpresa = '';
 
   @override
   void initState() { super.initState(); _carregar(); }
@@ -2705,10 +2714,12 @@ class _TabContaState extends State<_TabConta> {
         ApiService.getEnderecoEmpresa(id),
         ApiService.getFotosEmpresa(id),
         ApiService.getConfiguracoes(id),
+        ApiService.getChavePix(id),
       ]);
       final endData = results[0];
       final fotos   = results[1] as Map<String, String?>;
       final config  = results[2];
+      final Map<String, dynamic>? pix = results[3];
       if (mounted) {
         setState(() {
           _endereco   = endData?['endereco']?.toString();
@@ -2722,6 +2733,10 @@ class _TabContaState extends State<_TabConta> {
             _taxaMinima   = config['taxa_minima']   is num ? (config['taxa_minima']   as num).toDouble() : _taxaMinima;
             _tempoPreparo = config['tempo_preparo'] is int ?  config['tempo_preparo'] as int
                 : int.tryParse(config['tempo_preparo']?.toString() ?? '') ?? _tempoPreparo;
+          }
+          if (pix != null) {
+            _chavePix     = pix['chave_pix']?.toString() ?? '';
+            _cidadeEmpresa = pix['cidade']?.toString() ?? '';
           }
         });
       }
@@ -2892,6 +2907,108 @@ class _TabContaState extends State<_TabConta> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Configurações salvas!'), backgroundColor: Colors.green),
+        );
+      }
+    }
+  }
+
+  Future<void> _editarChavePix() async {
+    final pixCtrl    = TextEditingController(text: _chavePix);
+    final cidadeCtrl = TextEditingController(text: _cidadeEmpresa);
+    String? erro;
+
+    final salvo = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: _cor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.pix, color: _cor, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Text('Chave PIX', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Os clientes pagarão via PIX diretamente para você. O QR Code é gerado com sua chave.',
+                style: GoogleFonts.poppins(fontSize: 12, color: _muted),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: pixCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Chave PIX',
+                  helperText: 'CPF, CNPJ, telefone, e-mail ou chave aleatória',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: _bgPage,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: cidadeCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Cidade',
+                  helperText: 'Cidade onde a empresa está localizada',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: _bgPage,
+                ),
+              ),
+              if (erro != null) ...[
+                const SizedBox(height: 8),
+                Text(erro!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancelar', style: GoogleFonts.poppins()),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _cor, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final chave  = pixCtrl.text.trim();
+                final cidade = cidadeCtrl.text.trim();
+                if (chave.isEmpty) { setS(() => erro = 'Informe a chave PIX.'); return; }
+                if (cidade.isEmpty) { setS(() => erro = 'Informe a cidade.'); return; }
+                final id = SessionStore.idEmpresa;
+                if (id == null) return;
+                final erroApi = await ApiService.atualizarChavePix(id, chave, cidade);
+                if (!ctx.mounted) return;
+                if (erroApi != null) { setS(() => erro = erroApi); return; }
+                Navigator.pop(ctx, true);
+              },
+              child: Text('Salvar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    pixCtrl.dispose();
+    cidadeCtrl.dispose();
+
+    if (salvo == true && mounted) {
+      final id = SessionStore.idEmpresa;
+      if (id == null) return;
+      final pix = await ApiService.getChavePix(id);
+      if (pix != null && mounted) {
+        setState(() {
+          _chavePix      = pix['chave_pix']?.toString() ?? '';
+          _cidadeEmpresa = pix['cidade']?.toString() ?? '';
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chave PIX salva!'), backgroundColor: Colors.green),
         );
       }
     }
@@ -3091,6 +3208,27 @@ class _TabContaState extends State<_TabConta> {
                     title: 'Entrega e preparo',
                     subtitle: 'Taxa mínima: R\$ ${_taxaMinima.toStringAsFixed(2)}  ·  Preparo: $_tempoPreparo min',
                     onTap: _editarConfiguracoes,
+                  ),
+                  Divider(height: 1, indent: 60, color: Colors.grey.shade100),
+
+                  // Chave PIX
+                  _SettingsRow(
+                    icon: Icons.pix,
+                    iconColor: _chavePix.isEmpty ? Colors.red : Colors.green,
+                    iconBg: _chavePix.isEmpty ? Colors.red.shade50 : Colors.green.shade50,
+                    title: 'Chave PIX',
+                    subtitle: _chavePix.isEmpty
+                        ? 'Não cadastrada — clientes não poderão pagar via PIX'
+                        : _chavePix,
+                    subtitleColor: _chavePix.isEmpty ? Colors.red : null,
+                    trailing: _chavePix.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                            child: Text('Cadastrar', style: GoogleFonts.poppins(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          )
+                        : null,
+                    onTap: _editarChavePix,
                   ),
                   Divider(height: 1, indent: 60, color: Colors.grey.shade100),
 

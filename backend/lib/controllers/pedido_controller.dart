@@ -267,6 +267,21 @@ class PedidoController {
         parameters: {'novo_status': novoStatus, 'pedido_id': idPedido},
       );
 
+      // PIX pago diretamente ao restaurante: aprovado quando aceito (status 2)
+      if (novoStatus == 2) {
+        try {
+          await conn.execute(
+            Sql.named('''
+              UPDATE pedidos SET status_pagamento = 'approved'
+              WHERE id_pedido = @id
+                AND forma_pagamento = 'pix'
+                AND status_pagamento = 'pending'
+            '''),
+            parameters: {'id': idPedido},
+          );
+        } catch (_) {}
+      }
+
       // Notifica o cliente
       final idUsuario = await _idUsuarioDoPedido(idPedido);
       if (idUsuario != null) {

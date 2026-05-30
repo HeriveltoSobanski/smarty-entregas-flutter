@@ -5,6 +5,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 
 import '../services/mercadopago_service.dart';
+import '../services/pix_brcode_service.dart';
 import '../services/fcm_service.dart';
 import 'notificacao_controller.dart';
 
@@ -230,30 +231,6 @@ class CriarPedidoController {
 
       final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
 
-      // ---- Validação de pagamento em dinheiro (verifica saldo da empresa) ----
-      if (formaPagamento == 'dinheiro') {
-        double saldoEmpresa = 0.0;
-        try {
-          final saldoResult = await conn.execute(
-            Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
-            parameters: {'id': idEmpresa},
-          );
-          saldoEmpresa = saldoResult.isNotEmpty ? (_parseDouble(saldoResult.first[0]) ?? 0.0) : 0.0;
-        } catch (_) {
-          saldoEmpresa = 0.0;
-        }
-        final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
-        final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
-        final debitoTotal           = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
-        if (saldoEmpresa < debitoTotal) {
-          return _json(422, {
-            'error': 'Restaurante sem crédito suficiente para aceitar pagamento em dinheiro. '
-                'Necessário: R\$ ${debitoTotal.toStringAsFixed(2)}, '
-                'disponível: R\$ ${saldoEmpresa.toStringAsFixed(2)}',
-          });
-        }
-      }
-
       // ---- Validação de cartão (exige token do MP) ----
       if ((formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') &&
           (mpCardToken == null || mpCardToken.isEmpty)) {
@@ -338,41 +315,47 @@ class CriarPedidoController {
         );
       }
 
-      // ---- Processar pagamento via Mercado Pago ----
-      final descricaoPedido = 'Pedido #$idPedido - Smarty Entregas';
-      final valorCobranca   = valorTotal + taxaEntregaFinal;
+      // ---- Processar pagamento ----
+      final valorCobranca = valorTotal + taxaEntregaFinal;
 
       if (formaPagamento == 'pix') {
-        final mpResult = await _mp.criarPagamentoPix(
-          valor:        valorCobranca,
-          descricao:    descricaoPedido,
-          emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
-          idPedido:     idPedido,
+        // Busca chave PIX e dados do restaurante
+        final empresaPix = await conn.execute(
+          Sql.named('SELECT chave_pix, nome, cidade FROM empresas WHERE id_empresa = @id'),
+          parameters: {'id': idEmpresa},
+        );
+
+        final chavePix = empresaPix.isNotEmpty ? (empresaPix.first[0]?.toString() ?? '') : '';
+        if (chavePix.isEmpty) {
+          return _json(422, {
+            'error': 'Este restaurante ainda não cadastrou sua chave PIX. '
+                'Entre em contato com o restaurante para mais informações.',
+          });
+        }
+
+        final nomeEmpresa = empresaPix.isNotEmpty ? (empresaPix.first[1]?.toString() ?? 'Empresa') : 'Empresa';
+        final cidadeEmpresa = empresaPix.isNotEmpty ? (empresaPix.first[2]?.toString() ?? '') : '';
+
+        final brCode = PixBrCodeService.gerarPayload(
+          chavePix:      chavePix,
+          valor:         valorCobranca,
+          nomeRecebedor: nomeEmpresa,
+          cidade:        cidadeEmpresa,
+          idPedido:      idPedido,
         );
 
         await conn.execute(
-          Sql.named('''
-            UPDATE pedidos SET
-              id_pagamento_mp  = @id_mp,
-              status_pagamento = @status,
-              qr_code_pix      = @qr
-            WHERE id_pedido = @id
-          '''),
-          parameters: {
-            'id_mp':  mpResult['id_pagamento_mp'],
-            'status': mpResult['status_pagamento'],
-            'qr':     mpResult['qr_code_pix'],
-            'id':     idPedido,
-          },
+          Sql.named('UPDATE pedidos SET qr_code_pix = @qr, status_pagamento = @s WHERE id_pedido = @id'),
+          parameters: {'qr': brCode, 's': 'pending', 'id': idPedido},
         );
 
         return _json(201, {
-          'ok':             true,
-          'id_pedido':      idPedido,
+          'ok':              true,
+          'id_pedido':       idPedido,
           'forma_pagamento': 'pix',
-          'qr_code_pix':    mpResult['qr_code_pix'],
-          'qr_code_base64': mpResult['qr_code_base64'],
-          'id_pagamento_mp': mpResult['id_pagamento_mp'],
+          'qr_code_pix':     brCode,
+          'qr_code_base64':  '',
+          'id_pagamento_mp': '',
         });
       }
 
@@ -381,7 +364,7 @@ class CriarPedidoController {
           valor:        valorCobranca,
           token:        mpCardToken!,
           emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
-          descricao:    descricaoPedido,
+          descricao:    'Pedido #$idPedido - Smarty Entregas',
           idPedido:     idPedido,
         );
 

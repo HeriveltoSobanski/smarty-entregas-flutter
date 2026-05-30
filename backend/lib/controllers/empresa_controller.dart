@@ -252,6 +252,56 @@ class EmpresaController {
     }
   }
 
+  // ----------------------------------------------------------------
+  // GET /empresas/:id/pix
+  // ----------------------------------------------------------------
+  Future<Response> getChavePix(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+
+      final result = await conn.execute(
+        Sql.named('SELECT chave_pix, cidade FROM empresas WHERE id_empresa = @id'),
+        parameters: {'id': idEmpresa},
+      );
+      if (result.isEmpty) return _json(404, {'error': 'Empresa nao encontrada'});
+
+      return _json(200, {
+        'chave_pix': result.first[0]?.toString() ?? '',
+        'cidade':    result.first[1]?.toString() ?? '',
+      });
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // PATCH /empresas/:id/pix
+  // Body: { chave_pix, cidade? }
+  // ----------------------------------------------------------------
+  Future<Response> atualizarChavePix(Request request, String id) async {
+    try {
+      final idEmpresa = int.tryParse(id);
+      if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (jwtEmpresa != idEmpresa) return _json(403, {'error': 'Acesso negado'});
+
+      final data = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final chavePix = data['chave_pix']?.toString().trim() ?? '';
+      final cidade   = data['cidade']?.toString().trim() ?? '';
+
+      if (chavePix.isEmpty) return _json(400, {'error': 'chave_pix obrigatoria'});
+
+      await conn.execute(
+        Sql.named('UPDATE empresas SET chave_pix = @chave, cidade = @cidade WHERE id_empresa = @id'),
+        parameters: {'chave': chavePix, 'cidade': cidade, 'id': idEmpresa},
+      );
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': e.toString()});
+    }
+  }
+
   Response _json(int status, Map<String, dynamic> body) => Response(
         status,
         body: jsonEncode(body),
