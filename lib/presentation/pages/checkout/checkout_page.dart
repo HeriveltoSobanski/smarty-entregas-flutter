@@ -1345,12 +1345,14 @@ class _PedidoConfirmadoPage extends StatelessWidget {
         children: [
           Icon(icon, color: _cor, size: 18),
           const SizedBox(width: 8),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-            Text(valor,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          ]),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              Text(valor,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+          ),
         ],
       );
 
