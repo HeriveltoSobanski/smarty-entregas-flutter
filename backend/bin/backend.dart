@@ -321,6 +321,8 @@ void main() async {
     "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT",
     // Id do pagamento MP no depósito de saldo, para conciliação via webhook
     "ALTER TABLE empresa_transacoes ADD COLUMN IF NOT EXISTS id_pagamento_mp VARCHAR(50)",
+    // Versão de sessão para revogação de tokens JWT (troca/reset de senha)
+    "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0",
   ];
 
   for (final sql in migrations) {
@@ -737,7 +739,7 @@ void main() async {
         if (req.url.path.startsWith('uploads/')) return staticFiles(req);
         if (req.url.path == 'pagamentos/webhook') return app.call(req);
         return Pipeline()
-            .addMiddleware(jwtMiddleware(jwtService))
+            .addMiddleware(jwtMiddleware(jwtService, db.connection))
             .addHandler(app.call)
             .call(req);
       });

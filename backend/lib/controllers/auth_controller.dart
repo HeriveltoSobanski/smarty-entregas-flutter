@@ -105,7 +105,8 @@ class AuthController {
         Sql.named('''
           SELECT u.id_usuario, u.email, u.senha, u.ativo,
                  u.tipo_usuario, u.nome,
-                 COALESCE(e.id_empresa, 0) AS id_empresa
+                 COALESCE(e.id_empresa, 0) AS id_empresa,
+                 COALESCE(u.token_version, 0) AS token_version
           FROM usuarios u
           LEFT JOIN empresas e ON e.id_usuario = u.id_usuario
           WHERE u.email = @email
@@ -127,6 +128,7 @@ class AuthController {
       final tipoUsuario = row[4]?.toString() ?? '';
       final nome        = row[5]?.toString() ?? '';
       final idEmpresa   = (row[6] as int?) ?? 0;
+      final tokenVersion = (row[7] as int?) ?? 0;
 
       if (!ativo) {
         return _json(403, {'error': 'Usuário inativo'});
@@ -152,6 +154,7 @@ class AuthController {
         idUsuario: idUsuario,
         tipoUsuario: tipoUsuario,
         idEmpresa: idEmpresa,
+        tokenVersion: tokenVersion,
       );
 
       return _json(200, {
@@ -189,11 +192,28 @@ class AuthController {
       final idUsuario   = payload['sub'] as int;
       final tipoUsuario = payload['tipo']?.toString() ?? '';
       final idEmpresa   = payload['id_empresa'] as int?;
+      final tokenTv     = payload['tv'] is int
+          ? payload['tv'] as int
+          : int.tryParse(payload['tv']?.toString() ?? '0') ?? 0;
+
+      // Recusa refresh de token revogado (troca/reset de senha, logout forçado).
+      final tvResult = await conn.execute(
+        Sql.named('SELECT COALESCE(token_version, 0) FROM usuarios WHERE id_usuario = @id'),
+        parameters: {'id': idUsuario},
+      );
+      if (tvResult.isEmpty) return _json(401, {'error': 'Sessão inválida'});
+      final dbTv = tvResult.first[0] is int
+          ? tvResult.first[0] as int
+          : int.tryParse(tvResult.first[0]?.toString() ?? '0') ?? 0;
+      if (dbTv != tokenTv) {
+        return _json(401, {'error': 'Sessão expirada. Faça login novamente.'});
+      }
 
       final newToken = _jwt.generateToken(
         idUsuario: idUsuario,
         tipoUsuario: tipoUsuario,
         idEmpresa: idEmpresa,
+        tokenVersion: dbTv,
       );
 
       return _json(200, {'token': newToken});
@@ -653,8 +673,10 @@ class AuthController {
       final idCodigo = codeResult.first[0] as int;
       final senhaHash = PasswordService.hash(novaSenha);
 
+      // Incrementa token_version: revoga todas as sessões antigas do usuário
+      // (essencial no fluxo de recuperação de conta comprometida).
       await conn.execute(
-        Sql.named('UPDATE usuarios SET senha = @senha WHERE email = @email'),
+        Sql.named('UPDATE usuarios SET senha = @senha, token_version = token_version + 1 WHERE email = @email'),
         parameters: {'senha': senhaHash, 'email': email},
       );
       await conn.execute(
@@ -785,7 +807,8 @@ class AuthController {
     final result = await conn.execute(
       Sql.named('''
         SELECT u.id_usuario, u.ativo, u.tipo_usuario, u.nome,
-               COALESCE(e.id_empresa, 0) AS id_empresa
+               COALESCE(e.id_empresa, 0) AS id_empresa,
+               COALESCE(u.token_version, 0) AS token_version
         FROM usuarios u
         LEFT JOIN empresas e ON e.id_usuario = u.id_usuario
         WHERE u.email = @email
@@ -798,6 +821,7 @@ class AuthController {
     String tipoUsuario;
     String nomeUsuario;
     int    idEmpresa;
+    int    tokenVersion;
 
     if (result.isNotEmpty) {
       final row = result.first;
@@ -806,6 +830,7 @@ class AuthController {
       tipoUsuario = row[2]?.toString() ?? 'cliente';
       nomeUsuario = row[3]?.toString() ?? nome;
       idEmpresa   = (row[4] as int?) ?? 0;
+      tokenVersion = (row[5] as int?) ?? 0;
 
       if (!ativo) return _json(403, {'error': 'Usuário inativo'});
     } else {
@@ -829,12 +854,14 @@ class AuthController {
       tipoUsuario = 'cliente';
       nomeUsuario = nome;
       idEmpresa   = 0;
+      tokenVersion = 0;
     }
 
     final token = _jwt.generateToken(
       idUsuario:   idUsuario,
       tipoUsuario: tipoUsuario,
       idEmpresa:   idEmpresa,
+      tokenVersion: tokenVersion,
     );
 
     return _json(200, {

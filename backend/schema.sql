@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   facebook_id VARCHAR(100),
   foto_url    TEXT,
   status_motoboy VARCHAR(20) DEFAULT 'offline',
+  token_version INT NOT NULL DEFAULT 0,
   criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

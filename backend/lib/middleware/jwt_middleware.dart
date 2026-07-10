@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import '../services/jwt_service.dart';
 
@@ -84,7 +85,7 @@ const _anyAuthPaths = {
 };
 
 /// Middleware que valida JWT e aplica RBAC por rota.
-Middleware jwtMiddleware(JwtService jwtService) {
+Middleware jwtMiddleware(JwtService jwtService, Pool conn) {
   return (Handler inner) {
     return (Request req) async {
       if (req.method == 'OPTIONS') return inner(req);
@@ -102,6 +103,34 @@ Middleware jwtMiddleware(JwtService jwtService) {
       final payload = jwtService.verifyToken(token);
       if (payload == null) {
         return _unauthorized('Token inválido ou expirado');
+      }
+
+      // Revogação de sessão: o token carrega a versão (claim `tv`) em que foi
+      // emitido. Se não bater com o token_version atual do usuário no banco, o
+      // token foi revogado (troca/reset de senha, logout forçado) → 401.
+      // Tokens antigos sem `tv` valem como 0, casando com o DEFAULT 0 da coluna.
+      final sub = payload['sub'];
+      final subId = sub is int ? sub : int.tryParse(sub?.toString() ?? '');
+      if (subId == null) return _unauthorized('Token inválido');
+      final tokenTv = payload['tv'] is int
+          ? payload['tv'] as int
+          : int.tryParse(payload['tv']?.toString() ?? '0') ?? 0;
+      try {
+        final r = await conn.execute(
+          Sql.named('SELECT COALESCE(token_version, 0) FROM usuarios WHERE id_usuario = @id'),
+          parameters: {'id': subId},
+        );
+        if (r.isEmpty) return _unauthorized('Sessão inválida');
+        final dbTv = r.first[0] is int
+            ? r.first[0] as int
+            : int.tryParse(r.first[0]?.toString() ?? '0') ?? 0;
+        if (dbTv != tokenTv) {
+          return _unauthorized('Sessão expirada. Faça login novamente.');
+        }
+      } catch (_) {
+        // Falha transitória do banco não deve deslogar todo mundo (401);
+        // sinaliza indisponibilidade para o app tentar de novo.
+        return _serviceUnavailable('Falha ao validar sessão');
       }
 
       final tipoUsuario = payload['tipo']?.toString() ?? '';
@@ -147,6 +176,12 @@ Response _unauthorized(String message) => Response(
 
 Response _forbidden(String message) => Response(
       403,
+      body: jsonEncode({'error': message}),
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );
+
+Response _serviceUnavailable(String message) => Response(
+      503,
       body: jsonEncode({'error': message}),
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );

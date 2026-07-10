@@ -13,6 +13,18 @@ void main() {
       expect(payload['tipo'], 'cliente');
     });
 
+    test('inclui o claim tv (token_version); default 0', () {
+      final comTv = jwt.verifyToken(
+        jwt.generateToken(idUsuario: 1, tipoUsuario: 'cliente', tokenVersion: 3),
+      );
+      expect(comTv!['tv'], 3);
+
+      final semTv = jwt.verifyToken(
+        jwt.generateToken(idUsuario: 1, tipoUsuario: 'cliente'),
+      );
+      expect(semTv!['tv'], 0);
+    });
+
     test('inclui id_empresa quando != 0 e omite quando 0', () {
       final comEmpresa = jwt.verifyToken(
         jwt.generateToken(idUsuario: 1, tipoUsuario: 'empresa', idEmpresa: 7),

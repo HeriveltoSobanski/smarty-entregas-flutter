@@ -10,10 +10,15 @@ class JwtService {
   JwtService(this._secret);
 
   /// Gera um token JWT assinado.
+  ///
+  /// [tokenVersion] carimba a versão de sessão do usuário no claim `tv`.
+  /// O middleware compara esse valor com o `token_version` atual no banco;
+  /// incrementar o contador no banco revoga todos os tokens já emitidos.
   String generateToken({
     required int idUsuario,
     required String tipoUsuario,
     int? idEmpresa,
+    int tokenVersion = 0,
   }) {
     final header = _encode({'alg': 'HS256', 'typ': 'JWT'});
     final exp =
@@ -23,6 +28,7 @@ class JwtService {
       'sub': idUsuario,
       'tipo': tipoUsuario,
       if (idEmpresa != null && idEmpresa != 0) 'id_empresa': idEmpresa,
+      'tv': tokenVersion,
       'iat': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       'exp': exp,
     });
