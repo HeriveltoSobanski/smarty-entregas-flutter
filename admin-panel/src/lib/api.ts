@@ -19,18 +19,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.erro ?? `Erro ${res.status}`)
+    throw new Error(body.error ?? `Erro ${res.status}`)
   }
   return res.json()
 }
 
 export type LoginResponse = { token: string; tipoUsuario: string }
 
+// Shape real retornado pelo backend: { ok, token, user: { tipo_usuario, ... } }.
+type LoginApiResponse = {
+  token: string
+  user?: { tipo_usuario?: string }
+}
+
 export async function login(email: string, senha: string): Promise<LoginResponse> {
-  return request<LoginResponse>('/auth/login', {
+  const data = await request<LoginApiResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, senha }),
   })
+  return {
+    token: data.token,
+    tipoUsuario: data.user?.tipo_usuario ?? '',
+  }
 }
 
 export type Cupom = {
