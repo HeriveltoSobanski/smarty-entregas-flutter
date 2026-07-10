@@ -42,9 +42,13 @@ const _routeAcl = <(String, String), String>{
   ('GET',    'produtos/empresa'):           'empresa',
   ('GET',    'pedidos/empresa'):            'empresa',
   ('PATCH',  'pedidos/'):                   'empresa',
-  ('POST',   'cupons'):                     'empresa',
-  ('GET',    'cupons'):                     'empresa',
-  ('PATCH',  'cupons/'):                    'empresa',
+  // Gestão de cupons é exclusiva do admin (admin-panel). O controller já
+  // exige tipoUsuario == 'admin'; a ACL 'empresa' antiga era inconsistente e
+  // barrava o próprio admin no gate. POST /cupons/validar permanece liberado
+  // para qualquer autenticado via _anyAuthPaths (usado pelo cliente no checkout).
+  ('POST',   'cupons'):                     'admin',
+  ('GET',    'cupons'):                     'admin',
+  ('PATCH',  'cupons/'):                    'admin',
   ('POST',   'empresas/'):                  'empresa',
   ('DELETE', 'empresas/'):                  'empresa',
   // Cliente
