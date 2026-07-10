@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 import '../services/image_service.dart';
 
 class EmpresaController {
@@ -71,7 +72,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -95,7 +96,7 @@ class EmpresaController {
         'foto_capa': result.first[1]?.toString(),
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -122,7 +123,7 @@ class EmpresaController {
         'longitude': r[2],
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -166,7 +167,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -193,7 +194,7 @@ class EmpresaController {
         'tempo_preparo': r[1] is int ? r[1] as int : int.tryParse(r[1]?.toString() ?? '30') ?? 30,
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -248,7 +249,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -273,7 +274,7 @@ class EmpresaController {
         'cidade':    result.first[1]?.toString() ?? '',
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -300,7 +301,7 @@ class EmpresaController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Empresa', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

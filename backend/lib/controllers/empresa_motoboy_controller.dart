@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 /// Gerencia motoboys vinculados a uma empresa específica.
 /// Tabela: empresa_motoboys (id, id_empresa, id_usuario, ativo)
@@ -35,7 +36,7 @@ class EmpresaMotoboyController {
         'telefone': r[2]?.toString() ?? '',
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('EmpresaMotoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -72,7 +73,7 @@ class EmpresaMotoboyController {
 
       return _json(200, {'motoboys': lista});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('EmpresaMotoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -120,7 +121,7 @@ class EmpresaMotoboyController {
 
       return _json(201, {'ok': true, 'id': result.first[0]});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('EmpresaMotoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -136,7 +137,7 @@ class EmpresaMotoboyController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('EmpresaMotoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -186,7 +187,7 @@ class EmpresaMotoboyController {
 
       return _json(200, {'ok': true, 'motoboy_nome': nome, 'motoboy_telefone': telefone});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('EmpresaMotoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

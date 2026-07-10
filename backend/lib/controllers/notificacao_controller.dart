@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 import '../services/fcm_service.dart';
 
 class NotificacaoController {
@@ -39,7 +40,7 @@ class NotificacaoController {
 
       return _json(200, {'notificacoes': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Notificacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -65,7 +66,7 @@ class NotificacaoController {
 
       return _json(200, {'total': count});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Notificacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -83,7 +84,7 @@ class NotificacaoController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Notificacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -104,7 +105,7 @@ class NotificacaoController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Notificacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

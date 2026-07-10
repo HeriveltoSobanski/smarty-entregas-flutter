@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 class CupomController {
   final Pool conn;
@@ -92,7 +93,7 @@ class CupomController {
         'desconto':  double.parse(desconto.toStringAsFixed(2)),
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Cupom', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -155,7 +156,7 @@ class CupomController {
       if (msg.contains('unique') || msg.contains('duplicate')) {
         return _json(409, {'error': 'Código de cupom já existe'});
       }
-      print('Erro 500: $msg'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Cupom', msg); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -190,7 +191,7 @@ class CupomController {
 
       return _json(200, {'cupons': cupons});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Cupom', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -210,7 +211,7 @@ class CupomController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Cupom', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

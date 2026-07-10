@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 class AdicionalController {
   final Pool conn;
@@ -45,7 +46,7 @@ class AdicionalController {
 
       return _json(200, {'grupos': grupoMap.values.toList()});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Adicional', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -101,7 +102,7 @@ class AdicionalController {
 
       return _json(201, {'ok': true, 'id_adicional': result.first[0]});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Adicional', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -119,7 +120,7 @@ class AdicionalController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Adicional', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

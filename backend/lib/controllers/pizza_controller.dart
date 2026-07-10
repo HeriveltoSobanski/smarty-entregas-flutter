@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 class PizzaController {
   final Pool conn;
@@ -34,7 +35,7 @@ class PizzaController {
 
       return _json(200, {'sabores': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pizza', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -74,7 +75,7 @@ class PizzaController {
 
       return _json(201, {'ok': true, 'id_sabor': result.first[0]});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pizza', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -122,7 +123,7 @@ class PizzaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pizza', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -141,7 +142,7 @@ class PizzaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pizza', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

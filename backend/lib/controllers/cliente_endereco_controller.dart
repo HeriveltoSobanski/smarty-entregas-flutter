@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 class ClienteEnderecoController {
   final Pool conn;
@@ -38,7 +39,7 @@ class ClienteEnderecoController {
 
       return _json(200, {'enderecos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('ClienteEndereco', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -92,7 +93,7 @@ class ClienteEnderecoController {
 
       return _json(201, {'ok': true, 'id_endereco': result.first[0], 'principal': isPrincipal});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('ClienteEndereco', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -138,7 +139,7 @@ class ClienteEnderecoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('ClienteEndereco', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -174,7 +175,7 @@ class ClienteEnderecoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('ClienteEndereco', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 
 class AvaliacaoController {
   final Pool conn;
@@ -90,7 +91,7 @@ class AvaliacaoController {
 
       return _json(201, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Avaliacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -126,7 +127,7 @@ class AvaliacaoController {
         'comentario':   r[3]?.toString(),
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Avaliacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -156,7 +157,7 @@ class AvaliacaoController {
 
       return _json(200, {'media': media, 'total': total});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Avaliacao', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

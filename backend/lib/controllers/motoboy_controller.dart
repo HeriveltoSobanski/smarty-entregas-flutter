@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 import 'notificacao_controller.dart';
 import 'pedido_controller.dart' show transicaoStatusValida;
 
@@ -56,7 +57,7 @@ class MotoboyController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -82,7 +83,7 @@ class MotoboyController {
         'em_rota':     r[1],
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -132,7 +133,7 @@ class MotoboyController {
       }).toList();
       return _json(200, {'pedidos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -156,7 +157,7 @@ class MotoboyController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -208,7 +209,7 @@ class MotoboyController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -274,7 +275,7 @@ class MotoboyController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -319,7 +320,7 @@ class MotoboyController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -392,7 +393,7 @@ class MotoboyController {
         'taxa_por_entrega': taxaPorEntrega,
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Motoboy', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

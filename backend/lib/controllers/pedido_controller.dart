@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 import 'notificacao_controller.dart';
 import '../services/fcm_service.dart';
 
@@ -95,7 +96,7 @@ class PedidoController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -198,7 +199,7 @@ class PedidoController {
         }
       });
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -256,7 +257,7 @@ class PedidoController {
 
       return _json(200, {'pedidos': list, 'tem_mais': list.length == limite});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -334,7 +335,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -370,7 +371,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -410,7 +411,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -450,7 +451,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Pedido', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

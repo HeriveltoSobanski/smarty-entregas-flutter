@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
+import '../services/log_service.dart';
 import '../services/image_service.dart';
 
 class ProdutoController {
@@ -35,7 +36,7 @@ class ProdutoController {
 
       return _json(200, {'categorias': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -84,7 +85,7 @@ class ProdutoController {
 
       return _json(200, {'produtos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -136,7 +137,7 @@ class ProdutoController {
 
       return _json(200, {'produtos': list});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -210,7 +211,7 @@ class ProdutoController {
       if (msg.contains('uq_produtos_empresa_nome')) {
         return _json(409, {'error': 'Já existe um produto com este nome nesta empresa'});
       }
-      print('Erro 500: $msg'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', msg); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -277,7 +278,7 @@ class ProdutoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -298,7 +299,7 @@ class ProdutoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -323,7 +324,7 @@ class ProdutoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -426,7 +427,7 @@ class ProdutoController {
 
       return _json(200, {'empresas': empresaMap.values.toList()});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -494,7 +495,7 @@ class ProdutoController {
 
       return _json(200, {'empresas': empresaMap.values.toList()});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+      Log.error('Produto', e); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

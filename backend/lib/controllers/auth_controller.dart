@@ -8,6 +8,7 @@ import 'package:shelf/shelf.dart';
 import '../services/jwt_service.dart';
 import '../services/password_service.dart';
 import '../services/email_service.dart';
+import '../services/log_service.dart';
 
 class AuthController {
   final Pool conn;
@@ -593,7 +594,7 @@ class AuthController {
       await _email.sendRecoveryCode(email, code);
       return _json(200, {'ok': true});
     } catch (e) {
-      print('Erro 500: $e'); return _json(500, {'error': 'Erro ao enviar código'});
+      Log.error('Auth', e); return _json(500, {'error': 'Erro ao enviar código'});
     }
   }
 

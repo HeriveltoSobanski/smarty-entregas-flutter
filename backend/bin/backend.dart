@@ -31,6 +31,7 @@ import 'package:backend/services/jwt_service.dart';
 import 'package:backend/services/email_service.dart';
 import 'package:backend/services/image_service.dart';
 import 'package:backend/services/mercadopago_service.dart';
+import 'package:backend/services/log_service.dart';
 import 'package:backend/middleware/jwt_middleware.dart';
 
 void main() async {
@@ -68,9 +69,9 @@ void main() async {
   final db = DbConnection(env);
   try {
     await db.open();
-    print('Conexao com o banco estabelecida com sucesso');
+    Log.info('Boot', 'Conexão com o banco estabelecida');
   } catch (e) {
-    print('Erro fatal ao conectar ao banco: $e');
+    Log.error('Boot', 'Falha fatal ao conectar ao banco: $e');
     return;
   }
 
@@ -329,10 +330,10 @@ void main() async {
     try {
       await db.connection.execute(Sql.named(sql), parameters: {});
     } catch (e) {
-      print('Aviso migração: $e');
+      Log.warn('Migração', 'Falha ao aplicar migração: $e');
     }
   }
-  print('Migrações aplicadas');
+  Log.info('Migração', 'Migrações aplicadas');
 
   // Converte imagens base64 antigas para arquivos em disco
   await imageService.migrarBanco(db.connection);
@@ -746,7 +747,7 @@ void main() async {
 
   final port = int.tryParse(env['PORT'] ?? '') ?? 8081;
   final server = await serve(handler, InternetAddress.anyIPv4, port);
-  print('Servidor online em http://${server.address.host}:${server.port}');
+  Log.info('Boot', 'Servidor online em http://${server.address.host}:${server.port}');
 }
 
 Response _json(int status, Map<String, dynamic> body) => Response(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
+import 'log_service.dart';
 
 class FcmService {
   final String _projectId;
@@ -104,10 +105,10 @@ class FcmService {
         }),
       );
       if (resp.statusCode != 200) {
-        print('[FCM] Falha ao enviar (${resp.statusCode}): ${resp.body}');
+        Log.warn('FCM', 'Falha ao enviar (${resp.statusCode}): ${resp.body}');
       }
     } catch (e) {
-      print('[FCM] Erro: $e');
+      Log.error('FCM', e);
     }
   }
 
@@ -140,7 +141,7 @@ class FcmService {
         }
       }
     } catch (e) {
-      print('[FCM] enviarParaUsuario erro: $e');
+      Log.error('FCM', e);
     }
   }
 }

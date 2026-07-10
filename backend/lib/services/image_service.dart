@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:postgres/postgres.dart';
+import 'log_service.dart';
 
 /// Salva imagens base64 em disco e retorna URL relativa.
 /// Registros já em URL passam sem alteração (backward compat).
@@ -64,7 +65,7 @@ class ImageService {
       await File(p.join(dir.path, nome)).writeAsBytes(bytes);
       return '/uploads/imagens/$nome';
     } catch (e) {
-      print('ImageService.processar erro: $e');
+      Log.error('Image', e);
       return null;
     }
   }
@@ -76,7 +77,7 @@ class ImageService {
     await _migrarColuna(conn, 'empresas',            'foto_perfil', 'id_empresa');
     await _migrarColuna(conn, 'empresas',            'foto_capa',   'id_empresa');
     await _migrarColunaOpcional(conn, 'produto_adicionais', 'imagem', 'id_adicional');
-    print('Migração de imagens concluída');
+    Log.info('Image', 'Migração de imagens concluída');
   }
 
   Future<void> _migrarColuna(
@@ -100,9 +101,9 @@ class ImageService {
         );
         count++;
       }
-      if (count > 0) print('Imagens migradas: $tabela.$coluna ($count registros)');
+      if (count > 0) Log.info('Image', 'Imagens migradas: $tabela.$coluna ($count registros)');
     } catch (e) {
-      print('Aviso migração $tabela.$coluna: $e');
+      Log.warn('Image', 'Falha ao migrar $tabela.$coluna: $e');
     }
   }
 
