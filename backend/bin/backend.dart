@@ -454,7 +454,8 @@ void main() async {
 
     final result = await db.connection.execute(
       Sql.named('''
-        SELECT id_pagamento_mp, status_pagamento, qr_code_pix
+        SELECT id_pagamento_mp, status_pagamento, qr_code_pix,
+               id_usuario, id_empresa, id_motoboy
         FROM pedidos WHERE id_pedido = @id
       '''),
       parameters: {'id': idPedido},
@@ -462,6 +463,19 @@ void main() async {
     if (result.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
 
     final row = result.first;
+
+    // Autorização: só o cliente dono, a empresa do pedido ou o motoboy
+    // atribuído podem consultar o pagamento/QR PIX deste pedido.
+    final jwtUserId  = int.tryParse(req.context['userId']?.toString() ?? '');
+    final jwtEmpresa = int.tryParse(req.context['idEmpresa']?.toString() ?? '');
+    final pedUsuario = row[3] is int ? row[3] as int : int.tryParse(row[3]?.toString() ?? '');
+    final pedEmpresa = row[4] is int ? row[4] as int : int.tryParse(row[4]?.toString() ?? '');
+    final pedMotoboy = row[5] is int ? row[5] as int : int.tryParse(row[5]?.toString() ?? '');
+    final temAcesso = (jwtUserId != null && jwtUserId == pedUsuario) ||
+        (jwtEmpresa != null && jwtEmpresa == pedEmpresa) ||
+        (jwtUserId != null && jwtUserId == pedMotoboy);
+    if (!temAcesso) return _json(403, {'error': 'Acesso negado'});
+
     final idMp = row[0]?.toString();
 
     // Se tem pagamento MP e está pendente, consulta status atualizado

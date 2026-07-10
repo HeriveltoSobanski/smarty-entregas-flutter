@@ -259,6 +259,8 @@ class EmpresaController {
     try {
       final idEmpresa = int.tryParse(id);
       if (idEmpresa == null) return _json(400, {'error': 'id invalido'});
+      final jwtEmpresa = int.tryParse(request.context['idEmpresa']?.toString() ?? '');
+      if (jwtEmpresa != idEmpresa) return _json(403, {'error': 'Acesso negado'});
 
       final result = await conn.execute(
         Sql.named('SELECT chave_pix, cidade FROM empresas WHERE id_empresa = @id'),
