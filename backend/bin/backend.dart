@@ -49,6 +49,10 @@ void main() async {
 
   final mpAccessToken = env['MP_ACCESS_TOKEN'] ?? '';
   final mpService = MercadoPagoService(mpAccessToken);
+  // Secret do webhook do Mercado Pago. Quando definido, a assinatura
+  // x-signature das notificações é validada; quando vazio, a validação é
+  // ignorada (comportamento anterior) para não quebrar antes de configurar.
+  final mpWebhookSecret = env['MP_WEBHOOK_SECRET'] ?? '';
 
   // Diretório public/ relativo ao local onde o binário roda (backend/)
   final publicDir = p.join(Directory.current.path, 'public');
@@ -507,6 +511,19 @@ void main() async {
   // Webhook do Mercado Pago — notifica quando pagamento é aprovado/rejeitado
   app.post('/pagamentos/webhook', (Request req) async {
     try {
+      // Valida a assinatura do MP quando o secret está configurado.
+      if (mpWebhookSecret.isNotEmpty) {
+        final assinaturaOk = MercadoPagoService.validarAssinatura(
+          secret:     mpWebhookSecret,
+          xSignature: req.headers['x-signature'],
+          xRequestId: req.headers['x-request-id'],
+          dataId:     req.url.queryParameters['data.id'],
+        );
+        if (!assinaturaOk) {
+          return _json(401, {'error': 'assinatura invalida'});
+        }
+      }
+
       final bodyStr = await req.readAsString();
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
 
