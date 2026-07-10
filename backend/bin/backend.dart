@@ -720,37 +720,6 @@ void main() async {
     }
   });
 
-  // ── MANUTENÇÃO ───────────────────────────────────────────────
-  app.get('/admin/fix-triggers', (Request req) async {
-    if (req.context['tipoUsuario'] != 'admin') {
-      return _json(403, {'error': 'Acesso negado'});
-    }
-    try {
-      final triggers = await db.connection.execute(
-        Sql.named('''
-          SELECT trigger_name FROM information_schema.triggers
-          WHERE event_object_table = 'pedidos'
-        '''),
-        parameters: {},
-      );
-      final nomes = triggers.map((r) => r[0]?.toString() ?? '').toList();
-      for (final nome in nomes) {
-        if (nome.isNotEmpty) {
-          await db.connection.execute(
-            Sql.named('DROP TRIGGER IF EXISTS $nome ON pedidos'),
-            parameters: {},
-          );
-        }
-      }
-      return Response.ok(
-        jsonEncode({'ok': true, 'triggers_removidos': nomes}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      return _json(500, {'error': e.toString()});
-    }
-  });
-
   final overrideHeaders = {
     'Access-Control-Allow-Origin':  '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
