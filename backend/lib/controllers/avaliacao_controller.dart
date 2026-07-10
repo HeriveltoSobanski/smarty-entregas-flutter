@@ -90,7 +90,7 @@ class AvaliacaoController {
 
       return _json(201, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -126,7 +126,7 @@ class AvaliacaoController {
         'comentario':   r[3]?.toString(),
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -156,7 +156,7 @@ class AvaliacaoController {
 
       return _json(200, {'media': media, 'total': total});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

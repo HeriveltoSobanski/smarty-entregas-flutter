@@ -71,7 +71,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -95,7 +95,7 @@ class EmpresaController {
         'foto_capa': result.first[1]?.toString(),
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -122,7 +122,7 @@ class EmpresaController {
         'longitude': r[2],
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -166,7 +166,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -193,7 +193,7 @@ class EmpresaController {
         'tempo_preparo': r[1] is int ? r[1] as int : int.tryParse(r[1]?.toString() ?? '30') ?? 30,
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -248,7 +248,7 @@ class EmpresaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -271,7 +271,7 @@ class EmpresaController {
         'cidade':    result.first[1]?.toString() ?? '',
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -298,7 +298,7 @@ class EmpresaController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'notificacao_controller.dart';
+import 'pedido_controller.dart' show transicaoStatusValida;
 
 class MotoboyController {
   final Pool conn;
@@ -21,7 +22,7 @@ class MotoboyController {
                  e.nome                                     AS empresa,
                  COALESCE(e.endereco, '')                   AS empresa_endereco,
                  sp.nome                                    AS status,
-                 p.valor_total,
+                 p.total AS valor_total,
                  p.criado_em,
                  p.endereco_entrega,
                  COALESCE(p.observacao, '')                 AS observacao,
@@ -34,7 +35,7 @@ class MotoboyController {
           WHERE p.id_status = 6
             AND p.id_motoboy IS NULL
           GROUP BY p.id_pedido, e.nome, e.endereco, sp.nome,
-                   p.valor_total, p.criado_em, p.endereco_entrega, p.observacao
+                   p.total, p.criado_em, p.endereco_entrega, p.observacao
           ORDER BY p.criado_em ASC
         '''),
         parameters: {},
@@ -55,7 +56,7 @@ class MotoboyController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -81,7 +82,7 @@ class MotoboyController {
         'em_rota':     r[1],
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -100,7 +101,7 @@ class MotoboyController {
                  COALESCE(e.endereco, '') AS empresa_endereco,
                  sp.nome AS status,
                  p.id_status,
-                 p.valor_total,
+                 p.total AS valor_total,
                  p.criado_em,
                  p.endereco_entrega,
                  COALESCE(p.observacao, '') AS observacao,
@@ -112,7 +113,7 @@ class MotoboyController {
           LEFT JOIN produtos pr        ON pr.id_produto   = pitem.id_produto
           WHERE p.id_motoboy = @id AND p.id_status = 3
           GROUP BY p.id_pedido, e.nome, e.endereco, sp.nome, p.id_status,
-                   p.valor_total, p.criado_em, p.endereco_entrega, p.observacao
+                   p.total, p.criado_em, p.endereco_entrega, p.observacao
           ORDER BY p.criado_em DESC
         '''),
         parameters: {'id': idMotoboy},
@@ -131,7 +132,7 @@ class MotoboyController {
       }).toList();
       return _json(200, {'pedidos': list});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -155,7 +156,7 @@ class MotoboyController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -174,7 +175,7 @@ class MotoboyController {
                  e.nome                                     AS empresa,
                  sp.nome                                    AS status,
                  p.id_status,
-                 p.valor_total,
+                 p.total AS valor_total,
                  p.criado_em,
                  p.endereco_entrega,
                  COALESCE(p.observacao, '')                 AS observacao,
@@ -187,7 +188,7 @@ class MotoboyController {
           WHERE p.id_motoboy = @id_motoboy
             AND p.id_status NOT IN (4, 5)
           GROUP BY p.id_pedido, e.nome, sp.nome, p.id_status,
-                   p.valor_total, p.criado_em, p.endereco_entrega, p.observacao
+                   p.total, p.criado_em, p.endereco_entrega, p.observacao
           ORDER BY p.criado_em DESC
         '''),
         parameters: {'id_motoboy': idMotoboy},
@@ -207,7 +208,7 @@ class MotoboyController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -228,14 +229,21 @@ class MotoboyController {
         return _json(400, {'error': 'id_pedido obrigatório'});
       }
 
-      await conn.execute(
+      // UPDATE condicional: só pega a corrida se ainda estiver aguardando
+      // motoboy (status 6) e sem entregador. Vence o primeiro; o segundo
+      // motoboy simultâneo não afeta linha nenhuma.
+      final upd = await conn.execute(
         Sql.named('''
           UPDATE pedidos
           SET id_motoboy = @id_motoboy, id_status = 3
-          WHERE id_pedido = @id_pedido AND id_motoboy IS NULL
+          WHERE id_pedido = @id_pedido AND id_motoboy IS NULL AND id_status = 6
         '''),
         parameters: {'id_motoboy': idMotoboy, 'id_pedido': idPedido},
       );
+
+      if (upd.affectedRows == 0) {
+        return _json(409, {'error': 'Esta corrida já foi aceita por outro entregador.'});
+      }
 
       // Busca nome do motoboy e id_usuario do cliente para notificar
       final motoboyResult = await conn.execute(
@@ -266,7 +274,7 @@ class MotoboyController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -290,6 +298,19 @@ class MotoboyController {
         return _json(400, {'error': 'id_pedido e id_status obrigatórios'});
       }
 
+      // Valida a transição; busca o status atual apenas de pedido deste motoboy
+      final atualResult = await conn.execute(
+        Sql.named('SELECT id_status FROM pedidos WHERE id_pedido = @id AND id_motoboy = @id_motoboy LIMIT 1'),
+        parameters: {'id': idPedido, 'id_motoboy': idMotoboy},
+      );
+      if (atualResult.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
+      final statusAtual = atualResult.first[0] is int
+          ? atualResult.first[0] as int
+          : int.tryParse(atualResult.first[0]?.toString() ?? '');
+      if (!transicaoStatusValida(statusAtual, idStatus)) {
+        return _json(409, {'error': 'Transição de status inválida'});
+      }
+
       // Só atualiza se este motoboy é o responsável pelo pedido
       await conn.execute(
         Sql.named('UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id AND id_motoboy = @id_motoboy'),
@@ -298,7 +319,7 @@ class MotoboyController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -322,7 +343,7 @@ class MotoboyController {
         SELECT p.id_pedido,
                e.nome                                     AS empresa,
                sp.nome                                    AS status,
-               p.valor_total,
+               p.total AS valor_total,
                p.criado_em,
                p.endereco_entrega,
                STRING_AGG(pr.nome, ', ' ORDER BY pr.nome) AS itens
@@ -335,7 +356,7 @@ class MotoboyController {
           AND p.id_status = 4
           ${hasFilter ? 'AND p.criado_em >= @inicio::timestamp AND p.criado_em < (@fim::date + INTERVAL \'1 day\')' : ''}
         GROUP BY p.id_pedido, e.nome, sp.nome,
-                 p.valor_total, p.criado_em, p.endereco_entrega
+                 p.total, p.criado_em, p.endereco_entrega
         ORDER BY p.criado_em DESC
       ''';
 
@@ -371,7 +392,7 @@ class MotoboyController {
         'taxa_por_entrega': taxaPorEntrega,
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

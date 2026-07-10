@@ -34,7 +34,7 @@ class PizzaController {
 
       return _json(200, {'sabores': list});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -74,7 +74,7 @@ class PizzaController {
 
       return _json(201, {'ok': true, 'id_sabor': result.first[0]});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -122,7 +122,7 @@ class PizzaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -141,7 +141,7 @@ class PizzaController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Tokeniza dados do cartão via Mercado Pago usando a Public Key.
@@ -17,6 +18,14 @@ class MpCardService {
     required String nomePortador,
     required String cpf,
   }) async {
+    // Impede que um build de produção cobre no ambiente de testes do MP.
+    if (kReleaseMode && _publicKey.startsWith('TEST-')) {
+      throw Exception(
+        'Pagamento com cartão não configurado para produção. '
+        'Rebuilde com --dart-define=MP_PUBLIC_KEY=APP_USR-...',
+      );
+    }
+
     final body = jsonEncode({
       'card_number':      numero.replaceAll(' ', ''),
       'expiration_month': int.parse(mesExpiracao),

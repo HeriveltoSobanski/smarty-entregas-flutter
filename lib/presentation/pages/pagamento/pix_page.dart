@@ -111,7 +111,7 @@ class _PagamentoPixPageState extends State<PagamentoPixPage> {
 
             // Status banner
             if (pago)
-              _banner(Icons.check_circle_rounded, 'Pagamento confirmado!', Colors.green)
+              _banner(Icons.check_circle_rounded, 'Pedido confirmado pelo restaurante!', Colors.green)
             else if (rejeitado)
               _banner(Icons.cancel_rounded, 'Pagamento não aprovado', Colors.red)
             else
@@ -157,6 +157,13 @@ class _PagamentoPixPageState extends State<PagamentoPixPage> {
                       const Text(
                         'Escaneie com o app do seu banco',
                         style: TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'O pagamento é feito diretamente ao restaurante. '
+                        'O pedido é confirmado quando o restaurante verifica o recebimento.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                       ),
                     ],
                   ),
@@ -227,7 +234,7 @@ class _PagamentoPixPageState extends State<PagamentoPixPage> {
                       _instrucao('2', 'Escolha pagar via PIX'),
                       _instrucao('3', 'Escaneie o QR Code ou cole o código'),
                       _instrucao('4', 'Confirme o pagamento'),
-                      _instrucao('5', 'Aguarde a confirmação automática aqui'),
+                      _instrucao('5', 'Depois de pagar, aguarde o restaurante confirmar o pedido'),
                     ],
                   ),
                 ),

@@ -697,6 +697,23 @@ class ApiService {
     }
   }
 
+  /// Cancela um pedido do próprio cliente, enviando o motivo.
+  /// Retorna null em caso de sucesso, ou a mensagem de erro do servidor.
+  static Future<String?> cancelarPedido(int idPedido, String motivo) async {
+    try {
+      final resp = await _post(
+        Uri.parse('$baseUrl/pedidos/$idPedido/cancelar'),
+        body: jsonEncode({'motivo': motivo}),
+      );
+      if (resp.statusCode == 200) return null;
+      final data = _safeJson(resp, 'Erro ao cancelar pedido');
+      return data['error']?.toString() ?? 'Erro ao cancelar pedido (${resp.statusCode})';
+    } catch (e, st) {
+      AppLogger.e('ApiService', e, st);
+      return e.toString();
+    }
+  }
+
   // ----------------------------------------------------------------
   // EMPRESAS COM PRODUTOS
   // ----------------------------------------------------------------

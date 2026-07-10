@@ -179,9 +179,10 @@ class CriarPedidoController {
         }
       }
 
-      // ---- Cupom ----
+      // ---- Validar cupom (sem incrementar ainda) ----
       double desconto = 0.0;
       String? cupomAplicado;
+      int? idCupomAplicado;
 
       if (codigoCupom != null && codigoCupom.isNotEmpty) {
         final cupomResult = await conn.execute(
@@ -221,196 +222,133 @@ class CriarPedidoController {
 
         desconto = tipo == 'percentual' ? subtotal * (valor / 100) : (valor > subtotal ? subtotal : valor);
         desconto = double.parse(desconto.toStringAsFixed(2));
-        cupomAplicado = codigoCupom;
-
-        await conn.execute(
-          Sql.named('UPDATE cupons SET usos_atuais = usos_atuais + 1 WHERE id_cupom = @id'),
-          parameters: {'id': idCupom},
-        );
+        cupomAplicado   = codigoCupom;
+        idCupomAplicado = idCupom;
       }
 
-      final valorTotal = double.parse((subtotal - desconto).toStringAsFixed(2));
+      final valorTotal    = double.parse((subtotal - desconto).toStringAsFixed(2));
+      final valorCobranca = valorTotal + taxaEntregaFinal;
 
-      // ---- Validação de cartão (exige token do MP) ----
+      // ---- Validações específicas de pagamento (antes de qualquer escrita) ----
       if ((formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') &&
           (mpCardToken == null || mpCardToken.isEmpty)) {
         return _json(400, {'error': 'mp_card_token obrigatório para pagamento com cartão'});
       }
 
-      // ---- Buscar email do usuário (necessário para o MP) ----
-      final usuarioResult = await conn.execute(
-        Sql.named('SELECT email FROM usuarios WHERE id_usuario = @id'),
-        parameters: {'id': idUsuario},
-      );
-      final emailUsuario = usuarioResult.isNotEmpty ? (usuarioResult.first[0]?.toString() ?? '') : '';
-
-      // ---- Inserir pedido ----
-      final pedidoResult = await conn.execute(
-        Sql.named('''
-          INSERT INTO pedidos
-            (id_usuario, id_empresa, id_status, total,
-             endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega,
-             codigo_cupom, desconto)
-          VALUES
-            (@id_usuario, @id_empresa, 1, @total,
-             @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega,
-             @codigo_cupom, @desconto)
-          RETURNING id_pedido
-        '''),
-        parameters: {
-          'id_usuario':      idUsuario,
-          'id_empresa':      idEmpresa,
-          'total':           valorTotal,
-          'endereco_entrega': enderecoEntrega,
-          'observacao':      observacao,
-          'forma_pagamento': formaPagamento.isNotEmpty ? formaPagamento : null,
-          'troco_para':      trocoPara,
-          'taxa_entrega':    taxaEntregaFinal,
-          'codigo_cupom':    cupomAplicado,
-          'desconto':        desconto,
-        },
-      );
-
-      final idPedido = pedidoResult.first[0] as int;
-
-      // ---- Notificar o restaurante sobre novo pedido ----
-      try {
-        final empresaUserResult = await conn.execute(
-          Sql.named('SELECT id_usuario FROM empresas WHERE id_empresa = @id'),
-          parameters: {'id': idEmpresa},
-        );
-        if (empresaUserResult.isNotEmpty) {
-          final idUsuarioEmpresa = empresaUserResult.first[0];
-          final uid = idUsuarioEmpresa is int
-              ? idUsuarioEmpresa
-              : int.tryParse(idUsuarioEmpresa?.toString() ?? '');
-          if (uid != null) {
-            await NotificacaoController.criar(
-              conn:       conn,
-              idUsuario:  uid,
-              titulo:     'Novo pedido recebido! 🛒',
-              corpo:      'Pedido #$idPedido chegou. Toque para ver os detalhes.',
-              tipo:       'novo_pedido',
-              idPedido:   idPedido,
-              fcmService: fcmService,
-            );
-          }
-        }
-      } catch (_) {}
-
-      // ---- Inserir itens ----
-      for (final item in itensComPreco) {
-        await conn.execute(
-          Sql.named('''
-            INSERT INTO pedido_itens (id_pedido, id_produto, quantidade, preco_unit, observacao)
-            VALUES (@id_pedido, @id_produto, @quantidade, @preco_unit, @observacao)
-          '''),
-          parameters: {
-            'id_pedido':  idPedido,
-            'id_produto': item['id_produto'],
-            'quantidade': item['quantidade'],
-            'preco_unit': item['preco_unit'],
-            'observacao': item['observacao'],
-          },
-        );
-      }
-
-      // ---- Processar pagamento ----
-      final valorCobranca = valorTotal + taxaEntregaFinal;
-
+      // PIX: valida a chave do restaurante ANTES de criar o pedido,
+      // evitando pedido órfão quando a empresa não tem chave cadastrada.
+      String chavePix      = '';
+      String nomeEmpresa   = 'Empresa';
+      String cidadeEmpresa = '';
       if (formaPagamento == 'pix') {
-        // Busca chave PIX e dados do restaurante
         final empresaPix = await conn.execute(
           Sql.named('SELECT chave_pix, nome, cidade FROM empresas WHERE id_empresa = @id'),
           parameters: {'id': idEmpresa},
         );
-
-        final chavePix = empresaPix.isNotEmpty ? (empresaPix.first[0]?.toString() ?? '') : '';
+        chavePix = empresaPix.isNotEmpty ? (empresaPix.first[0]?.toString() ?? '') : '';
         if (chavePix.isEmpty) {
           return _json(422, {
             'error': 'Este restaurante ainda não cadastrou sua chave PIX. '
                 'Entre em contato com o restaurante para mais informações.',
           });
         }
-
-        final nomeEmpresa = empresaPix.isNotEmpty ? (empresaPix.first[1]?.toString() ?? 'Empresa') : 'Empresa';
-        final cidadeEmpresa = empresaPix.isNotEmpty ? (empresaPix.first[2]?.toString() ?? '') : '';
-
-        final brCode = PixBrCodeService.gerarPayload(
-          chavePix:      chavePix,
-          valor:         valorCobranca,
-          nomeRecebedor: nomeEmpresa,
-          cidade:        cidadeEmpresa,
-          idPedido:      idPedido,
-        );
-
-        await conn.execute(
-          Sql.named('UPDATE pedidos SET qr_code_pix = @qr, status_pagamento = @s WHERE id_pedido = @id'),
-          parameters: {'qr': brCode, 's': 'pending', 'id': idPedido},
-        );
-
-        return _json(201, {
-          'ok':              true,
-          'id_pedido':       idPedido,
-          'forma_pagamento': 'pix',
-          'qr_code_pix':     brCode,
-          'qr_code_base64':  '',
-          'id_pagamento_mp': '',
-        });
+        nomeEmpresa   = empresaPix.first[1]?.toString() ?? 'Empresa';
+        cidadeEmpresa = empresaPix.first[2]?.toString() ?? '';
       }
 
-      if (formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') {
-        final mpResult = await _mp.criarPagamentoCartao(
-          valor:        valorCobranca,
-          token:        mpCardToken!,
-          emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
-          descricao:    'Pedido #$idPedido - Smarty Entregas',
-          idPedido:     idPedido,
-        );
+      // ---- Email do usuário (necessário para o MP) ----
+      final usuarioResult = await conn.execute(
+        Sql.named('SELECT email FROM usuarios WHERE id_usuario = @id'),
+        parameters: {'id': idUsuario},
+      );
+      final emailUsuario = usuarioResult.isNotEmpty ? (usuarioResult.first[0]?.toString() ?? '') : '';
 
-        final statusMp = mpResult['status_pagamento'] as String;
-
-        await conn.execute(
+      // Insere pedido + itens + incremento de cupom na MESMA transação.
+      // Nada é persistido se qualquer passo falhar.
+      Future<int> inserirPedido(TxSession s, String statusPagamento) async {
+        final pedidoResult = await s.execute(
           Sql.named('''
-            UPDATE pedidos SET
-              id_pagamento_mp  = @id_mp,
-              status_pagamento = @status
-            WHERE id_pedido = @id
+            INSERT INTO pedidos
+              (id_usuario, id_empresa, id_status, total,
+               endereco_entrega, observacao, forma_pagamento, troco_para, taxa_entrega,
+               codigo_cupom, desconto, status_pagamento)
+            VALUES
+              (@id_usuario, @id_empresa, 1, @total,
+               @endereco_entrega, @observacao, @forma_pagamento, @troco_para, @taxa_entrega,
+               @codigo_cupom, @desconto, @status_pagamento)
+            RETURNING id_pedido
           '''),
           parameters: {
-            'id_mp':  mpResult['id_pagamento_mp'],
-            'status': statusMp,
-            'id':     idPedido,
+            'id_usuario':       idUsuario,
+            'id_empresa':       idEmpresa,
+            'total':            valorTotal,
+            'endereco_entrega': enderecoEntrega,
+            'observacao':       observacao,
+            'forma_pagamento':  formaPagamento.isNotEmpty ? formaPagamento : null,
+            'troco_para':       trocoPara,
+            'taxa_entrega':     taxaEntregaFinal,
+            'codigo_cupom':     cupomAplicado,
+            'desconto':         desconto,
+            'status_pagamento': statusPagamento,
           },
         );
+        final novoId = pedidoResult.first[0] as int;
 
-        if (statusMp == 'rejected') {
-          return _json(422, {
-            'error': 'Pagamento recusado. Verifique os dados do cartão.',
-            'status_detail': mpResult['status_detail'],
-          });
+        for (final item in itensComPreco) {
+          await s.execute(
+            Sql.named('''
+              INSERT INTO pedido_itens (id_pedido, id_produto, quantidade, preco_unit, observacao)
+              VALUES (@id_pedido, @id_produto, @quantidade, @preco_unit, @observacao)
+            '''),
+            parameters: {
+              'id_pedido':  novoId,
+              'id_produto': item['id_produto'],
+              'quantidade': item['quantidade'],
+              'preco_unit': item['preco_unit'],
+              'observacao': item['observacao'],
+            },
+          );
         }
 
-        return _json(201, {
-          'ok':              true,
-          'id_pedido':       idPedido,
-          'forma_pagamento': formaPagamento,
-          'status_pagamento': statusMp,
-          'id_pagamento_mp': mpResult['id_pagamento_mp'],
-        });
+        if (idCupomAplicado != null) {
+          // Incremento atômico: só consome se ainda houver usos disponíveis.
+          // Evita ultrapassar usos_maximos em pedidos concorrentes.
+          final cupomUpd = await s.execute(
+            Sql.named('''
+              UPDATE cupons SET usos_atuais = usos_atuais + 1
+              WHERE id_cupom = @id
+                AND (usos_maximos IS NULL OR usos_atuais < usos_maximos)
+            '''),
+            parameters: {'id': idCupomAplicado},
+          );
+          if (cupomUpd.affectedRows == 0) {
+            // Esgotou entre a validação e o commit; desfaz a transação.
+            throw _CupomEsgotadoException();
+          }
+        }
+
+        return novoId;
       }
 
+      // ---- DINHEIRO ----
       if (formaPagamento == 'dinheiro') {
         final taxaSmartySobrePedido = double.parse((valorTotal * 0.10).toStringAsFixed(2));
         final taxaSmartyEntrega     = double.parse((taxaEntregaFinal * 0.10).toStringAsFixed(2));
         final debitoEmpresa         = taxaSmartySobrePedido + taxaSmartyEntrega + taxaEntregaFinal;
 
-        await conn.execute(
-          Sql.named('UPDATE empresas SET saldo = saldo - @debito WHERE id_empresa = @id'),
-          parameters: {'debito': debitoEmpresa, 'id': idEmpresa},
-        );
-        try {
-          await conn.execute(
+        int idPedido = 0;
+        await conn.runTx((s) async {
+          idPedido = await inserirPedido(s, 'aprovado');
+          // Débito condicional: não deixa o caixa da empresa ficar negativo.
+          final saldoUpd = await s.execute(
+            Sql.named('UPDATE empresas SET saldo = saldo - @debito '
+                'WHERE id_empresa = @id AND saldo >= @debito'),
+            parameters: {'debito': debitoEmpresa, 'id': idEmpresa},
+          );
+          if (saldoUpd.affectedRows == 0) {
+            throw _SaldoInsuficienteException();
+          }
+          await s.execute(
             Sql.named('''
               INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao, id_pedido)
               VALUES (@id_empresa, 'debito', @valor, @descricao, @id_pedido)
@@ -422,33 +360,158 @@ class CriarPedidoController {
               'id_pedido':  idPedido,
             },
           );
-        } catch (_) {}
+        });
 
-        await conn.execute(
-          Sql.named("UPDATE pedidos SET status_pagamento = 'aprovado' WHERE id_pedido = @id"),
-          parameters: {'id': idPedido},
-        );
+        await _notificarNovoPedido(idEmpresa, idPedido);
+        return _json(201, {
+          'ok':               true,
+          'id_pedido':        idPedido,
+          'forma_pagamento':  'dinheiro',
+          'status_pagamento': 'aprovado',
+        });
+      }
+
+      // ---- PIX ----
+      if (formaPagamento == 'pix') {
+        int    idPedido = 0;
+        String brCode   = '';
+        await conn.runTx((s) async {
+          idPedido = await inserirPedido(s, 'pending');
+          brCode = PixBrCodeService.gerarPayload(
+            chavePix:      chavePix,
+            valor:         valorCobranca,
+            nomeRecebedor: nomeEmpresa,
+            cidade:        cidadeEmpresa,
+            idPedido:      idPedido,
+          );
+          await s.execute(
+            Sql.named('UPDATE pedidos SET qr_code_pix = @qr WHERE id_pedido = @id'),
+            parameters: {'qr': brCode, 'id': idPedido},
+          );
+        });
+
+        await _notificarNovoPedido(idEmpresa, idPedido);
         return _json(201, {
           'ok':              true,
           'id_pedido':       idPedido,
-          'forma_pagamento': 'dinheiro',
-          'status_pagamento': 'aprovado',
+          'forma_pagamento': 'pix',
+          'qr_code_pix':     brCode,
+          'qr_code_base64':  '',
+          'id_pagamento_mp': '',
+        });
+      }
+
+      // ---- CARTÃO ----
+      // Pedido é criado como 'pending'; a cobrança externa (MP) ocorre após
+      // o commit. Se recusar/falhar, marcamos 'rejected' e devolvemos o cupom.
+      if (formaPagamento == 'cartao_credito' || formaPagamento == 'cartao_debito') {
+        int idPedido = 0;
+        await conn.runTx((s) async {
+          idPedido = await inserirPedido(s, 'pending');
+        });
+
+        Map<String, dynamic> mpResult;
+        try {
+          mpResult = await _mp.criarPagamentoCartao(
+            valor:        valorCobranca,
+            token:        mpCardToken!,
+            emailPagador: emailUsuario.isNotEmpty ? emailUsuario : 'cliente@smartyentregas.com',
+            descricao:    'Pedido #$idPedido - Smarty Entregas',
+            idPedido:     idPedido,
+          );
+        } catch (_) {
+          await conn.execute(
+            Sql.named("UPDATE pedidos SET status_pagamento = 'rejected' WHERE id_pedido = @id"),
+            parameters: {'id': idPedido},
+          );
+          await _devolverCupom(idCupomAplicado);
+          return _json(502, {'error': 'Falha ao processar o pagamento. Tente novamente.'});
+        }
+
+        final statusMp = mpResult['status_pagamento'] as String;
+        await conn.execute(
+          Sql.named('''
+            UPDATE pedidos SET id_pagamento_mp = @id_mp, status_pagamento = @status
+            WHERE id_pedido = @id
+          '''),
+          parameters: {'id_mp': mpResult['id_pagamento_mp'], 'status': statusMp, 'id': idPedido},
+        );
+
+        if (statusMp == 'rejected') {
+          await _devolverCupom(idCupomAplicado);
+          return _json(422, {
+            'error': 'Pagamento recusado. Verifique os dados do cartão.',
+            'status_detail': mpResult['status_detail'],
+          });
+        }
+
+        await _notificarNovoPedido(idEmpresa, idPedido);
+        return _json(201, {
+          'ok':               true,
+          'id_pedido':        idPedido,
+          'forma_pagamento':  formaPagamento,
+          'status_pagamento': statusMp,
+          'id_pagamento_mp':  mpResult['id_pagamento_mp'],
         });
       }
 
       // Forma de pagamento não reconhecida
       return _json(400, {'error': 'Forma de pagamento inválida: $formaPagamento'});
-    } catch (e) {
-      return _json(500, {
-        'error': 'Erro interno ao criar pedido',
-        'details': e.toString(),
+    } on _CupomEsgotadoException {
+      return _json(422, {'error': 'Cupom esgotado'});
+    } on _SaldoInsuficienteException {
+      return _json(422, {
+        'error': 'Este restaurante está temporariamente indisponível para '
+            'pagamento em dinheiro. Escolha outra forma de pagamento.',
       });
+    } catch (e) {
+      return _json(500, {'error': 'Erro interno ao criar pedido'});
     }
   }
 
   // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------
+
+  /// Notifica o restaurante sobre um novo pedido (best-effort).
+  /// Chamado só após o pedido ser efetivamente persistido.
+  Future<void> _notificarNovoPedido(int idEmpresa, int idPedido) async {
+    try {
+      final empresaUserResult = await conn.execute(
+        Sql.named('SELECT id_usuario FROM empresas WHERE id_empresa = @id'),
+        parameters: {'id': idEmpresa},
+      );
+      if (empresaUserResult.isNotEmpty) {
+        final idUsuarioEmpresa = empresaUserResult.first[0];
+        final uid = idUsuarioEmpresa is int
+            ? idUsuarioEmpresa
+            : int.tryParse(idUsuarioEmpresa?.toString() ?? '');
+        if (uid != null) {
+          await NotificacaoController.criar(
+            conn:       conn,
+            idUsuario:  uid,
+            titulo:     'Novo pedido recebido! 🛒',
+            corpo:      'Pedido #$idPedido chegou. Toque para ver os detalhes.',
+            tipo:       'novo_pedido',
+            idPedido:   idPedido,
+            fcmService: fcmService,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Devolve um uso de cupom quando o pagamento não se concretiza.
+  Future<void> _devolverCupom(int? idCupom) async {
+    if (idCupom == null) return;
+    try {
+      await conn.execute(
+        Sql.named('UPDATE cupons SET usos_atuais = GREATEST(usos_atuais - 1, 0) WHERE id_cupom = @id'),
+        parameters: {'id': idCupom},
+      );
+    } catch (_) {}
+  }
+
   int? _parseInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
@@ -480,3 +543,11 @@ class CriarPedidoController {
         headers: const {'content-type': 'application/json; charset=utf-8'},
       );
 }
+
+/// Sinaliza que o cupom esgotou entre a validação e o commit do pedido.
+/// Usada para abortar a transação e responder 422 sem persistir o pedido.
+class _CupomEsgotadoException implements Exception {}
+
+/// Sinaliza que o caixa da empresa não cobre o débito de um pedido em dinheiro.
+/// Aborta a transação sem deixar o saldo negativo.
+class _SaldoInsuficienteException implements Exception {}

@@ -12,6 +12,7 @@ dependencies:
   postgres: any
   shelf_cors_headers: ^0.1.0
   crypto: any
+  bcrypt: ^1.1.3
   dotenv: ^4.2.0
   http: ^1.0.0
   mailer: ^6.1.2

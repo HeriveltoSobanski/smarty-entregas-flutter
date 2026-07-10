@@ -123,52 +123,13 @@ void main() async {
     "ALTER TABLE usuario_enderecos ALTER COLUMN cidade      DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN estado      DROP NOT NULL",
     "ALTER TABLE usuario_enderecos ALTER COLUMN pais        DROP NOT NULL",
-    '''
-      DO \$\$
-      DECLARE col RECORD;
-      BEGIN
-        FOR col IN
-          SELECT column_name
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name   = 'usuario_enderecos'
-            AND column_name  NOT IN ('id_endereco', 'id_usuario')
-            AND is_nullable  = 'NO'
-            AND column_default IS NULL
-        LOOP
-          EXECUTE 'ALTER TABLE usuario_enderecos ALTER COLUMN '
-                  || quote_ident(col.column_name) || ' DROP NOT NULL';
-        END LOOP;
-      END \$\$
-    ''',
-    '''
-      DO \$\$
-      DECLARE r RECORD;
-      BEGIN
-        FOR r IN
-          SELECT trigger_name
-          FROM information_schema.triggers
-          WHERE event_object_schema = 'public'
-            AND event_object_table  = 'usuario_enderecos'
-        LOOP
-          EXECUTE 'DROP TRIGGER IF EXISTS ' || quote_ident(r.trigger_name) || ' ON usuario_enderecos';
-        END LOOP;
-      END \$\$
-    ''',
-    '''
-      DO \$\$
-      DECLARE r RECORD;
-      BEGIN
-        FOR r IN
-          SELECT routine_name
-          FROM information_schema.routines
-          WHERE routine_type = 'FUNCTION'
-            AND routine_name ILIKE '%tipo_usuario%'
-        LOOP
-          EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.routine_name) || '() CASCADE';
-        END LOOP;
-      END \$\$
-    ''',
+    // NOTA (congelado): aqui existiam 3 blocos DO $$ que enumeravam e dropavam
+    // DINAMICAMENTE todas as constraints NOT NULL e todos os triggers de
+    // usuario_enderecos, além de todas as funções cujo nome contém
+    // 'tipo_usuario'. Rodavam a CADA boot e destruiriam silenciosamente
+    // qualquer constraint/trigger criado no futuro. Foram removidos: a limpeza
+    // de legado já foi aplicada e os DROP NOT NULL das colunas conhecidas
+    // permanecem acima (linhas idempotentes e específicas).
     "INSERT INTO status_pedidos (id_status, nome) VALUES (1, 'Aguardando')        ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
     "INSERT INTO status_pedidos (id_status, nome) VALUES (2, 'Em Preparo')        ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
     "INSERT INTO status_pedidos (id_status, nome) VALUES (3, 'A Caminho')         ON CONFLICT (id_status) DO UPDATE SET nome = EXCLUDED.nome",
@@ -352,6 +313,10 @@ void main() async {
     // Chave PIX e cidade da empresa para QR Code
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS chave_pix VARCHAR(150)",
     "ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cidade VARCHAR(80)",
+    // Motivo de cancelamento informado pelo cliente
+    "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT",
+    // Id do pagamento MP no depósito de saldo, para conciliação via webhook
+    "ALTER TABLE empresa_transacoes ADD COLUMN IF NOT EXISTS id_pagamento_mp VARCHAR(50)",
   ];
 
   for (final sql in migrations) {
@@ -366,7 +331,18 @@ void main() async {
   // Converte imagens base64 antigas para arquivos em disco
   await imageService.migrarBanco(db.connection);
 
-  final auth           = AuthController(db.connection, jwtService, emailService);
+  final auth           = AuthController(
+    db.connection,
+    jwtService,
+    emailService,
+    googleClientIds: (env['GOOGLE_CLIENT_IDS'] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList(),
+    facebookAppId:     env['FACEBOOK_APP_ID']     ?? '',
+    facebookAppSecret: env['FACEBOOK_APP_SECRET'] ?? '',
+  );
   final produto        = ProdutoController(db.connection, imageService);
   final pedido         = PedidoController(db.connection, fcmService: fcmService);
   final criarPedido    = CriarPedidoController(db.connection, mpService, fcmService: fcmService);
@@ -454,6 +430,7 @@ void main() async {
 
   // ── PEDIDOS ──────────────────────────────────────────────────
   app.post('/pedidos',                  criarPedido.criarPedido);
+  app.post('/pedidos/<id>/cancelar',    pedido.cancelarPeloCliente);
   app.get('/pedidos/empresa',           pedido.getPedidosByEmpresa);
   app.get('/pedidos/cliente',           pedido.getPedidosByCliente);
   app.get('/pedidos/<id>/detalhes',     pedido.getPedidoDetalhes);
@@ -533,6 +510,11 @@ void main() async {
         parameters: {'s': status, 'id_mp': idMp},
       );
 
+      // Depósito de saldo da empresa: credita quando o pagamento aprova.
+      if (status == 'approved') {
+        await _confirmarDepositoEmpresa(db.connection, idMp);
+      }
+
       return Response.ok('ok');
     } catch (_) {
       return Response.ok('ok');
@@ -543,6 +525,11 @@ void main() async {
   app.get('/empresas/<id>/saldo', (Request req, String id) async {
     final idEmpresa = int.tryParse(id);
     if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+    final jwtEmpresa = int.tryParse(req.context['idEmpresa']?.toString() ?? '');
+    if (jwtEmpresa == null || jwtEmpresa != idEmpresa) {
+      return _json(403, {'error': 'Acesso negado'});
+    }
 
     final result = await db.connection.execute(
       Sql.named('SELECT saldo FROM empresas WHERE id_empresa = @id'),
@@ -557,6 +544,11 @@ void main() async {
   app.get('/empresas/<id>/extrato', (Request req, String id) async {
     final idEmpresa = int.tryParse(id);
     if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
+
+    final jwtEmpresa = int.tryParse(req.context['idEmpresa']?.toString() ?? '');
+    if (jwtEmpresa == null || jwtEmpresa != idEmpresa) {
+      return _json(403, {'error': 'Acesso negado'});
+    }
 
     final result = await db.connection.execute(
       Sql.named('''
@@ -585,6 +577,11 @@ void main() async {
     final idEmpresa = int.tryParse(id);
     if (idEmpresa == null) return _json(400, {'error': 'id inválido'});
 
+    final jwtEmpresa = int.tryParse(req.context['idEmpresa']?.toString() ?? '');
+    if (jwtEmpresa == null || jwtEmpresa != idEmpresa) {
+      return _json(403, {'error': 'Acesso negado'});
+    }
+
     try {
       final bodyStr = await req.readAsString();
       final body    = jsonDecode(bodyStr) as Map<String, dynamic>;
@@ -611,13 +608,14 @@ void main() async {
       // Registra depósito pendente como transação
       await db.connection.execute(
         Sql.named('''
-          INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao)
-          VALUES (@id_empresa, 'deposito_pendente', @valor, @desc)
+          INSERT INTO empresa_transacoes (id_empresa, tipo, valor, descricao, id_pagamento_mp)
+          VALUES (@id_empresa, 'deposito_pendente', @valor, @desc, @id_mp)
         '''),
         parameters: {
           'id_empresa': idEmpresa,
           'valor':      valor,
           'desc':       'Depósito via PIX - MP: ${mpResult['id_pagamento_mp']}',
+          'id_mp':      mpResult['id_pagamento_mp'],
         },
       );
 
@@ -754,3 +752,31 @@ Response _json(int status, Map<String, dynamic> body) => Response(
       body: jsonEncode(body),
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );
+
+/// Confirma um depósito de saldo aprovado e credita o valor à empresa.
+///
+/// Idempotente: o UPDATE só afeta transações ainda 'deposito_pendente',
+/// então webhooks repetidos do Mercado Pago não creditam o valor duas vezes.
+/// A confirmação e o crédito ocorrem na mesma transação para não divergirem.
+Future<void> _confirmarDepositoEmpresa(Pool conn, String idMp) async {
+  await conn.runTx((session) async {
+    final upd = await session.execute(
+      Sql.named('''
+        UPDATE empresa_transacoes
+        SET tipo = 'deposito'
+        WHERE id_pagamento_mp = @id_mp AND tipo = 'deposito_pendente'
+        RETURNING id_empresa, valor
+      '''),
+      parameters: {'id_mp': idMp},
+    );
+
+    for (final row in upd) {
+      final idEmpresa = row[0] as int;
+      final valor     = (row[1] as num).toDouble();
+      await session.execute(
+        Sql.named('UPDATE empresas SET saldo = saldo + @valor WHERE id_empresa = @id'),
+        parameters: {'valor': valor, 'id': idEmpresa},
+      );
+    }
+  });
+}

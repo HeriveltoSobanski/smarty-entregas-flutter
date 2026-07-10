@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_logger.dart';
 import '../../../services/api_service.dart';
 
 const Color _laranja = Color(0xFFF5841F);
@@ -92,9 +91,11 @@ class _CancelarPedidoPageState extends State<CancelarPedidoPage> {
 
     setState(() => _cancelando = true);
 
-    try {
-      await ApiService.atualizarStatusPedido(widget.idPedido, 5);
-      if (!mounted) return;
+    final motivo = _motivoIndex != null ? _motivos[_motivoIndex!] : '';
+    final erro = await ApiService.cancelarPedido(widget.idPedido, motivo);
+    if (!mounted) return;
+
+    if (erro == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Pedido cancelado com sucesso.'),
@@ -102,14 +103,11 @@ class _CancelarPedidoPageState extends State<CancelarPedidoPage> {
         ),
       );
       Navigator.of(context).pop(true);
-    } catch (e, st) {
-      AppLogger.e('CancelarPedido', e, st);
-      if (!mounted) return;
+    } else {
       setState(() => _cancelando = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Não foi possível cancelar. Tente novamente ou entre em contato com o suporte.'),
+        SnackBar(
+          content: Text(erro),
           backgroundColor: Colors.red,
         ),
       );

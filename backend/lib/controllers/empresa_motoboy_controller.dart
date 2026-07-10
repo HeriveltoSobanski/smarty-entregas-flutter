@@ -35,7 +35,7 @@ class EmpresaMotoboyController {
         'telefone': r[2]?.toString() ?? '',
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -72,7 +72,7 @@ class EmpresaMotoboyController {
 
       return _json(200, {'motoboys': lista});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -120,7 +120,7 @@ class EmpresaMotoboyController {
 
       return _json(201, {'ok': true, 'id': result.first[0]});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -136,7 +136,7 @@ class EmpresaMotoboyController {
       );
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -186,7 +186,7 @@ class EmpresaMotoboyController {
 
       return _json(200, {'ok': true, 'motoboy_nome': nome, 'motoboy_telefone': telefone});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 

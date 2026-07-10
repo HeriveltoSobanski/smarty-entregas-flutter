@@ -14,7 +14,22 @@ class AuthController {
   final JwtService _jwt;
   final EmailService _email;
 
-  AuthController(this.conn, this._jwt, this._email);
+  /// Client IDs aceitos no login Google (claim `aud` do id_token).
+  /// Pode conter múltiplos (ex.: client web + Android).
+  final List<String> _googleClientIds;
+  final String _facebookAppId;
+  final String _facebookAppSecret;
+
+  AuthController(
+    this.conn,
+    this._jwt,
+    this._email, {
+    List<String> googleClientIds = const [],
+    String facebookAppId = '',
+    String facebookAppSecret = '',
+  })  : _googleClientIds = googleClientIds,
+        _facebookAppId = facebookAppId,
+        _facebookAppSecret = facebookAppSecret;
 
   // ---- Rate limiting persistente no banco ----
 
@@ -558,7 +573,7 @@ class AuthController {
       await _email.sendRecoveryCode(email, code);
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': 'Erro ao enviar código: ${e.toString()}'});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro ao enviar código'});
     }
   }
 
@@ -615,6 +630,11 @@ class AuthController {
         return _json(400, {'error': 'A senha deve ter ao menos 6 caracteres'});
       }
 
+      // Bloqueia força-bruta do código de 6 dígitos direto nesta rota
+      if (await _isRateLimited('reset:$email')) {
+        return _json(429, {'error': 'Muitas tentativas. Aguarde 15 minutos.'});
+      }
+
       final codeResult = await conn.execute(
         Sql.named('''
           SELECT id FROM recuperacao_senha
@@ -625,7 +645,10 @@ class AuthController {
         parameters: {'email': email, 'codigo': codigo},
       );
 
-      if (codeResult.isEmpty) return _json(400, {'error': 'Código inválido ou expirado'});
+      if (codeResult.isEmpty) {
+        await _recordFail('reset:$email');
+        return _json(400, {'error': 'Código inválido ou expirado'});
+      }
 
       final idCodigo = codeResult.first[0] as int;
       final senhaHash = PasswordService.hash(novaSenha);
@@ -638,6 +661,8 @@ class AuthController {
         Sql.named('UPDATE recuperacao_senha SET usado = true WHERE id = @id'),
         parameters: {'id': idCodigo},
       );
+
+      await _clearAttempts('reset:$email');
 
       return _json(200, {'ok': true});
     } catch (e) {
@@ -671,6 +696,16 @@ class AuthController {
         return _json(401, {'error': 'Token Google inválido'});
       }
 
+      // Garante que o token foi emitido para o NOSSO app (claim aud).
+      // Sem isso, qualquer id_token Google válido logaria como o usuário.
+      if (_googleClientIds.isEmpty) {
+        return _json(500, {'error': 'Login Google não configurado no servidor'});
+      }
+      final aud = googleData['aud']?.toString() ?? '';
+      if (!_googleClientIds.contains(aud)) {
+        return _json(401, {'error': 'Token Google não pertence a este aplicativo'});
+      }
+
       final email = googleData['email']?.toString().trim() ?? '';
       final nome  = (googleData['name'] ?? googleData['given_name'] ?? 'Usuário Google').toString().trim();
 
@@ -695,6 +730,26 @@ class AuthController {
       final accessToken = (data['access_token'] ?? '').toString().trim();
       if (accessToken.isEmpty) {
         return _json(400, {'error': 'Token Facebook obrigatório'});
+      }
+
+      // Garante que o token pertence ao NOSSO app antes de confiar nele.
+      if (_facebookAppId.isEmpty || _facebookAppSecret.isEmpty) {
+        return _json(500, {'error': 'Login Facebook não configurado no servidor'});
+      }
+      final appToken = '$_facebookAppId|$_facebookAppSecret';
+      final debugResp = await http.get(Uri.parse(
+        'https://graph.facebook.com/debug_token'
+        '?input_token=$accessToken&access_token=$appToken',
+      ));
+      if (debugResp.statusCode != 200) {
+        return _json(401, {'error': 'Token Facebook inválido'});
+      }
+      final debugData = jsonDecode(debugResp.body) as Map<String, dynamic>;
+      final debug = debugData['data'] as Map<String, dynamic>?;
+      if (debug == null ||
+          debug['is_valid'] != true ||
+          debug['app_id']?.toString() != _facebookAppId) {
+        return _json(401, {'error': 'Token Facebook não pertence a este aplicativo'});
       }
 
       final fbResp = await http.get(

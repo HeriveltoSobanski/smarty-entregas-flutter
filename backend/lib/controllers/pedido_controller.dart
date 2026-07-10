@@ -5,6 +5,26 @@ import 'package:shelf/shelf.dart';
 import 'notificacao_controller.dart';
 import '../services/fcm_service.dart';
 
+/// Transições de status permitidas: de → conjunto de próximos válidos.
+/// 1=Aguardando 2=Em Preparo 3=A Caminho 4=Entregue 5=Cancelado 6=Aguard. Motoboy.
+/// Estados 4 e 5 são terminais (não saem deles).
+const _transicoesStatus = <int, Set<int>>{
+  1: {2, 3, 5, 6},
+  2: {3, 5, 6},
+  6: {3, 5},
+  3: {4, 5},
+  4: <int>{},
+  5: <int>{},
+};
+
+/// Retorna true se a transição [de] → [para] é permitida.
+/// Transição para o mesmo status é tratada como no-op válido.
+bool transicaoStatusValida(int? de, int para) {
+  if (de == null) return false;
+  if (de == para) return true;
+  return _transicoesStatus[de]?.contains(para) ?? false;
+}
+
 class PedidoController {
   final Pool conn;
   final FcmService? fcmService;
@@ -75,7 +95,7 @@ class PedidoController {
 
       return _json(200, {'pedidos': list});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -178,7 +198,7 @@ class PedidoController {
         }
       });
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -236,7 +256,7 @@ class PedidoController {
 
       return _json(200, {'pedidos': list, 'tem_mais': list.length == limite});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -261,6 +281,19 @@ class PedidoController {
 
       final novoStatus = idStatus is int ? idStatus : int.tryParse(idStatus.toString());
       if (novoStatus == null) return _json(400, {'error': 'id_status deve ser inteiro'});
+
+      // Valida a transição a partir do status atual do pedido
+      final atualResult = await conn.execute(
+        Sql.named('SELECT id_status FROM pedidos WHERE id_pedido = @id LIMIT 1'),
+        parameters: {'id': idPedido},
+      );
+      if (atualResult.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
+      final statusAtual = atualResult.first[0] is int
+          ? atualResult.first[0] as int
+          : int.tryParse(atualResult.first[0]?.toString() ?? '');
+      if (!transicaoStatusValida(statusAtual, novoStatus)) {
+        return _json(409, {'error': 'Transição de status inválida'});
+      }
 
       await conn.execute(
         Sql.named('UPDATE pedidos SET id_status = @novo_status WHERE id_pedido = @pedido_id'),
@@ -301,7 +334,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -337,7 +370,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -377,7 +410,7 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -417,7 +450,104 @@ class PedidoController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // POST /pedidos/:id/cancelar  (cliente)
+  // Body: { motivo }
+  // Só permite cancelar enquanto o pedido está "Aguardando" (status 1),
+  // ou seja, antes de o restaurante iniciar o preparo.
+  // ----------------------------------------------------------------
+  Future<Response> cancelarPeloCliente(Request request, String id) async {
+    try {
+      final idPedido = int.tryParse(id);
+      if (idPedido == null) return _json(400, {'error': 'id inválido'});
+
+      final idUsuario = int.tryParse(request.context['userId']?.toString() ?? '');
+      if (idUsuario == null) return _json(403, {'error': 'Acesso negado'});
+
+      final bodyStr = await request.readAsString();
+      final body = bodyStr.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(bodyStr) as Map<String, dynamic>;
+      final motivo = (body['motivo'] ?? '').toString().trim();
+
+      // Busca dono, status e empresa do pedido
+      final ped = await conn.execute(
+        Sql.named('''
+          SELECT id_usuario, id_status, id_empresa
+          FROM pedidos WHERE id_pedido = @id LIMIT 1
+        '''),
+        parameters: {'id': idPedido},
+      );
+      if (ped.isEmpty) return _json(404, {'error': 'Pedido não encontrado'});
+
+      final donoId      = ped.first[0] is int ? ped.first[0] as int : int.tryParse(ped.first[0]?.toString() ?? '');
+      final statusAtual = ped.first[1] is int ? ped.first[1] as int : int.tryParse(ped.first[1]?.toString() ?? '');
+      final idEmpresa   = ped.first[2] is int ? ped.first[2] as int : int.tryParse(ped.first[2]?.toString() ?? '');
+
+      // Só o dono do pedido pode cancelar
+      if (donoId != idUsuario) return _json(403, {'error': 'Acesso negado'});
+
+      // Só permite cancelar antes do preparo (status 1 = Aguardando)
+      if (statusAtual != 1) {
+        return _json(409, {
+          'error': 'Este pedido não pode mais ser cancelado. '
+              'O restaurante já iniciou o preparo.',
+        });
+      }
+
+      // Atualização condicional: só cancela se ainda estiver no status 1.
+      // Evita corrida com a empresa aceitando o pedido ao mesmo tempo.
+      final upd = await conn.execute(
+        Sql.named('''
+          UPDATE pedidos
+          SET id_status = 5, motivo_cancelamento = @motivo
+          WHERE id_pedido = @id AND id_usuario = @usuario AND id_status = 1
+        '''),
+        parameters: {
+          'motivo':  motivo.isEmpty ? null : motivo,
+          'id':      idPedido,
+          'usuario': idUsuario,
+        },
+      );
+
+      if (upd.affectedRows == 0) {
+        return _json(409, {'error': 'Este pedido não pode mais ser cancelado.'});
+      }
+
+      // Notifica o restaurante (best-effort)
+      if (idEmpresa != null) {
+        try {
+          final emp = await conn.execute(
+            Sql.named('SELECT id_usuario FROM empresas WHERE id_empresa = @id'),
+            parameters: {'id': idEmpresa},
+          );
+          if (emp.isNotEmpty) {
+            final uid = emp.first[0] is int
+                ? emp.first[0] as int
+                : int.tryParse(emp.first[0]?.toString() ?? '');
+            if (uid != null) {
+              await NotificacaoController.criar(
+                conn:       conn,
+                idUsuario:  uid,
+                titulo:     'Pedido cancelado pelo cliente ❌',
+                corpo:      'O pedido #$idPedido foi cancelado.'
+                    '${motivo.isNotEmpty ? ' Motivo: $motivo' : ''}',
+                tipo:       'status_pedido',
+                idPedido:   idPedido,
+                fcmService: fcmService,
+              );
+            }
+          }
+        } catch (_) {}
+      }
+
+      return _json(200, {'ok': true});
+    } catch (e) {
+      return _json(500, {'error': 'Erro ao cancelar pedido'});
     }
   }
 

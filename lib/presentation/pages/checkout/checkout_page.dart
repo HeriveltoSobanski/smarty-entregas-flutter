@@ -287,7 +287,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     double? troco;
     if (_pagamento == _Pagamento.dinheiro) {
       final t = double.tryParse(_trocoCtrl.text.replaceAll(',', '.'));
-      final total = cart.total;
+      // Troco deve cobrir o valor total cobrado: subtotal + entrega - desconto
+      final total = cart.total + _taxaEntrega - _desconto;
       if (t != null && t < total) {
         setState(() => _carregando = false);
         ScaffoldMessenger.of(context).showSnackBar(

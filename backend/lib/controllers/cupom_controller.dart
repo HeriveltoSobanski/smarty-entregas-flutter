@@ -92,7 +92,7 @@ class CupomController {
         'desconto':  double.parse(desconto.toStringAsFixed(2)),
       });
     } catch (e) {
-      return _json(500, {'error': 'Erro interno', 'details': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -155,7 +155,7 @@ class CupomController {
       if (msg.contains('unique') || msg.contains('duplicate')) {
         return _json(409, {'error': 'Código de cupom já existe'});
       }
-      return _json(500, {'error': 'Erro interno', 'details': msg});
+      print('Erro 500: $msg'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -190,7 +190,7 @@ class CupomController {
 
       return _json(200, {'cupons': cupons});
     } catch (e) {
-      return _json(500, {'error': 'Erro interno', 'details': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
@@ -210,7 +210,7 @@ class CupomController {
 
       return _json(200, {'ok': true});
     } catch (e) {
-      return _json(500, {'error': 'Erro interno', 'details': e.toString()});
+      print('Erro 500: $e'); return _json(500, {'error': 'Erro interno do servidor'});
     }
   }
 
