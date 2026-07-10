@@ -21,6 +21,11 @@ const _publicPaths = {
   'auth/redefinir-senha',
   'auth/google',
   'auth/facebook',
+  // Refresh precisa aceitar tokens JÁ expirados — por isso não pode passar
+  // pelo gate de verifyToken (que rejeita expirados). O próprio handler se
+  // autovalida: verifyExpiredToken (assinatura + janela de 30 dias) e a
+  // checagem de token_version, que recusa tokens revogados.
+  'auth/refresh',
 };
 
 /// ACL por prefixo de rota e método HTTP.

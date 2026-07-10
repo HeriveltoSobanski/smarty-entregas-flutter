@@ -1,8 +1,29 @@
+import 'dart:convert';
 import 'package:backend/services/jwt_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 
+const _secret = 'segredo-de-teste-bem-longo-1234567890';
+
+/// Fabrica um token assinado com [_secret] e um `exp` arbitrário (em epoch
+/// segundos), para exercitar cenários de expiração que o generateToken
+/// (sempre +7 dias) não permite criar.
+String _fabricarToken({required int exp, int sub = 1, String tipo = 'cliente', int tv = 0}) {
+  String enc(Map<String, dynamic> m) =>
+      base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+  final header = enc({'alg': 'HS256', 'typ': 'JWT'});
+  final payload = enc({'sub': sub, 'tipo': tipo, 'tv': tv, 'iat': exp - 100, 'exp': exp});
+  final sig = base64Url
+      .encode(Hmac(sha256, utf8.encode(_secret)).convert(utf8.encode('$header.$payload')).bytes)
+      .replaceAll('=', '');
+  return '$header.$payload.$sig';
+}
+
+int _epochDiasAtras(int dias) =>
+    DateTime.now().subtract(Duration(days: dias)).millisecondsSinceEpoch ~/ 1000;
+
 void main() {
-  final jwt = JwtService('segredo-de-teste-bem-longo-1234567890');
+  final jwt = JwtService(_secret);
 
   group('JwtService', () {
     test('round-trip: gera e valida com os mesmos claims', () {
@@ -59,6 +80,21 @@ void main() {
       expect(jwt.verifyExpiredToken(token), isNotNull);
       final parts = token.split('.');
       expect(jwt.verifyExpiredToken('${parts[0]}.${parts[1]}.x'), isNull);
+    });
+
+    test('token expirado ha 5 dias: verifyToken recusa, verifyExpiredToken renova', () {
+      final token = _fabricarToken(exp: _epochDiasAtras(5), sub: 9, tipo: 'cliente');
+      // O gate normal recusa (expirado)...
+      expect(jwt.verifyToken(token), isNull);
+      // ...mas o refresh aceita, pois esta dentro da janela de 30 dias.
+      final payload = jwt.verifyExpiredToken(token);
+      expect(payload, isNotNull);
+      expect(payload!['sub'], 9);
+    });
+
+    test('token expirado ha 40 dias: verifyExpiredToken recusa (fora da janela)', () {
+      final token = _fabricarToken(exp: _epochDiasAtras(40));
+      expect(jwt.verifyExpiredToken(token), isNull);
     });
   });
 }
