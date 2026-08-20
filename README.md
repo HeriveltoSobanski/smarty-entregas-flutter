@@ -1,3 +1,7 @@
+![Flutter](https://img.shields.io/badge/Flutter-3.6.1-02569B?logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-3.6.1-0175C2?logo=dart&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-produção-brightgreen)
 # Smarty Entregas — Flutter
 
 App mobile de delivery com três perfis: cliente, empresa e motoboy.
