@@ -1,10 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class SocialAuthService {
+  static const _googleClientId =
+      '1088560191949-p50cghn8dfefgfj0umakokvo87ioi7cj.apps.googleusercontent.com';
+
+  // google_sign_in_web exige `clientId` e proíbe `serverClientId`;
+  // no mobile é o inverso (o client web é usado só para validar no backend).
   static final _google = GoogleSignIn(
-    serverClientId:
-        '1088560191949-p50cghn8dfefgfj0umakokvo87ioi7cj.apps.googleusercontent.com',
+    clientId: kIsWeb ? _googleClientId : null,
+    serverClientId: kIsWeb ? null : _googleClientId,
     scopes: ['email', 'profile'],
   );
 
