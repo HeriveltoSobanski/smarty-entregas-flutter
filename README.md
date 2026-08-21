@@ -1,10 +1,27 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.6.1-02569B?logo=flutter&logoColor=white)
+
+
+
+
 ![Dart](https://img.shields.io/badge/Dart-3.6.1-0175C2?logo=dart&logoColor=white)
+
+
+
+
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-produção-brightgreen)
+
+
+
+
+![Status](https://img.shields.io/badge/status-em%20testes-yellow)
+
+
+
 # Smarty Entregas — Flutter
 
-App mobile de delivery com três perfis: cliente, empresa e motoboy.
+App mobile de delivery com três perfis: cliente, empresa e motoboy, todos no mesmo aplicativo.
+
+> **Status:** projeto em fase de testes. O código pode ser buildado e explorado normalmente, mas o app depende de um backend próprio e de credenciais (Mapbox, Mercado Pago, Firebase) que não estão incluídas no repositório.
 
 ## Requisitos
 
@@ -19,28 +36,13 @@ App mobile de delivery com três perfis: cliente, empresa e motoboy.
 3. Execute `flutter pub get`
 4. Configure o `google-services.json` (Firebase)
 
-## Build
+## Rodando em modo debug
 
-```bash
-# Debug
+\`\`\`bash
 flutter run
+\`\`\`
 
-# Release Android — TODAS as flags abaixo são obrigatórias para produção.
-# O app se recusa a rodar em release sem API_URL https (ver api_service.dart)
-# e a cobrar cartão com chave de teste do MP (ver mp_card_service.dart).
-flutter build apk \
-  --dart-define=API_URL=https://sua-api.com \
-  --dart-define=MAPBOX_TOKEN=pk.seu_token_mapbox \
-  --dart-define=MP_PUBLIC_KEY=APP_USR-sua_chave_producao
-```
-
-Checklist antes de gerar o APK de testes:
-
-- [ ] `API_URL` aponta para o backend real via **https** (não localhost).
-- [ ] `MP_PUBLIC_KEY` é a chave de **produção** (`APP_USR-...`), não `TEST-...`.
-- [ ] Backend com `.env` de produção (inclui `GOOGLE_CLIENT_IDS`,
-      `FACEBOOK_APP_ID/SECRET`, credenciais MP de produção).
-- [ ] `google-services.json` de produção configurado.
+Sem um backend próprio configurado, o app abre e navega normalmente, mas funcionalidades que dependem de API (login, pedidos, mapa, pagamento) não vão responder até você apontar `API_URL` para um backend seu.
 
 ## Variáveis de ambiente
 
@@ -72,3 +74,7 @@ Configuradas no backend via `.env` (nunca commitar — ver `.env.example`):
 - **lib/models/** — modelos de dados
 - **lib/services/** — API, notificações, conectividade
 - **lib/presentation/** — páginas e widgets
+
+## Build de produção
+
+Instruções de build de release (flags obrigatórias, checklist de publicação) estão fora deste README — ver `DEPLOY.md`.
